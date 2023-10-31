@@ -5,16 +5,18 @@
 </pre></div><div class="public anchor" id="var-init.21"><h3>init!</h3><div class="usage"><code>(init!)</code></div><div class="doc"><pre class="plaintext">Initialises this namespace upon first call (and does nothing on subsequent
 calls), returning nil. Consumers of this namespace are not required to call
 this fn, as initialisation will occur implicitly anyway; it is provided to
-allow explicit control of the cost of initialisation to callers who need it.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/maven.clj#L133">view source</a></div></div><div class="public anchor" id="var-pom-.3Eexpressions"><h3>pom-&gt;expressions</h3><div class="usage"><code>(pom-&gt;expressions pom)</code><code>(pom-&gt;expressions pom filepath)</code></div><div class="doc"><pre class="plaintext">Returns a set of SPDX expressions (Strings) for the given POM file (an
+allow explicit control of the cost of initialisation to callers who need it.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/maven.clj#L135">view source</a></div></div><div class="public anchor" id="var-pom-.3Eexpressions"><h3>pom-&gt;expressions</h3><div class="usage"><code>(pom-&gt;expressions pom)</code><code>(pom-&gt;expressions pom filepath)</code></div><div class="doc"><pre class="plaintext">Returns a set of SPDX expressions (Strings) for the given POM file (an
 InputStream or something that can have an io/input-stream opened on it), or
 nil if no expressions were found.
 
 If an InputStream is provided, it is the caller's responsibility to open and
 close it, and a filepath associated with the InputStream *must* be provided as
-the second parameter (it is optional for other types of input).</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/maven.clj#L119">view source</a></div></div><div class="public anchor" id="var-pom-.3Eexpressions-info"><h3>pom-&gt;expressions-info</h3><h4 class="type">multimethod</h4><div class="usage"><code>(pom-&gt;expressions-info pom)</code><code>(pom-&gt;expressions-info pom filepath)</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given POM file (an InputStream or
+the second parameter (it is optional for other types of input).</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/maven.clj#L121">view source</a></div></div><div class="public anchor" id="var-pom-.3Eexpressions-info"><h3>pom-&gt;expressions-info</h3><h4 class="type">multimethod</h4><div class="usage"><code>(pom-&gt;expressions-info pom)</code><code>(pom-&gt;expressions-info pom filepath)</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given POM file (an InputStream or
 something that can have an io/input-stream opened on it), or nil if no
 expressions were found.
 
 If an InputStream is provided, it is the caller's responsibility to open and
 close it, and a filepath associated with the InputStream *must* be provided as
-the second parameter (it is optional for other types of input).</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/maven.clj#L69">view source</a></div></div></div></body></html>
+the second parameter (it is optional for other types of input).
+
+Note: throws on XML parsing error</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/maven.clj#L69">view source</a></div></div></div></body></html>
