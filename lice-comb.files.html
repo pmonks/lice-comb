@@ -8,7 +8,7 @@ were found.
 
 The optional `opts` map has these keys:
 * `include-zips?` (boolean, default false) - controls whether zip compressed
-  files found in the directory are recursively included in the scan or not</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L159">view source</a></div></div><div class="public anchor" id="var-dir-.3Eexpressions-info"><h3>dir-&gt;expressions-info</h3><div class="usage"><code>(dir-&gt;expressions-info dir)</code><code>(dir-&gt;expressions-info dir {:keys [include-zips?], :or {include-zips? false}})</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given dir (a String or a File,
+  files found in the directory are recursively included in the scan or not</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L164">view source</a></div></div><div class="public anchor" id="var-dir-.3Eexpressions-info"><h3>dir-&gt;expressions-info</h3><div class="usage"><code>(dir-&gt;expressions-info dir)</code><code>(dir-&gt;expressions-info dir {:keys [include-zips?], :or {include-zips? false}})</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given dir (a String or a File,
 which must refer to a readable directory), or nil if no expressions were
 found.
 
@@ -16,7 +16,7 @@ The optional `opts` map has these keys:
 * `include-zips?` (boolean, default false) - controls whether zip compressed
   files found in the directory are recursively included in the scan or not
 
-Note: logs and ignores errors (XML parsing errors, ZIP file errors)</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L129">view source</a></div></div><div class="public anchor" id="var-file-.3Eexpressions"><h3>file-&gt;expressions</h3><div class="usage"><code>(file-&gt;expressions f)</code><code>(file-&gt;expressions f filepath)</code></div><div class="doc"><pre class="plaintext">Returns a set of SPDX expressions (Strings) for the given file (an
+Note: logs and ignores errors (XML parsing errors, ZIP file errors)</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L134">view source</a></div></div><div class="public anchor" id="var-file-.3Eexpressions"><h3>file-&gt;expressions</h3><div class="usage"><code>(file-&gt;expressions f)</code><code>(file-&gt;expressions f filepath)</code></div><div class="doc"><pre class="plaintext">Returns a set of SPDX expressions (Strings) for the given file (an
 InputStream or something that can have an io/input-stream opened on it), or
 nil if no expressions were found.
 
@@ -31,14 +31,14 @@ close it, and a filepath associated with the InputStream *must* be provided as
 the second parameter (it is optional for other types of input).</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L53">view source</a></div></div><div class="public anchor" id="var-init.21"><h3>init!</h3><div class="usage"><code>(init!)</code></div><div class="doc"><pre class="plaintext">Initialises this namespace upon first call (and does nothing on subsequent
 calls), returning nil. Consumers of this namespace are not required to call
 this fn, as initialisation will occur implicitly anyway; it is provided to
-allow explicit control of the cost of initialisation to callers who need it.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L173">view source</a></div></div><div class="public anchor" id="var-probable-license-file.3F"><h3>probable-license-file?</h3><div class="usage"><code>(probable-license-file? f)</code></div><div class="doc"><pre class="plaintext">Returns true if the given file-like thing (String, File, ZipEntry) is a
+allow explicit control of the cost of initialisation to callers who need it.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L178">view source</a></div></div><div class="public anchor" id="var-probable-license-file.3F"><h3>probable-license-file?</h3><div class="usage"><code>(probable-license-file? f)</code></div><div class="doc"><pre class="plaintext">Returns true if the given file-like thing (String, File, ZipEntry) is a
 probable license file, false otherwise.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L33">view source</a></div></div><div class="public anchor" id="var-probable-license-files"><h3>probable-license-files</h3><div class="usage"><code>(probable-license-files dir)</code></div><div class="doc"><pre class="plaintext">Returns all probable license files in the given directory, recursively, as a
 set of java.io.File objects. dir may be a String or a java.io.File, either of
 which must refer to a readable directory.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L44">view source</a></div></div><div class="public anchor" id="var-zip-.3Eexpressions"><h3>zip-&gt;expressions</h3><div class="usage"><code>(zip-&gt;expressions zip)</code></div><div class="doc"><pre class="plaintext">Returns a set of SPDX expressions (Strings) for the given ZIP file (a String
 or a File, which must refer to a ZIP-format compressed file), or nil if no
 expressions were found.
 
-Throws if the file is not a valid ZIP.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L106">view source</a></div></div><div class="public anchor" id="var-zip-.3Eexpressions-info"><h3>zip-&gt;expressions-info</h3><div class="usage"><code>(zip-&gt;expressions-info zip)</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given ZIP file (a String or a File,
+Throws if the file is not a valid ZIP.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/files.clj#L111">view source</a></div></div><div class="public anchor" id="var-zip-.3Eexpressions-info"><h3>zip-&gt;expressions-info</h3><div class="usage"><code>(zip-&gt;expressions-info zip)</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given ZIP file (a String or a File,
 which must refer to a ZIP-format compressed file), or nil if no expressions
 were found.
 
