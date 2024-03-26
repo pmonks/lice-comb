@@ -36,20 +36,20 @@ Each lice-comb expression-info map has this structure:
   the input that was used to make this determination).</pre></div><div class="public anchor" id="var-id-.3Ename"><h3>id-&gt;name</h3><div class="usage"><code>(id-&gt;name id)</code></div><div class="doc"><pre class="plaintext">Returns the human readable name of the given license or exception identifier;
 either the official SPDX license or exception name or, if the id is a
 lice-comb specific LicenseRef, a lice-comb specific name. Returns the id
-verbatim if unable to determine a name. Returns nil if the id is blank.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L87">view source</a></div></div><div class="public anchor" id="var-init.21"><h3>init!</h3><div class="usage"><code>(init!)</code></div><div class="doc"><pre class="plaintext">Initialises this namespace upon first call (and does nothing on subsequent
+verbatim if unable to determine a name. Returns nil if the id is blank.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L87">view source</a></div></div><div class="public anchor" id="var-init.21"><h3>init!</h3><div class="usage"><code>(init!)</code></div><div class="doc"><pre class="plaintext">Initialises this namespace upon first call (and does nothing on subsequent
 calls), returning nil. Consumers of this namespace are not required to call
 this fn, as initialisation will occur implicitly anyway; it is provided to
 allow explicit control of the cost of initialisation to callers who need it.
 
-Note: this method has a substantial performance cost.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L214">view source</a></div></div><div class="public anchor" id="var-lice-comb-license-ref.3F"><h3>lice-comb-license-ref?</h3><div class="usage"><code>(lice-comb-license-ref? id)</code></div><div class="doc"><pre class="plaintext">Is the given id one of lice-comb's custom LicenseRefs?
-</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L61">view source</a></div></div><div class="public anchor" id="var-name-.3Eexpressions"><h3>name-&gt;expressions</h3><div class="usage"><code>(name-&gt;expressions name)</code></div><div class="doc"><pre class="plaintext">Attempts to determine the SPDX license expression(s) (a set of Strings) from
+Note: this method has a substantial performance cost.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L214">view source</a></div></div><div class="public anchor" id="var-lice-comb-license-ref.3F"><h3>lice-comb-license-ref?</h3><div class="usage"><code>(lice-comb-license-ref? id)</code></div><div class="doc"><pre class="plaintext">Is the given id one of lice-comb's custom LicenseRefs?
+</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L61">view source</a></div></div><div class="public anchor" id="var-name-.3Eexpressions"><h3>name-&gt;expressions</h3><div class="usage"><code>(name-&gt;expressions name)</code></div><div class="doc"><pre class="plaintext">Attempts to determine the SPDX license expression(s) (a set of Strings) from
 the given 'license name' (a String), or nil if there aren't any.  This involves:
 1. Determining whether the name is a valid SPDX license expression, and if so
    normalising (see clj-spdx's spdx.expressions/normalise fn) and returning it
 2. Checking if the name is actually a URI, and if so performing URL matching
    on it (as per url-&gt;expressions)
 3. attempting to construct one or more SPDX license expressions from the
-   name</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L200">view source</a></div></div><div class="public anchor" id="var-name-.3Eexpressions-info"><h3>name-&gt;expressions-info</h3><div class="usage"><code>(name-&gt;expressions-info name)</code></div><div class="doc"><pre class="plaintext">Returns a lice-comb expressions-info map for the given 'license name' (a
+   name</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L200">view source</a></div></div><div class="public anchor" id="var-name-.3Eexpressions-info"><h3>name-&gt;expressions-info</h3><div class="usage"><code>(name-&gt;expressions-info name)</code></div><div class="doc"><pre class="plaintext">Returns a lice-comb expressions-info map for the given 'license name' (a
 String), or nil if there isn't one.  This involves:
 1. Determining whether the name is a valid SPDX license expression, and if so
    normalising it (see clj-spdx's spdx.expressions/normalise fn)
@@ -59,9 +59,9 @@ String), or nil if there isn't one.  This involves:
    name
 
 The keys in the maps are the detected SPDX license and exception identifiers,
-and each value contains information about how that identifiers was determined.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L174">view source</a></div></div><div class="public anchor" id="var-proprietary-commercial.3F"><h3>proprietary-commercial?</h3><div class="usage"><code>(proprietary-commercial? id)</code></div><div class="doc"><pre class="plaintext">Is the given id lice-comb's custom 'proprietary / commercial' LicenseRef?
-</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L71">view source</a></div></div><div class="public anchor" id="var-public-domain.3F"><h3>public-domain?</h3><div class="usage"><code>(public-domain? id)</code></div><div class="doc"><pre class="plaintext">Is the given id lice-comb's custom 'public domain' LicenseRef?
-</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L66">view source</a></div></div><div class="public anchor" id="var-text-.3Eexpressions"><h3>text-&gt;expressions</h3><div class="usage"><code>(text-&gt;expressions text)</code></div><div class="doc"><pre class="plaintext">Returns a set of SPDX expressions (Strings) for the given license text (a
+and each value contains information about how that identifiers was determined.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L174">view source</a></div></div><div class="public anchor" id="var-proprietary-commercial.3F"><h3>proprietary-commercial?</h3><div class="usage"><code>(proprietary-commercial? id)</code></div><div class="doc"><pre class="plaintext">Is the given id lice-comb's custom 'proprietary / commercial' LicenseRef?
+</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L71">view source</a></div></div><div class="public anchor" id="var-public-domain.3F"><h3>public-domain?</h3><div class="usage"><code>(public-domain? id)</code></div><div class="doc"><pre class="plaintext">Is the given id lice-comb's custom 'public domain' LicenseRef?
+</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L66">view source</a></div></div><div class="public anchor" id="var-text-.3Eexpressions"><h3>text-&gt;expressions</h3><div class="usage"><code>(text-&gt;expressions text)</code></div><div class="doc"><pre class="plaintext">Returns a set of SPDX expressions (Strings) for the given license text (a
 String, Reader, InputStream, or something that is accepted by
 clojure.java.io/reader - File, URL, URI, Socket, etc.), or nil if no
 expressions were found.
@@ -72,7 +72,7 @@ Notes:
 * the caller is expected to open &amp; close a Reader or InputStream passed to
   this function (e.g. using clojure.core/with-open)
 * you cannot pass a String representation of a filename to this method - you
-  should pass filenames through clojure.java.io/file (or similar) first</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L116">view source</a></div></div><div class="public anchor" id="var-text-.3Eexpressions-info"><h3>text-&gt;expressions-info</h3><div class="usage"><code>(text-&gt;expressions-info text)</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given license text (a String, Reader,
+  should pass filenames through clojure.java.io/file (or similar) first</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L116">view source</a></div></div><div class="public anchor" id="var-text-.3Eexpressions-info"><h3>text-&gt;expressions-info</h3><div class="usage"><code>(text-&gt;expressions-info text)</code></div><div class="doc"><pre class="plaintext">Returns an expressions-info map for the given license text (a String, Reader,
 InputStream, or something that is accepted by clojure.java.io/reader - File,
 URL, URI, Socket, etc.), or nil if no expressions were found.
 
@@ -82,9 +82,9 @@ Notes:
 * the caller is expected to open &amp; close a Reader or InputStream passed to
   this function (e.g. using clojure.core/with-open)
 * you cannot pass a String representation of a filename to this method - you
-  should pass filenames through clojure.java.io/file (or similar) first</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L101">view source</a></div></div><div class="public anchor" id="var-unidentified-.3Ename"><h3>unidentified-&gt;name</h3><div class="usage"><code>(unidentified-&gt;name id)</code></div><div class="doc"><pre class="plaintext">Get the original name of the given unidentified license. Returns nil if id is nil
-or is not a lice-comb unidentified LicenseRef.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L81">view source</a></div></div><div class="public anchor" id="var-unidentified.3F"><h3>unidentified?</h3><div class="usage"><code>(unidentified? id)</code></div><div class="doc"><pre class="plaintext">Is the given id a lice-comb custom 'unidentified' LicenseRef?
-</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L76">view source</a></div></div><div class="public anchor" id="var-uri-.3Eexpressions"><h3>uri-&gt;expressions</h3><div class="usage"><code>(uri-&gt;expressions uri)</code></div><div class="doc"><pre class="plaintext">Returns the SPDX license and/or exception identifiers (a set of Strings) for
+  should pass filenames through clojure.java.io/file (or similar) first</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L101">view source</a></div></div><div class="public anchor" id="var-unidentified-.3Ename"><h3>unidentified-&gt;name</h3><div class="usage"><code>(unidentified-&gt;name id)</code></div><div class="doc"><pre class="plaintext">Get the original name of the given unidentified license. Returns nil if id is nil
+or is not a lice-comb unidentified LicenseRef.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L81">view source</a></div></div><div class="public anchor" id="var-unidentified.3F"><h3>unidentified?</h3><div class="usage"><code>(unidentified? id)</code></div><div class="doc"><pre class="plaintext">Is the given id a lice-comb custom 'unidentified' LicenseRef?
+</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L76">view source</a></div></div><div class="public anchor" id="var-uri-.3Eexpressions"><h3>uri-&gt;expressions</h3><div class="usage"><code>(uri-&gt;expressions uri)</code></div><div class="doc"><pre class="plaintext">Returns the SPDX license and/or exception identifiers (a set of Strings) for
 the given uri, or nil if there aren't any.  It does this via two steps:
 1. Seeing if the given URI is in the license or exception list, and returning
    the ids of the associated licenses and/or exceptions if so
@@ -98,7 +98,7 @@ Notes on step 1:
    ignoring extensions representing MIME types (.txt vs .html, etc.), etc.
    See lice-comb.impl.utils/simplify-uri for exact details.
 2. URIs in the SPDX license and exception lists are not unique - the same URI
-   may represent multiple licenses and/or exceptions.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L153">view source</a></div></div><div class="public anchor" id="var-uri-.3Eexpressions-info"><h3>uri-&gt;expressions-info</h3><div class="usage"><code>(uri-&gt;expressions-info uri)</code></div><div class="doc"><pre class="plaintext">Returns an exceptions-info map for the given license uri (a String, URL, or
+   may represent multiple licenses and/or exceptions.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L153">view source</a></div></div><div class="public anchor" id="var-uri-.3Eexpressions-info"><h3>uri-&gt;expressions-info</h3><div class="usage"><code>(uri-&gt;expressions-info uri)</code></div><div class="doc"><pre class="plaintext">Returns an exceptions-info map for the given license uri (a String, URL, or
 URI), or nil if no expressions were found.  It does this via two steps:
 1. Seeing if the given URI is in the SPDX license or exception lists, and
    returning the ids of the associated licenses and/or exceptions if so
@@ -112,4 +112,4 @@ Notes on step 1:
    ignoring extensions representing MIME types (.txt vs .html, etc.), etc.
    See lice-comb.impl.utils/simplify-uri for exact details.
 2. URIs in the SPDX license and exception lists are not unique - the same URI
-   may represent multiple licenses and/or exceptions.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/main/src/lice_comb/matching.clj#L134">view source</a></div></div></div></body></html>
+   may represent multiple licenses and/or exceptions.</pre></div><div class="src-link"><a href="https://github.com/pmonks/lice-comb/blob/release/src/lice_comb/matching.clj#L134">view source</a></div></div></div></body></html>
