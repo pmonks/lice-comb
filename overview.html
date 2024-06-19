@@ -20,6 +20,7 @@
 <li><code>:id</code> (<code>String</code>, optional): The portion of the SPDX expression that this info map refers to (usually, though not always, a single SPDX identifier).</li>
 <li><code>:type</code> (either <code>:declared</code> or <code>:concluded</code>, mandatory): Whether this identifier was unambiguously declared within the input or was instead concluded by lice-comb (see <a href="https://wiki.spdx.org/view/SPDX_FAQ">the SPDX FAQ</a> for more detail on the definition of these two terms).</li>
 <li><code>:confidence</code> (one of: <code>:high</code>, <code>:medium</code>, <code>:low</code>, only provided when <code>:type</code> = <code>:concluded</code>): Indicates the approximate confidence lice-comb has in its conclusions for this particular SPDX identifier.</li>
+<li><code>:confidence-explanations</code> (a set of keywords, optional): Describes why the associated <code>:confidence</code> was not <code>:high</code>.</li>
 <li><code>:strategy</code> (a keyword, mandatory): The strategy lice-comb used to determine this particular SPDX identifier.  See <a href="lice-comb.utils.html#var-strategy-.3Estring">lice-comb.utils/strategy-&gt;string</a> for an up-to-date list of all possible values.</li>
 <li><code>:source</code> (a sequence of <code>String</code>s): The list of sources used to arrive at this portion of the SPDX expression, starting from the most general (the input) through to the most specific (the smallest subset of the input that was used to make this determination.  These may include dependencies expressed in Leiningen or tools.deps format, Maven GAVs, file paths, URIs, XML tags, text fragments, and other string data, and are intended for human, rather than programmatic, consumption.</li>
 </ul>
@@ -29,31 +30,51 @@
 (lcmvn/gav-&gt;expressions-info "javax.mail" "javax.mail-api" "1.6.2")
 </code></pre>
 <p>results in this expressions-info map (pretty printed for clarity):</p>
-<pre><code class="language-clojure">{"GPL-2.0-or-later"
-   ({:id         "GPL-2.0-or-later",
-     :type       :concluded,
-     :confidence :medium,
-     :strategy   :regex-matching,
-     :source     ("https://repo1.maven.org/maven2/javax/mail/javax.mail-api/1.6.2/javax.mail-api-1.6.2.pom"
-                  "https://repo1.maven.org/maven2/com/sun/mail/all/1.6.2/all-1.6.2.pom"
-                  "&lt;licenses&gt;&lt;license&gt;&lt;name&gt;"
-                  "CDDL/GPLv2+CE"
-                  "GPLv2+")}),
- "CDDL-1.1"
-   ({:id         "CDDL-1.1",
-     :type       :concluded,
-     :confidence :low,
-     :strategy   :regex-matching,
-     :source     ("https://repo1.maven.org/maven2/javax/mail/javax.mail-api/1.6.2/javax.mail-api-1.6.2.pom"
-                  "https://repo1.maven.org/maven2/com/sun/mail/all/1.6.2/all-1.6.2.pom"
-                  "&lt;licenses&gt;&lt;license&gt;&lt;name&gt;"
-                  "CDDL/GPLv2+CE"
-                  "CDDL")})}
+<pre><code class="language-clojure">{"CDDL-1.1 OR GPL-2.0-only WITH Classpath-exception-2.0"
+ ({:type       :concluded
+   :confidence :low
+   :strategy   :maven-pom-multi-license-rule
+   :source     ("javax.mail/javax.mail-api@1.6.2"
+                "https://repo1.maven.org/maven2/javax/mail/javax.mail-api/1.6.2/javax.mail-api-1.6.2.pom"
+                "https://repo1.maven.org/maven2/com/sun/mail/all/1.6.2/all-1.6.2.pom")}
+  {:id         "GPL-2.0-only"
+   :type       :concluded
+   :confidence :high
+   :strategy   :manual-verification
+   :source     ("javax.mail/javax.mail-api@1.6.2"
+                "https://repo1.maven.org/maven2/javax/mail/javax.mail-api/1.6.2/javax.mail-api-1.6.2.pom"
+                "https://repo1.maven.org/maven2/com/sun/mail/all/1.6.2/all-1.6.2.pom"
+                "&lt;licenses&gt;&lt;license&gt;&lt;name&gt;"
+                "CDDL/GPLv2+CE"
+                "GPLv2+CE"
+                "GPLv2")}
+  {:id         "Classpath-exception-2.0"
+   :type       :concluded
+   :confidence :high
+   :strategy   :manual-verification
+   :source     ("javax.mail/javax.mail-api@1.6.2"
+                "https://repo1.maven.org/maven2/javax/mail/javax.mail-api/1.6.2/javax.mail-api-1.6.2.pom"
+                "https://repo1.maven.org/maven2/com/sun/mail/all/1.6.2/all-1.6.2.pom"
+                "&lt;licenses&gt;&lt;license&gt;&lt;name&gt;"
+                "CDDL/GPLv2+CE"
+                "GPLv2+CE"
+                "CE")}
+  {:id         "CDDL-1.1"
+   :type       :concluded
+   :confidence :low
+   :confidence-explanations #{:missing-version}
+   :strategy   :regex-matching
+   :source     ("javax.mail/javax.mail-api@1.6.2"
+                "https://repo1.maven.org/maven2/javax/mail/javax.mail-api/1.6.2/javax.mail-api-1.6.2.pom"
+                "https://repo1.maven.org/maven2/com/sun/mail/all/1.6.2/all-1.6.2.pom"
+                "&lt;licenses&gt;&lt;license&gt;&lt;name&gt;"
+                "CDDL/GPLv2+CE"
+                "CDDL")})}
 </code></pre>
-<p>A key insight that the expressions-info map tells us in this case is that the <code>javax.mail/javax.mail-api@1.6.2</code> artifact doesn’t declare which version of the CDDL it uses, and lice-comb has <em>inferred</em> the latest (<code>CDDL-1.1</code>), and in doing so reduced its confidence to “low”.  This important insight is not apparent when the <code>simple</code> variant of the function is used instead:</p>
+<p>A key insight that the expressions-info map tells us in this case is that the <code>javax.mail/javax.mail-api@1.6.2</code> artifact doesn’t declare which version of the CDDL it uses, and lice-comb has <em>inferred</em> the latest (<code>CDDL-1.1</code>), and in doing so reduced its confidence to “low” (while also provided a helpful confidence explanation).  This important insight is not apparent when the <code>simple</code> variant of the function is used instead:</p>
 <pre><code class="language-clojure">(lcmvn/gav-&gt;expressions "javax.mail" "javax.mail-api" "1.6.2")
 
-#{"CDDL-1.1" "GPL-2.0-or-later"}
+#{"CDDL-1.1 OR GPL-2.0-only WITH Classpath-exception-2.0"}
 </code></pre>
 <p><a href="https://github.com/pmonks/lice-comb">Back to GitHub</a></p>
 </div></div></div></body></html>
