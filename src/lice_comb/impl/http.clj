@@ -24,21 +24,26 @@
             [hato.client          :as hc]
             [lice-comb.impl.utils :as lciu]))
 
+(def ^:private user-agent    "https://github.com/pmonks/lice-comb")
 (def ^:private http-client-d (delay (hc/build-http-client {:connect-timeout 1000
                                                            :redirect-policy :always
                                                            :cookie-policy   :none})))
 
 (defn uri-resolves?
-  "Does the given URI resolve (i.e. does the resource it points to exist)?
+  "Does `uri` resolve i.e. does the resource it points to exist?
 
-  Note: does not throw - returns false on errors."
+  Notes:
+
+  * Only supports http(s) URIs
+  * Uses an HTTP HEAD request
+  * Does not throw - returns false on errors"
   [uri]
   (boolean
     (when (lciu/valid-http-uri? (str uri))
       (try
         (when-let [response (hc/head (str uri)
                                      {:http-client @http-client-d
-                                      :header      {"user agent" "com.github.pmonks/lice-comb"}})]
+                                      :header      {"User-Agent" user-agent}})]
           (= 200 (:status response)))
         (catch Exception _
           false)))))
@@ -52,29 +57,33 @@
   [uri]
   (if-let [^java.net.URL url-obj (try (io/as-url uri) (catch Exception _ nil))]
     (case (s/lower-case (.getHost url-obj))
-      "github.com" (-> uri
-                       (s/replace-first #"(?i)github\.com" "raw.githubusercontent.com")
-                       (s/replace-first "/blob/"          "/"))
+      "github.com" (if (s/includes? uri "/blob/")
+                     (-> uri
+                         (s/replace-first #"(?i)github\.com" "raw.githubusercontent.com")
+                         (s/replace-first "/blob/"          "/"))
+                     uri)
       uri)
     uri))
 
 (defn get-text
-  "Attempts to get plain text as a String from the given URI, returning nil if
-  unable to do so (including for error conditions - there is no way to
-  disambiguate errors from non-text content, for example).
+  "Attempts to retrieve the content of `uri` as plain text, returning a `String`
+  or `nil` if unable to do so (including for error conditions - there is no way
+  to disambiguate errors from non-text content, for example).
 
-  HTML responses are automatically converted to plain text (using JSoup)."
+  Notes:
+
+  * Automatically uses CDN URLs when known (as per `cdn-uri`)
+  * HTML responses are automatically converted to plain text (using JSoup)"
   [uri]
   (when (lciu/valid-http-uri? uri)
     (try
       (when-let [response (hc/get (cdn-uri uri)
                                   {:http-client @http-client-d
-                                   :accept      "text/plain;q=1,text/html;q=0.5,application/xhtml+xml;q=0.5,*/*;q=0"  ; Kindly request that the server give us text/plain... ...though this gets ignored a lot of the time 🙄
-                                   :header      {"user agent" "com.github.pmonks/lice-comb"}})]
+                                   :accept      "text/plain;q=1,text/html;q=0.5,application/xhtml+xml;q=0.5,*/*;q=0"
+                                   :header      {"User-Agent" user-agent}})]
         (case (:content-type response)
-           :text/plain            (:body response)
-           :text/html             (lciu/html->text (:body response))
-           :application/xhtml+xml (lciu/html->text (:body response))))
+           :text/plain                         (:body response)
+           (:text/html :application/xhtml+xml) (lciu/html->text (:body response))))
       (catch Exception _
         nil))))
 

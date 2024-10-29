@@ -60,46 +60,44 @@
                     {:id id}))))
 
 (defn- generic-id-constructor
-  "A generic SPDX id constructor which works for many simple regexes."
-  [m]
+  "A generic SPDX id constructor which works for many simple license name
+  regexes."
+  [id-prefix latest-ver pad-ver? m]
   (when m
     (let [version (get-rencgs m ["version"])
           [confidence confidence-explanations]
-                  (if (s/blank? (:latest-ver m))
+                  (if (s/blank? latest-ver)
                     [:high]  ; We didn't need a version
                     (if (s/blank? version)
                       [:low #{:missing-version}]
-                      (if (and (:pad-ver? m)
+                      (if (and pad-ver?
                                (not (s/includes? version ".")))
                         [:medium #{:partial-version}]   ; We got a partial version
                         [:high])))  ; We got a full version
           version (if (s/blank? version)
-                    (:latest-ver m)
+                    latest-ver
                     version)
-          version (if (and (:pad-ver? m)
+          version (if (and pad-ver?
                            (not (s/includes? version ".")))
                      (str version ".0")
                      version)
-          id      (str (:id m) (when-not (s/blank? version) (str "-" version)))]
+          id      (str id-prefix (when-not (s/blank? version) (str "-" version)))]
       [(assert-listed-id id) confidence confidence-explanations])))
-
-(defn- number-name-to-number
-  "Converts the name of a number to that number (as a string). e.g.
-  \"two\" -> \"2\".  Returns s unchanged if it's not a number name."
-  [^String s]
-  (when s
-    (case s
-      "two"   "2"
-      "three" "3"
-      "four"  "4"
-      s)))
 
 (defn- bsd-id-constructor
   "An SPDX id constructor specific to the BSD family of licenses."
   [m]
-  (let [clause-count1             (number-name-to-number (get-rencgs m ["clausecount1"]))
-        clause-count2             (number-name-to-number (get-rencgs m ["clausecount2"]))
-        preferred-clause-count    (case [(lciu/is-digits? clause-count1) (lciu/is-digits? clause-count2)]
+  (let [clause-count1             (let [s (get-rencgs m ["clausecount1"])
+                                        n (lciu/digit-name-to-number s)]
+                                    (if n
+                                      n
+                                      s))
+        clause-count2             (let [s (get-rencgs m ["clausecount2"])
+                                        n (lciu/digit-name-to-number s)]
+                                    (if n
+                                      n
+                                      s))
+        preferred-clause-count    (case [(number? clause-count1) (number? clause-count2)]
                                     [true true]   clause-count1
                                     [true false]  clause-count1
                                     [false true]  clause-count2
@@ -108,10 +106,10 @@
                                       clause-count2))
         [clause-count confidence confidence-explanations]
                                   (case preferred-clause-count
-                                    ("2" "simplified")                       ["2" :high]
-                                    ("3" "new" "revised" "modified" "aduna") ["3" :high]
-                                    ("4" "original")                         ["4" :high]
-                                    ["4" :low #{:missing-clause-count}])  ; Note: we default to 4 clause, since it was the original form of the BSD license
+                                    (2 "simplified")                       ["2" :high]
+                                    (3 "new" "revised" "modified" "aduna") ["3" :high]
+                                    (4 "original")                         ["4" :high]
+                                    [4 :low #{:missing-clause-count}])  ; Note: we default to 4 clause, since it was the original form of the BSD license
         suffix                    (case (get-rencgs m ["suffix" "clausecount2"])  ; Note: when the clause count is missing, the suffix can end up being captured by the clausecount2 capturing group
                                     "patent"                                              "Patent"
                                     "views"                                               "Views"
@@ -134,7 +132,7 @@
                                     "darwin"                                              "Darwin"
                                     "acpica"                                              "acpica"
                                     nil)
-        base-id                   (str (:id m) "-" clause-count "-Clause")
+        base-id                   (str "BSD-" clause-count "-Clause")
         id-with-suffix            (str base-id "-" suffix)]
     (if suffix
       (if (contains? @lcis/license-ids-d id-with-suffix)  ; Not all suffixes are valid with all BSD clause counts, so check that it's valid before returning it
@@ -157,7 +155,7 @@
                            [:high]
                            [:medium #{:partial-version}]))
         version        (if (s/blank? version)
-                         (:latest-ver m)
+                         "4.0"
                          version)
         version        (if (s/includes? version ".")
                          version
@@ -185,7 +183,7 @@
         [(assert-listed-id base-id) :low (set/union #{:invalid-region} confidence-explanations)])
       [(assert-listed-id base-id) confidence confidence-explanations])))
 
-(defn- gpl-id-constructor
+(defn gpl-id-constructor
   "An SPDX id constructor specific to the GNU family of licenses."
   [m]
   (let [variant            (cond (contains? m "agpl") "AGPL"
@@ -211,17 +209,6 @@
         id                 (str variant "-" version  "-" suffix)]
     [(assert-listed-id id) confidence confidence-explanations]))
 
-(defn- simple-regex-match
-  "Constructs a 'simple' name match structure that's a case-insensitive match
-  for s."
-  [s]
-  {:id    s
-   :regex (re-pattern (str "(?i)\\b(?<id>" (lciu/escape-re s) ")\\b"))
-   :fn    (fn [m] (if (= s (get m "id"))
-                    [s :high]
-                    [s :medium #{:case-mismatch}]))})
-
-
 ; The regex for the GNU family is a nightmare, so we build it up (and test it) in pieces
 (def agpl-re          #"(?<agpl>AGPL|Affero)(\s+GNU)?(\s+Genere?al)?(\s+Pub?lic)?(\s+Licen[cs]e)?(\s+\(?AGPL\)?)?")
 (def lgpl-re          #"(?<lgpl>(GNU\s+(Genere?al\s+)?(Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser))|((Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser)\s+(GNU|GPL|Genere?al)|(L(esser\s)?\s*GPL)))(\s+Genere?al)?(\s+Pub?lic)?(\s+Licen[cs]e)?(\s+\(?L\s*GPL\)?)?")
@@ -239,139 +226,104 @@
                                       "\n# Only/or-Later suffix\n"
                                       only-or-later-re))
 
-; Regexes used for license name matching, along with functions for constructing a tuple of [SPDX id, confidence metric, and (optionally) confidence explanation] from them
-(def ^:private license-name-matching-d (delay
-  (concat
-    ; By default we add most SPDX ids as "simple" regex matches
-    (map simple-regex-match (disj @lcis/license-ids-d "MIT" "Zlib"))
-    (map simple-regex-match (disj @lcis/exception-ids-d "Classpath-exception-2.0"))
-    [
-      {:id         "AFL"
-       :regex      #"(?i)\bAcademic(\s+Free)?(\s+Licen[cs]e)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "3.0"}
-      {:id         "Apache"
-       :regex      #"(?i)\b(ASL|Apache)(\s+Software)?(\s+Licen[cs]e(s)?)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?(?!.*acknowledgment\s+clause\s+removed)\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "2.0"}
-      {:id         "Artistic"
-       :regex      #"(?i)\bArtistic\s+Licen[cs]e(\s*V(ersion)?)?[\s,-]*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "2.0"}
-      {:id         "Beerware"
-       :regex      #"(?i)\bBeer-?ware\b"
-       :fn         (constantly ["Beerware" :high])}
-      {:id         "BSL"
-       :regex      #"(?i)\bBoost(\s+Software)?(\s+Licen[cs]e)?[\s,-]*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "1.0"}
-      {:id         "BSD"
-       :regex      #"(?i)\b(?<clausecount1>\p{Alnum}+)?[\s,-]*(C(lause)?|Type)?\s*\bBSD[\s-]*\(?(Licen[cs]e|Type|C(lause)?)?[\s-]*(?<clausecount2>\p{Alnum}+)?([\s-]+Clause)?(?<suffix>\s+(Patent|Views|Attribution|Clear|LBNL|HP|Sun|flex|FreeBSD|NetBSD|Modification|No\s+Military\s+Licen[cs]e|No\s+Nuclear\s+Licen[cs]e([\s-]+2014)?|No\s+Nuclear\s+Warranty|Open\s+MPI|Shortened|UC|Darwin|acpica))?"
-       :fn         bsd-id-constructor}
-      {:id         "CC0"
-       :regex      #"(?i)\bCC\s*0"
-       :fn         (constantly ["CC0-1.0" :high])}
-      {:id         "CECILL"
-       :regex      #"(?i)\bCeCILL(\s+Free)?(\s+Software)?(\s+Licen[cs]e)?(\s+Agreement)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "2.1"}
-      {:id         "Classpath-exception"
-       :regex      #"\b(CPE|((?i)Classpath[\s-]+exception(\s*V(ersion)?)?[\s-]*(?<version>\d+(\.\d+)?)?))\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "2.0"}
-      {:id         "CDDL"
-       :regex      #"(?i)(CDDL|Common\s+Development\s+(and|\&)?\s+Distribution\s+Licen[cs]e)(\s+\(?CDDL\)?)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "1.1"}
-      {:id         "CPL"
-       :regex      #"(?i)Common\s+Public\s+Licen[cs]e[\s,-]*(\s*V(ersion)?)?(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "1.0"}
-      {:id         "Creative commons family"
-       :regex      #"(?i)(\bCC[\s-]BY|Creative[\s-]+Commons(?![\s-]+CC0)(?!([\s-]+Legal[\s-]+Code)?[\s-]+Attribution)|(Creative[\s-]+Commons[\s-]+([\s-]+Legal[\s-]+Code)?)?(?<!BSD[\s-]+(\d|two|three|four)[\s-]+Clause\s+)Attribution)(\s+Licen[cs]e)?([\s,-]*((?<noncommercial>Non\s*Commercial|NC)|(?<noderivatives>No[\s-]*Deriv(ative)?s?|ND)|(?<sharealike>Share[\s-]*Alike|SA)))*(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\s*(?<region>Australia|Austria|England((\s+and|\&)?\s+Wales)?|France|Germany|IGO|Japan|Netherlands|UK|United\s+States|USA?)?"
-       :fn         cc-id-constructor
-       :pad-ver?   true
-       :latest-ver "4.0"}
-      {:id         "EPL"   ; Eclipse Public License (EPL) - v 1.0
-       :regex      #"(?i)\b(EPL|Eclipse(\s+Public)?(\s+Licen?[cs]e)?)(\s*\(EPL\))?[\s,-]*(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"   ; Note: optional "n" in "license" is because of a known typo
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "2.0"}
-      {:id         "EUPL"
-       :regex      #"(?i)\bEuropean\s+Union(\s+Public)?(\s+Licen[cs]e)?[\s,-]*(\(?EUPL\)?)?[\s,-]*(V(ersion)?)?(\.)?\s*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "1.2"}
-      {:id         "FreeBSD"
-       :regex      #"(?i)\bFreeBSD\b"
-       :fn         (constantly ["BSD-2-Clause-FreeBSD" :high])}
-      {:id         "GNU license family"
-       :regex      gnu-re
-       :fn         gpl-id-constructor
-       :pad-ver?   true
-       :latest-ver 3.0}
-      {:id         "Hippocratic"
-       :regex      #"(?i)\bHippocratic\b"
-       :fn         (constantly ["Hippocratic-2.1" :high])}  ; There are no other listed versions of this license
-      {:id         "LLVM-exception"
-       :regex      #"(?i)\bLLVM[\s-]+Exception\b"
-       :fn         (constantly ["LLVM-exception" :high])}
-      {:id         "MIT"
-       :regex      #"(?i)\b(MIT|Bouncy\s+Castle)(?![\s/]*(X11|ISC))(\s+Public)?(\s+Licen[cs]e)?\b"
-       :fn         (constantly ["MIT" :high])}
-      {:id         "MPL"
-       :regex      #"(?i)\b(MPL|Mozilla)(\s+Public)?(\s+Licen[cs]e)?[\s,-]*(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "2.0"}
-      {:id         "MX4J"
-       :regex      #"(?i)\bMX4J\s+Licen[cs]e(,?\s+v(ersion)?\s*1\.0)?\b"
-       :fn         (constantly ["Apache-1.1" :high])}  ; See https://github.com/spdx/license-list-XML/pull/594 - the MX4J license *is* the Apache-1.1 license, according to SPDX
-      {:id         "NASA"
-       :regex      #"(?i)\bNASA(\s+Open)?(\s+Source)?(\s+Agreement)?[\s,-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "1.3"}
-      {:id         "Plexus"
-       :regex      #"(?i)\bApache\s+Licen[cs]e(\s+but)?(\s+with)?(\s+the)?\s+acknowledgment\s+clause\s+removed\b"
-       :fn         (constantly ["Plexus" :medium [:inferred-license-name]])}
-      {:id         "Proprietary or commercial"
-       :regex      #"(?i)\b(Propriet[aoe]ry|Commercial|All\s+Rights\s+Reserved|Private)\b"
-       :fn         (constantly [(lcis/proprietary-commercial) :high])}
-      {:id         "Public Domain"
-       :regex      #"(?i)\bPublic\s+Domain(?![\s\(]*CC\s*0)"
-       :fn         (constantly [(lcis/public-domain) :high])}
-      {:id         "Ruby"
-       :regex      #"(?i)\bRuby(\s+Licen[cs]e)?\b"
-       :fn         (constantly ["Ruby" :high])}
-      {:id         "SGI-B"
-       :regex      #"(?i)\bSGI(\s+Free)?(\s+Software)?(\s+Licen[cs]e)?([\s,-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?)?\b"
-       :fn         generic-id-constructor
-       :pad-ver?   true
-       :latest-ver "2.0"}
-      {:id         "Unlicense"
-       :regex      #"(?i)\bUnlicen[cs]e\b"
-       :fn         (constantly ["Unlicense" :high])}
-      {:id         "UPL"
-       :regex      #"(?i)\bUniversal\s+Permissive(\s+Licen[cs]e)?([\s,-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?)?\b"
-       :fn         (constantly ["UPL-1.0" :high])}  ; There are no other listed versions of this license
-      {:id         "WTFPL"
-       :regex      #"(?i)\b(WTFPL|DO-WTF-U-WANT-2|Do\s+What\s+The\s+Fuck\s+You\s+Want\s+To(\s+Public)?(\s+Licen[cs]e)?)\b"
-       :fn         (constantly ["WTFPL" :high])}
-      {:id         "Zlib"
-       :regex      #"\b(?i)zlib(?![\s/]+libpng)\b"
-       :fn         (constantly ["Zlib" :high])}
-      ])))
 
-(defn- detect-id
+(def ^:private license-family-matching-d (delay
+  {"AFL" {
+     :regex #"(?i)\bAcademic(\s+Free)?(\s+Licen[cs]e)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "AFL" "3.0" true)}
+   "Apache" {
+     :regex #"(?i)\b(ASL|Apache)(\s+Software)?(\s+Licen[cs]e(s)?)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?(?!.*acknowledgment\s+clause\s+removed)\b"
+     :fn    (partial generic-id-constructor "Apache" "2.0" true)}
+    "Artistic" {
+     :regex #"(?i)\bArtistic\s+Licen[cs]e(\s*V(ersion)?)?[\s,-]*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "Artistic" "2.0" true)}
+    "Beerware" {
+     :regex #"(?i)\bBeer-?ware\b"
+     :fn    (constantly ["Beerware" :high])}
+    "BSL" {
+     :regex #"(?i)\bBoost(\s+Software)?(\s+Licen[cs]e)?[\s,-]*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "BSL" "1.0" true)}
+    "BSD" {
+     :regex #"(?i)\b(?<clausecount1>\p{Alnum}+)?[\s,-]*(C(lause)?|Type)?\s*\bBSD[\s-]*\(?(Licen[cs]e|Type|C(lause)?)?[\s-]*(?<clausecount2>\p{Alnum}+)?([\s-]+Clause)?(?<suffix>\s+(Patent|Views|Attribution|Clear|LBNL|HP|Sun|flex|FreeBSD|NetBSD|Modification|No\s+Military\s+Licen[cs]e|No\s+Nuclear\s+Licen[cs]e([\s-]+2014)?|No\s+Nuclear\s+Warranty|Open\s+MPI|Shortened|UC|Darwin|acpica))?"
+     :fn    bsd-id-constructor}
+    "CC" {
+     :regex #"(?i)(\bCC[\s-]BY|Creative[\s-]+Commons(?![\s-]+CC0)(?!([\s-]+Legal[\s-]+Code)?[\s-]+Attribution)|(Creative[\s-]+Commons[\s-]+([\s-]+Legal[\s-]+Code)?)?(?<!BSD[\s-]+(\d|two|three|four)[\s-]+Clause\s+)Attribution)(\s+Licen[cs]e)?([\s,-]*((?<noncommercial>Non\s*Commercial|NC)|(?<noderivatives>No[\s-]*Deriv(ative)?s?|ND)|(?<sharealike>Share[\s-]*Alike|SA)))*(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\s*(?<region>Australia|Austria|England((\s+and|\&)?\s+Wales)?|France|Germany|IGO|Japan|Netherlands|UK|United\s+States|USA?)?"
+     :fn    cc-id-constructor}
+    "CC0" {
+     :regex #"(?i)\bCC\s*0"
+     :fn    (constantly ["CC0-1.0" :high])}
+    "CECILL" {
+     :regex #"(?i)\bCeCILL(\s+Free)?(\s+Software)?(\s+Licen[cs]e)?(\s+Agreement)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "CECILL" "2.1" true)}
+    "Classpath-exception" {
+     :regex #"\b(CPE|((?i)Classpath[\s-]+exception(\s*V(ersion)?)?[\s-]*(?<version>\d+(\.\d+)?)?))\b"
+     :fn    (partial generic-id-constructor "Classpath-exception" "2.0" true)}
+    "CDDL" {
+     :regex #"(?i)(CDDL|Common\s+Development\s+(and|\&)?\s+Distribution\s+Licen[cs]e)(\s+\(?CDDL\)?)?[\s,-]*(\s*V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "CDDL" "1.1" true)}
+    "CPL" {
+     :regex #"(?i)Common\s+Public\s+Licen[cs]e[\s,-]*(\s*V(ersion)?)?(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "CPL" "1.0" true)}
+    "EPL" {
+     :regex #"(?i)\b(EPL|Eclipse(\s+Public)?(\s+Licen?[cs]e)?)(\s*\(EPL\))?[\s,-]*(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"   ; Note: optional "n" in "license" is because of a known typo
+     :fn    (partial generic-id-constructor "EPL" "2.0" true)}
+    "EUPL" {
+     :regex #"(?i)\bEuropean\s+Union(\s+Public)?(\s+Licen[cs]e)?[\s,-]*(\(?EUPL\)?)?[\s,-]*(V(ersion)?)?(\.)?\s*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "EUPL" "1.2" true)}
+    "FreeBSD" {
+     :regex #"(?i)\bFreeBSD\b"
+     :fn    (constantly ["BSD-2-Clause-FreeBSD" :high])}
+    "GNU" {
+     :regex gnu-re
+     :fn    gpl-id-constructor}
+    "Hippocratic" {
+     :regex #"(?i)\bHippocratic\b"
+     :fn    (constantly ["Hippocratic-2.1" :high])}  ; There are no other listed versions of this license
+    "LLVM-exception" {
+     :regex #"(?i)\bLLVM[\s-]+Exception\b"
+     :fn    (constantly ["LLVM-exception" :high])}
+    "MIT" {
+     :regex #"(?i)\b(MIT|Bouncy\s+Castle)(?![\s/]*(X11|ISC))(\s+Public)?(\s+Licen[cs]e)?\b"
+     :fn    (constantly ["MIT" :high])}
+    "MPL" {
+     :regex #"(?i)\b(MPL|Mozilla)(\s+Public)?(\s+Licen[cs]e)?[\s,-]*(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "MPL" "2.0" true)}
+    "MX4J" {
+     :regex #"(?i)\bMX4J\s+Licen[cs]e(,?\s+v(ersion)?\s*1\.0)?\b"
+     :fn    (constantly ["Apache-1.1" :high])}  ; See https://github.com/spdx/license-list-XML/pull/594 - the MX4J license *is* the Apache-1.1 license, according to SPDX
+    "NASA" {
+     :regex #"(?i)\bNASA(\s+Open)?(\s+Source)?(\s+Agreement)?[\s,-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?\b"
+     :fn    (partial generic-id-constructor "NASA" "1.3" true)}
+    "Plexus" {
+     :regex #"(?i)\bApache\s+Licen[cs]e(\s+but)?(\s+with)?(\s+the)?\s+acknowledgment\s+clause\s+removed\b"
+     :fn    (constantly ["Plexus" :medium [:inferred-license-name]])}
+    "Proprietary-commercial" {
+     :regex #"(?i)\b(Propriet[aoe]ry|Commercial|All\s+Rights\s+Reserved|Private)\b"
+     :fn    (constantly [(lcis/proprietary-commercial) :high])}
+    "Public-domain" {
+     :regex #"(?i)\bPublic\s+Domain(?![\s\(]*CC\s*0)"
+     :fn    (constantly [(lcis/public-domain) :high])}
+    "Ruby" {
+     :regex #"(?i)\bRuby(\s+Licen[cs]e)?\b"
+     :fn    (constantly ["Ruby" :high])}
+    "SGI-B" {
+     :regex #"(?i)\bSGI(\s+Free)?(\s+Software)?(\s+Licen[cs]e)?([\s,-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?)?\b"
+     :fn    (partial generic-id-constructor "SGI-B" "2.0" true)}
+    "Unlicense" {
+     :regex #"(?i)\bUnlicen[cs]e\b"
+     :fn    (constantly ["Unlicense" :high])}
+    "UPL" {
+     :regex #"(?i)\bUniversal\s+Permissive(\s+Licen[cs]e)?([\s,-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?)?\b"
+     :fn    (constantly ["UPL-1.0" :high])}  ; There are no other listed versions of this license
+    "WTFPL" {
+     :regex #"(?i)\b(WTFPL|DO-WTF-U-WANT-2|Do\s+What\s+The\s+Fuck\s+You\s+Want\s+To(\s+Public)?(\s+Licen[cs]e)?)\b"
+     :fn    (constantly ["WTFPL" :high])}
+    "Zlib" {
+     :regex #"\b(?i)zlib(?![\s/]+libpng)\b"
+     :fn    (constantly ["Zlib" :high])}
+    }))
+
+(defn- detect-id-internal
   "If a match occured for the given regex element when tested against string s,
   returns a map containing the following keys:
   * :id         The SPDX license or exception identifier that was determined
@@ -380,48 +332,66 @@
   * :strategy   The matching strategy - will always have the value :regex-matching
   * :source     A list of strings containing source information (specifically
                 the portion of the string s that matched this regex element)
-  *: start      The start index of the given match within s
+  *: start      The start index of the given match within s (to allow sorting)
 
   Returns nil if there was no match."
   [s elem]
   (when-let [match (rencg/re-find-ncg (:regex elem) s)]
-    (let [[id confidence confidence-explanations] ((:fn elem) (merge {:name s} elem match))
-          source                                  (s/trim (subs s (:start match) (:end match)))]
+    (let [[id confidence confidence-explanations] ((:fn elem) match)
+          source                                  (list (s/trim (:match match)))]
       (merge {:id         id
               :type       :concluded
               :confidence (if (= source id) :high confidence)
               :strategy   :regex-matching
-              :source     (list source)
+              :source     source
               :start      (:start match)}
              (when (seq confidence-explanations) {:confidence-explanations confidence-explanations})))))
 
+(defn supported-families
+  "Set of supported 'families' (as `String`s) available for use with
+  [[detect-id]]."
+  []
+  (some-> @license-family-matching-d
+          keys
+          set))
+
+(defn detect-id
+  "Attempts to detect the specific SPDX identifier for `family`, from `s`.
+  Returns `nil` if the `family` wasn't detected in `s`."
+  [family s]
+  (when family
+    (when-let [elem (get @license-family-matching-d family)]
+      (detect-id-internal s elem))))
+
+(defn replace-family
+  "Replaces values in `s` with any values that match the regex for `family`.
+  Results are as for [[lice-comb.impl.utils/explaining-replace]]."
+  [family s]
+  (when (and family s)
+    (when-let [elem (get @license-family-matching-d family)]
+      (let [re (:regex elem)
+            f  (:fn    elem)]
+        (lciu/explaining-replace s re #(first (f %)))))))   ;####TODO: WE'RE LOSING THE CONFIDENCE AND CONFIDENCE EXPLANATIONS HERE!!!!
+
 (defn detect-ids
   "Returns a sequence (NOT A SET!) of maps where each key is a SPDX license or
-  exception identifier (a String) that was found in s, and the value is a
-  sequence containing a single map describing how the identifier was determined.
-  The map contains these keys:
-  * :type       The 'type' of match - will always have the value :concluded
-  * :confidence The confidence of the match: either :high, :medium, or :low
-  * :confdience-explanations A sequence of explanations (keywords) for the given
-                confiddence.
-  * :strategy   The matching strategy - will always have the value :regex-matching
-  * :source     A sequence of strings containing source information
-                (specifically the substring of s that matched this identifier)
+  exception identifier (a `String`) that was found in `s`, and the value is an
+  expression-info map.
 
-  Results are in the order in which they appear in the string, and the function
-  returns nil if there were no matches."
+  Results are in the order in which they appear in `s` (hence why this fn
+  returns a sequence not a set), and returns `nil` if there were no matches."
   [s]
-  (when-let [matches (seq (filter identity (e/pmap* (partial detect-id s) @license-name-matching-d)))]
+  (when-let [matches (seq (filter identity (e/pmap* (partial detect-id-internal s) (vals @license-family-matching-d))))]   ;####TODO: CONSIDER IF/HOW THE LOSS OF ORDERING AFFECTS THIS!!!!
     (some->> matches
              (med/distinct-by :id)    ;####TODO: THINK ABOUT MERGING INSTEAD OF DROPPING
              (sort-by :start)
-             (map #(hash-map (:id %) (list (merge {:id                      (:id %)   ; We duplicate this here in case the result gets merged into an expression
-                                                   :type                    (:type %)
-                                                   :confidence              (:confidence %)
-                                                   :strategy                (:strategy %)
-                                                   :source                  (:source %)}
-                                                  (when (seq (:confidence-explanations %))
-                                                    {:confidence-explanations (:confidence-explanations %)}))))))))
+             (map #(hash-map (:id %) (merge {:id         (:id %)   ; We duplicate this here in case the result gets merged into an expression
+                                             :type       (:type %)
+                                             :confidence (:confidence %)
+                                             :strategy   (:strategy %)
+                                             :source     (:source %)}
+                                            (when (seq (:confidence-explanations %))
+                                              {:confidence-explanations (:confidence-explanations %)})))))))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent
@@ -432,5 +402,5 @@
   Note: this method has a substantial performance cost."
   []
   (lcis/init!)
-  @license-name-matching-d
+  @license-family-matching-d
   nil)

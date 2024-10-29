@@ -44,7 +44,7 @@
       (catch clojure.lang.ExceptionInfo ie
         (throw ie))
       (catch Exception e
-        (throw (ex-info (str "Unexpected " (cr/typename (type e)) " while reading " path) {} e))))))
+        (throw (ex-info (str "Unexpected " (cr/typename (type e)) " while reading classpath resource " path) {} e))))))
 
 (defn load-edn-resource
   "Loads and parses the given EDN file from the classpath."

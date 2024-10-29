@@ -1,4 +1,4 @@
 lice-comb
 Copyright © 2021 Peter Monks (https://github.com/pmonks)
 
-This project contains source code for rdrop-while, which is copyright Joshua Suskalo (https://github.com/IGJoshua) 2023 and licensed as "CC0-1.0 OR MIT". For details, see https://discord.com/channels/729136623421227082/732641743723298877/1141786961875583097.
+This project contains source code for sorting functionality obtained from Reddit, in file src/lice_comb/impl/sort_utils.clj.  That code is copyright 2022 Reddit user u/fredoverflow, and to the best of my knowledge only licensed under Reddit's Public Content Policy: https://support.reddithelp.com/hc/en-us/articles/26410290525844-Public-Content-Policy

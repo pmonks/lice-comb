@@ -23,7 +23,8 @@
   (:require [clojure.string  :as s]
             [clojure.java.io :as io]
             [clj-base62.core :as base62]
-            [embroidery.api  :as e]))
+            [embroidery.api  :as e]
+            [rencg.api       :as rencg]))
 
 (defn mapfonk
   "Returns a new map where f has been applied to all of the keys of m."
@@ -105,7 +106,7 @@
 (defn retained-split
   "As for `clojure.string/split`, but retains whatever `re` matched as distinct
   elements in the result."
-  [s re]
+  [^CharSequence s ^java.util.regex.Pattern re]
   (let [m             (re-matcher re s)
         split-indices (loop [result []
                              f      (.find m)]
@@ -116,6 +117,56 @@
     (if (empty? split-indices)
       [s]
       (mapv #(subs s (first %) (second %)) (partition 2 1 split-indices)))))
+
+(defn explaining-replace
+  "Similar to `clojure.string/replace`, but returns a tuple where the first
+  element is the new `String`, and the second element is a sequence of tuples,
+  each of which contains the substring that was replaced and the value it was
+  replaced with.  This sequence will be `nil` if no replacements were performed.
+
+  Notes:
+  * uses [rencg](https://github.com/pmonks/rencg), so if `replacement` is a
+    function it must accept a map, not a sequence. It must also return a
+    `String`.
+  * does not support the `$1` syntax (as supported by Clojure and the JVM) - use
+    a function instead"
+  [^CharSequence s ^java.util.regex.Pattern re replacement]
+  (let [m              (re-matcher re s)
+        ncgs           (rencg/re-named-groups re)
+        replacement-fn (if (fn? replacement) replacement (constantly replacement))]
+    (if (.find m)
+      (let [buffer (StringBuffer. (.length s))]
+        (loop [found        true
+               replacements []]
+          (if found
+            (let [groups (rencg/re-groups-ncg m ncgs)
+                  match  (:match groups)
+                  rep    (replacement-fn groups)]
+              (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement rep))
+              (recur (.find m) (conj replacements [match rep])))
+            (do
+              (.appendTail m buffer)
+              [(.toString buffer) replacements]))))
+      [s nil])))
+
+(defn digit-name-to-number
+  "Converts the English name of a single digit (a `String`) to that number (as a
+  `Long`). e.g. `\"two\"` -> `2`.  Returns `nil` if `s` is not the name of a
+  digit."
+  [^String s]
+  (when s
+    (case s
+      "zero"  0
+      "one"   1
+      "two"   2
+      "three" 3
+      "four"  4
+      "five"  5
+      "six"   6
+      "seven" 7
+      "eight" 8
+      "nine"  9
+      nil)))
 
 (def ^java.nio.charset.Charset utf8-charset java.nio.charset.StandardCharsets/UTF_8)
 

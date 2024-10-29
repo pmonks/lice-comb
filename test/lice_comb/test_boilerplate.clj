@@ -19,6 +19,7 @@
 (ns lice-comb.test-boilerplate
   (:require [clojure.spec.alpha :as spec]
             [spdx.licenses      :as slic]
+            [spdx.exceptions    :as sexc]
             [spdx.expressions   :as sexp]))
 
 (println "\n☔️ Running tests on Clojure" (clojure-version)
@@ -42,6 +43,12 @@
   [f]
   @global-setup
   (f))
+
+(def lic-ids-d (delay (slic/ids)))
+(def exc-ids-d (delay (sexc/ids)))
+
+(def license-list-d   (delay (map slic/id->info @lic-ids-d)))
+(def exception-list-d (delay (map sexc/id->info @exc-ids-d)))
 
 (def not-nil? (complement nil?))
 

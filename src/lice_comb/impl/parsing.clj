@@ -29,97 +29,14 @@
             [embroidery.api                  :as e]
             [lice-comb.impl.spdx             :as lcis]
             [lice-comb.impl.id-detection     :as lciid]
-            [lice-comb.impl.splitting        :as lcisp]
             [lice-comb.impl.expressions-info :as lciei]
             [lice-comb.impl.http             :as lcihttp]
             [lice-comb.impl.data             :as lcid]
+            [lice-comb.impl.correction       :as lcic]
             [lice-comb.impl.utils            :as lciu]))
 
+; Names that are so cursed we don't even both trying to parse them
 (def ^:private cursed-names-d (delay (lcid/load-edn-resource "lice_comb/names.edn")))
-
-(def ^:private gpl-ids-with-only-or-later #{"AGPL-1.0"
-                                            "AGPL-3.0"
-                                            "GFDL-1.1"
-                                            "GFDL-1.2"
-                                            "GFDL-1.3"
-                                            "GPL-1.0"
-                                            "GPL-2.0"
-                                            "GPL-3.0"
-                                            "LGPL-2.0"
-                                            "LGPL-2.1"
-                                            "LGPL-3.0"})
-
-(defn- dis
-  "Remove the given key(s) from the associative collection (set or map)."
-  [associative & ks]
-  (cond (set? associative) (apply disj   associative ks)
-        (map? associative) (apply dissoc associative ks)))
-
-(defn- fix-gpl-only-or-later
-  "If the keys of expressions includes both an 'only' and an 'or-later' variant
-  of the same underlying GNU family identifier, remove the 'only' variant."
-  [expressions]
-  (loop [result expressions
-         f      (first gpl-ids-with-only-or-later)
-         r      (rest  gpl-ids-with-only-or-later)]
-    (if f
-      (recur (if (and (contains? result (str f "-only"))
-                      (contains? result (str f "-or-later")))
-               (dis result (str f "-only"))
-               result)
-             (first r)
-             (rest r))
-      result)))
-
-(defn- fix-public-domain-cc0
-  "If the keys of expressions includes both CC0-1.0 and lice-comb's public
-  domain LicenseRef, remove the LicenseRef as it's redundant."
-  [expressions]
-  (if (and (contains? expressions (lcis/public-domain))
-           (contains? expressions "CC0-1.0"))
-    (dis expressions (lcis/public-domain))
-    expressions))
-
-(defn- fix-mpl-2
-  "If the keys of expressions includes both MPL-2.0 and
-  MPL-2.0-no-copyleft-exception, remove MPL-2.0-no-copyleft-exception as it's
-  redundant."
-  [expressions]
-  (if (and (contains? expressions "MPL-2.0")
-           (contains? expressions "MPL-2.0-no-copyleft-exception"))
-    (dis expressions "MPL-2.0-no-copyleft-exception")
-    expressions))
-
-(defn- fix-license-id-with-exception-id
-  "Combines instances where there are two keys, one of them a license identifier
-  and the other an exception identifier."
-  [expressions]
-  (if (= 2 (count expressions))
-    (if (set? expressions)
-      ; expressions is a set
-      (let [license-id   (first (seq (filter #(or (sl/listed-id? %) (sl/license-ref?  %)) expressions)))
-            exception-id (first (seq (filter #(or (se/listed-id? %) (se/addition-ref? %)) expressions)))]
-        (if (and license-id exception-id)
-          #{(str license-id " WITH " exception-id)}
-          expressions))
-      ; expressions is a map
-      (let [exprs        (keys expressions)
-            license-id   (first (seq (filter #(or (sl/listed-id? %) (sl/license-ref?  %)) exprs)))
-            exception-id (first (seq (filter #(or (se/listed-id? %) (se/addition-ref? %)) exprs)))]
-        (if (and license-id exception-id)
-          {(str license-id " WITH " exception-id) (reduce concat (vals expressions))}
-          expressions)))
-    expressions))
-
-(defn manual-fixes
-  "Manually fix certain invalid combinations of license identifiers in a set or
-  map of expressions."
-  [expressions]
-  (some-> expressions
-          fix-gpl-only-or-later
-          fix-public-domain-cc0
-          fix-mpl-2
-          fix-license-id-with-exception-id))
 
 (defmulti match-text
   "Returns an expressions-info map for the given license text, or nil if no
@@ -140,8 +57,8 @@
                                #{(str (first license-ids-found) " WITH " (first exception-ids-found))}
                                (set/union license-ids-found exception-ids-found))]
     (when expressions-found
-      ; Note: we don't need to sexp/normalise the keys here, as the only expressions that can be returned are constructed correctly
-      (manual-fixes (into {} (map #(hash-map % (list {:id % :type :concluded :confidence :high :strategy :spdx-matching-guidelines})) expressions-found))))))
+      ; Note: we don't need to sexp/normalise the keys here, as the only expressions that can be returned are already correctly constructed
+      (lcic/correct (into {} (map #(hash-map % (list {:id % :type :concluded :confidence :high :strategy :spdx-matching-guidelines :source (list "<content>")})) expressions-found))))))
 
 (defmethod match-text java.io.Reader
   [r]
@@ -164,17 +81,333 @@
   if no matching license ids were found."
   [uri]
   (when-not (s/blank? uri)
-    (let [result (manual-fixes
-                   (or
-                     ; 1. Is the URI a close match for any of the URIs in the SPDX license or exception lists?
-                     (when-let [ids (lcis/near-match-uri uri)]
-                       (into {} (map #(hash-map % (list {:id % :type :concluded :confidence :high :strategy :spdx-listed-uri :source (list uri)})) ids)))
+    (when-let [result (or
+                        ; 1. Is the URI a close match for any of the URIs in the SPDX license or exception lists?
+                        (when-let [id (lcis/best-near-match-uri uri)]
+                          {id (list {:id id :type :concluded :confidence :high :strategy :spdx-listed-uri-near-match})})  ; We don't need a :source here since we prepend it below
 
-                     ; 2. attempt to retrieve the text/plain contents of the uri and perform license text matching on it
-                     (when-let [license-text (lcihttp/get-text uri)]
-                       (match-text license-text))))]
+                        ; 2. attempt to retrieve the text/plain contents of the uri and perform license text matching on it
+                        (when-let [license-text (lcihttp/get-text uri)]
+                          (match-text license-text)))]
       ; We don't need to sexp/normalise the keys here, as we never detect an expression from a URI
-      (lciei/prepend-source uri result))))
+      (lciei/prepend-source uri (lcic/correct result)))))
+
+(defn- determine-strategy-for-id-match
+  "Returns the strategy (a keyword) for the given `m`atch, matched to `id`."
+  [m id]
+  (cond
+    (= (s/lower-case m) (s/lower-case id)) :spdx-listed-identifier
+    :else                                  :spdx-listed-identifier-near-match))
+
+(defn- determine-strategy-for-name-match
+  "Returns the strategy (a keyword) for the given `n`ame, matched to `id`."
+  [n id]
+  (let [listed-name (or (:name (sl/id->info id)) (:name (se/id->info id)))]
+    (cond
+      (= n listed-name)                               :spdx-listed-name-exact-match
+      (= (s/lower-case n) (s/lower-case listed-name)) :spdx-listed-name-case-insensitive-match
+      :else                                           :spdx-listed-name-near-match)))
+
+(defn- attempt-to-match-single-id
+  "Attempts to match a single SPDX identifier from `s` (a `String`). The
+  specific steps involve identifying whether `s` is:
+  1. a 'cursed' name (see resources/lice_comb/names.edn)
+  2. an SPDX expression
+  3. an SPDX listed identifier (near match)
+  4. an SPDX listed name (near match)
+  5. an SPDX listed URL (near match)
+  6. proprietary/commercial
+  7. public domain
+
+  Returns an expressions-info map or `nil` if `s` is not recognised as the name
+  of a single license."
+;####TODO: CONSIDER ADDING A FLAG FOR "MATCH" MODE (used initially) VS "FIND" MODE (used after an expression has been parsed into fragments)
+  [s]
+  (let [s (s/trim s)]
+    ; 1. Is it cursed?
+    (if-let [cursed-ids (get @cursed-names-d s)]
+      (map #(apply hash-map %) cursed-ids)
+      (if-let [normalised-expression (sexp/normalise s)]
+        ; 2. n is already an SPDX id / expression
+        {normalised-expression (list {:type     :declared
+                                      :strategy (if (= 1 (count (sexp/extract-ids (sexp/parse normalised-expression)))) :spdx-listed-identifier :spdx-expression)
+                                      :source   (list s)})}
+        (if-let [id (lcis/best-near-match-id s)]
+          ; 3. n is a near match for an SPDX identifier
+          {id (list {:id id :type :concluded :confidence :high :strategy (determine-strategy-for-id-match s id) :source (list s)})}
+          (if-let [id (lcis/best-near-match-name s)]
+            ; 4. n is an SPDX listed name
+            {id (list {:id id :type :concluded :confidence :high :strategy (determine-strategy-for-name-match s id) :source (list s)})}
+            (if (lciu/valid-http-uri? s)
+              (if-let [ei-map (parse-uri s)]
+                ; 5.1. n is a URL and it's in the SPDX license or exception list
+                ei-map
+                ; 5.2. n is a URL but it's not in the SPDX license or exception list
+                (let [unidentified-license-ref (lcis/name->unidentified-license-ref s)]
+                  {unidentified-license-ref (list {:id unidentified-license-ref :type :concluded :confidence :high :strategy :unidentified :source (list s)})}))
+              ;####TODO: THIS REGEX IS DUPLICATED FROM lice-comb.impl.id-detection - THERE SHOULD BE A BETTER WAY
+              (if (re-matches #"(?i)\b(Propriet[aoe]ry|Commercial|Propriet[aoe]ry\s*[/\-\\]\s*Commercial|All\s+Rights\s+Reserved|Private)\b" s)
+                ; 6. n is proprietary / commercial
+                (let [prop-comm-license-ref (lcis/proprietary-commercial)]
+                  {prop-comm-license-ref (list {:id prop-comm-license-ref :type :concluded :confidence :high :strategy :regex-matching :source (list s)})})
+                ;####TODO: THIS REGEX IS DUPLICATED FROM lice-comb.impl.id-detection - THERE SHOULD BE A BETTER WAY
+                (when (re-matches #"(?i)\bPublic\s+Domain(?![\s\(]*CC\s*0)" s)
+                  ; 7. n is Public Domain
+                  (let [public-domain-license-ref (lcis/public-domain)]
+                    {public-domain-license-ref (list {:id public-domain-license-ref :type :concluded :confidence :high :strategy :regex-matching :source (list s)})}))))))))))
+
+(defn- replace-listed-ids-near-match
+  "Replaces all near matches of SPDX listed identifiers in `s` with their SPDX
+  ids, returning a tuple where the first element is the new `String`, and the
+  second element is a sequence of expression info maps or `nil` if no replacements
+  occurred."
+  [s]
+  (if (s/blank? s)
+    [s nil]
+    (let [[new-s explanations] (lcis/replace-near-match-ids-with-id (s/trim s))
+          ei                   (when explanations
+                                 (map #(let [[found id] %]
+                                         {:id id :type :concluded :confidence :high :strategy (determine-strategy-for-id-match found id) :source (list found)})
+                                      explanations))]
+      [new-s ei])))
+
+(defn- replace-listed-names-near-match
+  "Replaces all near matches of SPDX listed names in `s` with their SPDX ids,
+  returning a tuple where the first element is the new `String`, and the second
+  element is a sequence of expression info maps or `nil` if no replacements
+  occurred."
+  [s]
+  (if (s/blank? s)
+    [s nil]
+    (let [[new-s explanations] (lcis/replace-near-match-names-with-id (s/trim s))
+          ei                   (when explanations
+                                 (map #(let [[found id] %]
+                                         {:id id :type :concluded :confidence :high :strategy (determine-strategy-for-name-match found id) :source (list found)})
+                                      explanations))]
+      [new-s ei])))
+
+(defn- replace-tricky-names
+  "Replaces all tricky names in `s` with their SPDX ids, returning a tuple where
+  the first element is the new `String`, and the second element is a sequence of
+  expression info maps or `nil` if no replacements occurred."
+  [s]
+  (if (s/blank? s)
+    [s nil]
+    ;####TODO: LOSING A LOT OF IMPORTANT CONTEXT HERE!!!!!
+    (let [result (lciid/replace-family "GPL" s)
+          result (lciid/replace-family "CDDL" (first result))]
+      [(first result) nil])))   ;####TODO: BOGUS SECOND TUPLE ELEMENT
+
+(defn- split-and-detect-fragments
+  [s]
+  ;####TODO: IMPLEMENT ME!
+  nil)
+
+(defn- attempt-to-parse-name
+  "Attempts to parse `n`ame into an SPDX expression, by:
+  1. Replacing listed names with their ids
+  2. Replacing listed names with their ids
+  3. Replacing 'custom' names with their ids
+  4. Parsing out
+
+  4. Identifying operators and canonicalising them (AND, OR, WITH, AND/OR, OR-LATER)
+  5. Inferring operators where appropriate (i.e. where a license id is followed by an exception id)
+  6. Splitting (if needed) where operators don't exist and cannot be inferred
+
+  Returns `nil` if parsing fails."
+  [n]
+  ; 1. Replace near matches for SPDX listed ids
+  (let [[n eis] (replace-listed-ids-near-match n)]
+    (if-let [normalised-expression (sexp/normalise n)]
+      {normalised-expression eis}
+      ; 2. Replace near matches for SPDX listed names
+      (let [[n new-eis] (replace-listed-names-near-match n)
+            eis         (concat eis new-eis)]
+        (if-let [normalised-expression (sexp/normalise n)]
+          {normalised-expression eis}
+          ; 3. Replace tricky names (those with operators in them, primarily)
+          (let [[n new-eis] (replace-tricky-names n)
+                eis         (concat eis new-eis)]            
+            (if-let [normalised-expression (sexp/normalise n)]
+              {normalised-expression eis}
+              ; 4. Split on operators then detect fragments
+              (let [[n new-eis] (split-and-detect-fragments n)
+                    eis         (concat eis new-eis)]
+                (when-let [normalised-expression (sexp/normalise n)]
+                  {normalised-expression eis})))))))))
+
+(defn parse-name
+  "Parses the given license `n`ame, returning an expressions-info map or `nil`
+  when `n`ame is blank."
+  [n]
+  (when-not (s/blank? n)
+    (let [n (s/trim n)]
+      (or ; 1. Is it a 'singleton' case?
+          (attempt-to-match-single-id n)
+          ; 2. Is it a 'complex' case?
+          (attempt-to-parse-name n)
+          ; 3. Could not parse at all - return a single unidentified LicenseRef
+          (let [unidentified-id (lcis/name->unidentified-license-ref n)]
+            {unidentified-id (list {:id unidentified-id :type :concluded :confidence :low :strategy :unidentified :source (list n)})})))))
+
+(defn init!
+  "Initialises this namespace upon first call (and does nothing on subsequent
+  calls), returning nil. Consumers of this namespace are not required to call
+  this fn, as initialisation will occur implicitly anyway; it is provided to
+  allow explicit control of the cost of initialisation to callers who need it.
+
+  Note: this method has a substantial performance cost."
+  []
+  (lcis/init!)
+  (lciid/init!)
+  (lcihttp/init!)
+  @cursed-names-d
+  nil)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; OLD SHIT TO BE DELETED!!!!!!!!!!!!!!!!!!!!!!
+
+
+(comment
+
+
+
+
+
+
+
+(defn- replace-by-with-ei
+  "clojure.string/replace-by, but returning a (singleton) map where the key is
+  the replaced string, and the value is an expressions info map."
+  [^CharSequence s ^java.util.regex.Pattern re f]
+  (let [m (re-matcher re s)]
+    (if (.find m)
+      (let [buffer (StringBuffer. (.length s))
+            match  (re-groups m)
+            ei     {f (list {:id f :type :concluded :confidence :high :strategy :spdx-listed-name :source (list match)})}]
+        (loop [found true]
+          (if found
+            (do (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement (f (re-groups m))))
+                (recur (.find m)))
+            (do (.appendTail m buffer)
+                {(.toString buffer) ei}))))
+      {s nil})))
+
+(def ^:private name-regex-id-pairs-d (delay (concat @lcis/name-regex-id-pairs-d
+                                                    [; LGPL name variations containing "or"
+                                                     [#"(?i)\bGNU\s+General\s+Library\s+or\s+Less[eo]r\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b" "LGPL"]
+                                                     [#"(?i)\bGNU\s+General\s+Less[eo]r\s+or\s+Library\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b" "LGPL"]
+                                                     [#"(?i)\bGeneral\s+Library\s+or\s+Less[eo]r\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"       "LGPL"]
+                                                     [#"(?i)\bGeneral\s+Less[eo]r\s+or\s+Library\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"       "LGPL"]
+                                                     [#"(?i)\bGNU\s+Library\s+or\s+Less[eo]r\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"           "LGPL"]
+                                                     [#"(?i)\bGNU\s+Less[eo]r\s+or\s+Library\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"           "LGPL"]
+                                                     [#"(?i)\bGeneral\s+Library\s+or\s+Less[eo]r(\s+\(LGPL\))?\b"                             "LGPL"]
+                                                     [#"(?i)\bGeneral\s+Less[eor]\s+or\s+Library(\s+\(LGPL\))?\b"                             "LGPL"]
+                                                     [#"(?i)\bGNU\s+Library\s+or\s+Less[eo]r(\s+\(LGPL\))?\b"                                 "LGPL"]
+                                                     [#"(?i)\bGNU\s+Less[eo]r\s+or\s+Library(\s+\(LGPL\))?\b"                                 "LGPL"]
+                                                     [#"(?i)\b(\(GNU\)\s+)?Library\s+or\s+Less[eo]r\s+GPL\b"                                  "LGPL"]
+                                                     [#"(?i)\b(\(GNU\)\s+)?Less[eo]r\s+or\s+Library\s+GPL\b"                                  "LGPL"]
+                                                     ; CDDL name variations containing "and"
+                                                     [#"(?i)\bCommon\s+Development\s+(and|\&)?\s+Distribution(\s+Licen[cs]e)?\b"              "CDDL"]
+                                                    ])))
+
+;####TODO: USE replace-by-with-ei TO ENSURE EXPRESSIONS INFO IS SYNTHESISED IE BY USING replace-by-with-ei
+;####TODO: as part of this, have to figure out what to do about "two step" replacements (e.g. "Common Development & Distribution" -> "CDDL" -> "CDDL-1.1")
+(defn replace-names-with-ids
+;(defn- replace-names-with-ids
+  "Replaces all listed SPDX license and exception names in `s` with their
+  identifier, returning a `String`.  Returns `nil` if `s` is `nil`."
+  [s]
+  (if (s/blank? s)
+    s
+    (loop [result  s
+           [f & r] @name-regex-id-pairs-d]
+      (if f
+        (recur (s/replace result (first f) (second f)) r)
+        ; Base case - return
+        result))))
+
+(def op-re          #"\s+(and[/\-\\]or|and|&|or|w/|with|\s+)+\s+")
+(def leading-op-re  (lciu/re-concat "(?i)\\A" op-re))
+(def trailing-op-re (lciu/re-concat "(?i)" op-re "\\z"))
+
+(defn- strip-leading-and-trailing-operators
+  "Strips all leading and trailing operators (and, or, and/or, with) from `s`."
+  [s]
+  (when s
+    (let [new-s (-> (str " " s " ")   ; Ensure s has leading and trailing whitespace, as op-re requires it to exist
+                    (s/replace leading-op-re  "")
+                    (s/replace trailing-op-re ""))]
+      (when-not (s/blank? new-s)
+        (s/trim new-s)))))
+
+(def ^:private and-or-splitting-re           #"(?i)(?<=\s)and[/\-\\]or(?=\s)")
+(def ^:private abbreviated-with-splitting-re #"(?i)\bw/")
+(def ^:private abbreviated-and-splitting-re  #"(?i)&")
+(def ^:private and-or-with-splitting-re      #"(?i)\b((and|&)(?![/\-\\]or)|(?<!(and|&)[/\-\\])or(?!\s+lat[eo]r)|with)\b")
+
+(defn- naive-operator-split
+  "Naively splits `s` (a `String`) on potential operators. Returns a sequence
+  (potentially of one element) of `String`s including both the values between
+  operators and the identified operators themselves. Returns `nil` when `s` is
+  `nil`."
+  [s]
+  (when s
+    (->>          (lciu/retained-split s and-or-splitting-re)
+         (mapcat #(lciu/retained-split % abbreviated-with-splitting-re))
+         (mapcat #(lciu/retained-split % abbreviated-and-splitting-re))
+         (mapcat #(lciu/retained-split % and-or-with-splitting-re)))))
+
+(defn- keywordise-operators
+  "Turns operators in `coll` (a sequence of `String`s) into a keyword
+  equivalent.  These keywords are one of:
+  * :and
+  * :or
+  * :with
+
+  Note: and/or 'operators' are removed from the result"
+  [coll]
+  (filter identity (map #(case (s/lower-case %)
+                           ("and" "&")                   :and
+                           "or"                          :or
+                           ("with" "w/")                 :with
+                           ("and/or" "and-or" "and\\or") nil
+                           %)
+                        coll)))
 
 (defn- string->ids-info
   "Converts the given string (a fragment of a license name) into a **sequence**
@@ -304,37 +537,9 @@
       (recur (process-expression-element result f) (first r) (rest r))
       (manual-fixes (into {} result)))))
 
-(defn parse-name
-  "Parses the given license `n`ame, returning an expressions-info map."
-  [n]
-  (when-not (s/blank? n)
-    (let [n              (s/trim n)
-          partial-result (some->> n
-                                  lcisp/split-on-operators                         ; Split on operators
-                                  (map #(if (keyword? %) % (string->ids-info %)))  ; Determine SPDX ids (or UNIDENTIFIED-xxx) with info for all non-operators
-                                  flatten                                          ; Flatten back to an unnested sequence (since string->ids-info returns sequences)
-                                  fix-unidentifieds                                ; Convert each unidentified non-operator into either a LicenseRef or AdditionRef, depending on context
-                                  seq)
-          ids-only       (seq (mapcat keys (filter map? partial-result)))
-          result         ; Check whether all we have are unidentified LicenseRefs/AdditionRefs, and if so just return the entire thing as a single unidentified LicenseRef
-                         (if (every? lcis/unidentified? ids-only)
-                           (let [id (lcis/name->unidentified-license-ref n)]
-                             {id (list {:id id :type :concluded :confidence :low :confidence-explanations [:unidentified] :strategy :unidentified :source (list)})})
-                           (some->> partial-result
-                                    build-expressions-info-map
-                                    (lciu/mapfonk sexp/normalise)))]
-      (lciei/prepend-source n result))))
 
-(defn init!
-  "Initialises this namespace upon first call (and does nothing on subsequent
-  calls), returning nil. Consumers of this namespace are not required to call
-  this fn, as initialisation will occur implicitly anyway; it is provided to
-  allow explicit control of the cost of initialisation to callers who need it.
 
-  Note: this method has a substantial performance cost."
-  []
-  (lcis/init!)
-  (lciid/init!)
-  (lcihttp/init!)
-  @cursed-names-d
-  nil)
+
+
+
+)

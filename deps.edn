@@ -26,8 +26,8 @@
     hato/hato                             {:mvn/version "1.0.0"}
     dev.weavejester/medley                {:mvn/version "1.8.1"}
     miikka/clj-base62                     {:mvn/version "0.1.1"}
-    com.github.pmonks/clj-spdx            {:mvn/version "1.0.176"}
-    com.github.pmonks/rencg               {:mvn/version "1.0.51"}
+    com.github.pmonks/clj-spdx            {:mvn/version "1.0.190"}
+    com.github.pmonks/rencg               {:mvn/version "1.0.64"}
     com.github.pmonks/embroidery          {:mvn/version "1.0.44"}}
  :aliases
    {:build {:deps       {com.github.pmonks/pbr {:mvn/version "RELEASE"}}
