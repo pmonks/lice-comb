@@ -1,0 +1,77 @@
+;;;; lice_comb.impl.3rd_party.clj
+;;;
+;;; Code obtained from third party sources, but not readily available as a
+;;; library via standard package-consumption mechanisms (i.e. a Maven artifact).
+;;;
+;;; Copyright and license information is on a per-code-snippet basis, and
+;;; is communicated inline via further comments.
+;;;
+(ns lice-comb.impl.3rd-party)
+
+
+;; rdrop-while is copyright © Joshua Suskalo (https://github.com/IGJoshua) 2023 and licensed as "CC0-1.0 OR MIT"
+;;
+;; Source: https://discord.com/channels/729136623421227082/732641743723298877/1141786961875583097
+;; Link to request access: https://discord.gg/discljord
+;;
+;; Note that the lice-comb project elects to consume this code under the MIT license
+;;
+;; SPDX-License-Identifier: CC0-1.0 OR MIT
+;;
+(defn rdrop-while
+  "As for clojure.core/drop-while, but drops from the end of the
+  sequence backwards, rather than the front forwards. More efficient
+  when provided with a vector rather than a list."
+  ([pred coll]
+   (if (reversible? coll)
+     (take (- (count coll) (count (take-while pred (rseq coll)))) coll)
+     (reverse (drop-while pred (reverse coll)))))
+  ([pred]
+   (fn [rf]
+     (let [stash (volatile! [])]
+       (fn
+         ([] (rf))
+         ([acc] (rf acc))
+         ([acc elt]
+          (if (pred elt)
+            (do (vswap! stash conj elt)
+                acc)
+            (let [res (reduce rf acc (conj @stash elt))]
+              (vreset! stash [])
+              res))))))))
+
+
+;; by, ascending, and descending are copyright © Reddit user u/fredoverflow 2022
+;;
+;; Obtained from https://www.reddit.com/r/Clojure/comments/ufa8e0/comment/i6s7zt5/,
+;; and with no license information explicitly listed, they fall back on being
+;; licensed under Reddit's Public Content Policy:
+;;
+;; https://support.reddithelp.com/hc/en-us/articles/26410290525844-Public-Content-Policy
+;;
+;; SPDX-License-Identifier: LicenseRef-lice-comb-PROPRIETARY-COMMERCIAL
+;;
+(defn by
+  "For use with `clojure.core/sort` to provide composite sorts.
+
+  For example:
+  ```clojure
+  (sort (by :deprecated? ascending :id ascending) license-id)
+  ```"
+  [& keys-orderings]
+  (fn [a b]
+    (loop [[key ordering & keys-orderings] keys-orderings]
+      (let [order (ordering (key a) (key b))]
+        (if (and (zero? order) keys-orderings)
+          (recur keys-orderings)
+          order)))))
+
+(defn ascending
+  "For use with [[by]] to indicate ascending sort order."
+  [a b]
+  (clojure.lang.Util/compare a b))
+
+(defn descending
+  "For use with [[by]] to indicate descending sort order."
+  [a b]
+  (clojure.lang.Util/compare b a))

@@ -1,4 +1,9 @@
 lice-comb
 Copyright © 2021 Peter Monks (https://github.com/pmonks)
 
-This project contains source code for sorting functionality obtained from Reddit, in file src/lice_comb/impl/sort_utils.clj.  That code is copyright 2022 Reddit user u/fredoverflow, and to the best of my knowledge only licensed under Reddit's Public Content Policy: https://support.reddithelp.com/hc/en-us/articles/26410290525844-Public-Content-Policy
+This project contains source code copied from third parties, in file:
+
+    src/lice_comb/impl/3rd_party.clj
+
+Please refer to that file for detailed copyright and licensing information of
+that code.

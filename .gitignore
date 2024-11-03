@@ -1,3 +1,4 @@
+.DS_Store
 .idea
 .nvd
 *.iml
@@ -19,4 +20,3 @@ uberjar/
 attic
 resources/logback-test.xml
 .clj-kondo/.cache
-.nvd

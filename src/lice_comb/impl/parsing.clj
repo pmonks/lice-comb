@@ -33,7 +33,8 @@
             [lice-comb.impl.http             :as lcihttp]
             [lice-comb.impl.data             :as lcid]
             [lice-comb.impl.correction       :as lcic]
-            [lice-comb.impl.utils            :as lciu]))
+            [lice-comb.impl.utils            :as lciu]
+            [lice-comb.impl.3rd-party        :as lci3]))
 
 ; Names that are so cursed we don't even both trying to parse them
 (def ^:private cursed-names-d (delay (lcid/load-edn-resource "lice_comb/names.edn")))
@@ -108,6 +109,7 @@
       (= (s/lower-case n) (s/lower-case listed-name)) :spdx-listed-name-case-insensitive-match
       :else                                           :spdx-listed-name-near-match)))
 
+;####TODO: CONSIDER MOVING THIS TO lice-comb.impl.id-detection - THIS WOULD RESOLVE THE TODOS INLINE TOO
 (defn- attempt-to-match-single-id
   "Attempts to match a single SPDX identifier from `s` (a `String`). The
   specific steps involve identifying whether `s` is:
@@ -121,7 +123,6 @@
 
   Returns an expressions-info map or `nil` if `s` is not recognised as the name
   of a single license."
-;####TODO: CONSIDER ADDING A FLAG FOR "MATCH" MODE (used initially) VS "FIND" MODE (used after an expression has been parsed into fragments)
   [s]
   (let [s (s/trim s)]
     ; 1. Is it cursed?
@@ -191,28 +192,138 @@
   the first element is the new `String`, and the second element is a sequence of
   expression info maps or `nil` if no replacements occurred."
   [s]
-  (if (s/blank? s)
-    [s nil]
-    ;####TODO: LOSING A LOT OF IMPORTANT CONTEXT HERE!!!!!
-    (let [result (lciid/replace-family "GPL" s)
-          result (lciid/replace-family "CDDL" (first result))]
-      [(first result) nil])))   ;####TODO: BOGUS SECOND TUPLE ELEMENT
+  ;####TODO: IMPLEMENT ME!!!!
+  [s nil])
+
+;  (if (s/blank? s)
+;    [s nil]
+;    ;####TODO: LOSING A LOT OF IMPORTANT CONTEXT HERE!!!!!
+;    (let [result (lciid/replace-family "GPL"  s)
+;          result (lciid/replace-family "CDDL" (first result))]
+;      [(first result) nil])))   ;####TODO: BOGUS EI (second tuple element)
+
+(defn- replace-operators-with-keywords
+  [coll]
+  (filter identity
+    (map #(let [trimmed (s/trim %)
+                val     (-> trimmed
+                            s/lower-case
+                            (s/replace #"(?i)w/"           "with")
+                            (s/replace #"&+"               "and")
+                            (s/replace #"/+"               "/")
+                            (s/replace #"\\+"              "/")
+                            (s/replace #"(?i)and\s*/\s*or" "/"))]
+            (case val
+              "and"    :and
+              "or"     :or
+              "with"   :with
+              ("/" "") nil
+              trimmed))  ; Not a keyword - keep it unchanged (albeit trimmed)
+         coll)))
+
+(defn- collapse-duplicate-operator-keywords
+  "Collapses sequential runs of keywords in `coll`, either to 1 keyword if
+  the run is identical, or to no keywords if they're heterogeneous. Non-keyword
+  values in `coll` are passed through unchanged."
+  [coll]
+  (filter #(not= ::sentinel %)
+    (reduce #(if (and (keyword? (last %1)) (keyword? %2))
+               (if (= (last %1) %2)
+                 %1
+                 (conj (vec (drop-last %1)) ::sentinel))
+               (conj %1 %2))
+            []
+            coll)))
+
+(defn- remove-invalid-operator-keywords
+  "Removes invalid operator keywords from `coll`. This is defined as all leading
+  and trailing keywords, and collapsing sequential runs of keywords (either to
+  1 keyword if they're all the same, or no keywords if they're heterogeneous)."
+  [coll]
+  (->> coll
+       (drop-while keyword?)
+       (lci3/rdrop-while keyword?)
+       collapse-duplicate-operator-keywords))
+
+(defn- attempt-to-find-ids-in-fragments
+  "Attempts to find one or more ids in the fragments (Strings) in `coll`.
+  For each fragment returns a sequence of maps, where the key(s) are the
+  detected identifier(s), and the value(s) are an expression-info map for that
+  identifer. If no ids are found in a fragment, the identifier for that fragment
+  will be an Unidentified LicenseRef.
+
+  Other elements (i.e. operator keywords) are passed through unchanged)."
+  [coll]
+  (flatten
+    (map #(if (string? %)
+            (if (or (sl/listed-id?                %)
+                    (se/listed-id?                %)
+                    (lcis/lice-comb-license-ref?  %)
+                    (lcis/lice-comb-addition-ref? %))
+              [{% nil}]   ; Don't need an expression-info here, since it will already have one from earlier steps in the parsing process
+              (if-let [ids (lciid/detect-ids %)]
+                ids
+                (let [unidentified-id (lcis/name->unidentified-license-ref %)]
+                  [{unidentified-id {:id unidentified-id :type :concluded :confidence :low :strategy :unidentified :source (list %)}}])))
+            %)
+         coll)))
+
+(defn- rebuild-expressions
+  "Rebuilds one or more SPDX expressions from the given `fragments` and
+  expression-infos (`eis`).  `fragments` is a heterogeneous sequence containing
+  maps and/or keywords.  Each map represents a detected license, with an SPDX
+  identifier as the key and an exression-info map as the value.  Each keyword
+  represents one of the SPDX expression operators (`:and`, `:or`, `:with`).
+
+  It returns a sequence of maps, where the keys are SPDX expressions, and the
+  associated value is a sequence of expression-info maps related to that
+  expression."
+  [fragments existing-eis]
+  (let [eis                 (concat existing-eis (filter identity (mapcat #(when (map? %) (vals %)) fragments)))
+        expr-elements       (mapcat #(if (keyword? %) [%] (keys %)) fragments)
+        regrouped-fragments (loop [result  [[]]
+                                   [f & r] expr-elements]
+                              (if-not f
+                                ; Base case
+                                result
+                                ; Recursive case
+                                (let [l (last result)]
+                                  (case [(string? (last l)) (string? f)]
+                                    [true  true]  (recur (conj result [f])                    r) ; String/string, so add a "gap" to the result
+                                    [true false]  (recur (conj (drop-last result) (conj l f)) r) ; String/keyword, so continue the current last collection in result
+                                    [false true]  (recur (conj (drop-last result) (conj l f)) r) ; Keyword/string, so continue the current last collection in result
+;                                    [false false]  ; Not possible - we've already removed consecutive keywords in fragments (in remove-invalid-operator-keywords/collapse-duplicate-operator-keywords)
+                                    ))))
+        expressions         (map #(sexp/normalise (s/join " " (map name %))) regrouped-fragments)
+        ; Now regroup expression-infos with their associated expression(s)
+        ei-lookup           (group-by :id eis)
+        expr-ei-pairs       (mapcat #(let [ids (sexp/extract-ids (sexp/parse %))]
+                                       [% (seq (filter identity (conj (vec (mapcat (fn [id] (get ei-lookup id)) ids))
+                                                                      (when (> (count ids) 1) {:type :concluded :confidence :high :strategy :expression-inference}))))])
+                                    expressions)]
+    (apply hash-map expr-ei-pairs)))
 
 (defn- split-and-detect-fragments
-  [s]
-  ;####TODO: IMPLEMENT ME!
-  nil)
+  "Splits `s` (a `String`) into fragments based on probable separators (SPDX
+  expression operators and various other delimiters commonly seen in license
+  names), then detects the license and/or exception identifier(s) in each
+  fragment, the finally rebuilds expressions"
+  [s eis]
+  (let [fragments   (some-> (lciu/retained-split s #"(?i)(\band\s*/+\s*or\b|\band\b|\bor\b|\bwith\b|\bw/|&+|/+|\\+)")
+                            replace-operators-with-keywords
+                            remove-invalid-operator-keywords
+                            attempt-to-find-ids-in-fragments)
+        identifiers (mapcat keys (filter #(not (keyword? %)) fragments))]
+    ; If we only found unidentifieds, return nil
+    (when-not (seq (filter #(lcis/unidentified? %) identifiers))
+      (rebuild-expressions fragments eis))))
 
 (defn- attempt-to-parse-name
   "Attempts to parse `n`ame into an SPDX expression, by:
   1. Replacing listed names with their ids
   2. Replacing listed names with their ids
-  3. Replacing 'custom' names with their ids
-  4. Parsing out
-
-  4. Identifying operators and canonicalising them (AND, OR, WITH, AND/OR, OR-LATER)
-  5. Inferring operators where appropriate (i.e. where a license id is followed by an exception id)
-  6. Splitting (if needed) where operators don't exist and cannot be inferred
+  3. Replacing 'tricky' names with their ids
+  4. Parsing the input for any elements it contains that haven't yet been converted into an id
 
   Returns `nil` if parsing fails."
   [n]
@@ -230,11 +341,9 @@
                 eis         (concat eis new-eis)]            
             (if-let [normalised-expression (sexp/normalise n)]
               {normalised-expression eis}
-              ; 4. Split on operators then detect fragments
-              (let [[n new-eis] (split-and-detect-fragments n)
-                    eis         (concat eis new-eis)]
-                (when-let [normalised-expression (sexp/normalise n)]
-                  {normalised-expression eis})))))))))
+              ; 4. Split on operators then detect fragments - note: this is the (only) point where we can end up with multiple expressions
+              (when-let [fully-parsed-result (split-and-detect-fragments n eis)]
+                fully-parsed-result))))))))
 
 (defn parse-name
   "Parses the given license `n`ame, returning an expressions-info map or `nil`
@@ -263,283 +372,3 @@
   (lcihttp/init!)
   @cursed-names-d
   nil)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-; OLD SHIT TO BE DELETED!!!!!!!!!!!!!!!!!!!!!!
-
-
-(comment
-
-
-
-
-
-
-
-(defn- replace-by-with-ei
-  "clojure.string/replace-by, but returning a (singleton) map where the key is
-  the replaced string, and the value is an expressions info map."
-  [^CharSequence s ^java.util.regex.Pattern re f]
-  (let [m (re-matcher re s)]
-    (if (.find m)
-      (let [buffer (StringBuffer. (.length s))
-            match  (re-groups m)
-            ei     {f (list {:id f :type :concluded :confidence :high :strategy :spdx-listed-name :source (list match)})}]
-        (loop [found true]
-          (if found
-            (do (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement (f (re-groups m))))
-                (recur (.find m)))
-            (do (.appendTail m buffer)
-                {(.toString buffer) ei}))))
-      {s nil})))
-
-(def ^:private name-regex-id-pairs-d (delay (concat @lcis/name-regex-id-pairs-d
-                                                    [; LGPL name variations containing "or"
-                                                     [#"(?i)\bGNU\s+General\s+Library\s+or\s+Less[eo]r\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b" "LGPL"]
-                                                     [#"(?i)\bGNU\s+General\s+Less[eo]r\s+or\s+Library\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b" "LGPL"]
-                                                     [#"(?i)\bGeneral\s+Library\s+or\s+Less[eo]r\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"       "LGPL"]
-                                                     [#"(?i)\bGeneral\s+Less[eo]r\s+or\s+Library\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"       "LGPL"]
-                                                     [#"(?i)\bGNU\s+Library\s+or\s+Less[eo]r\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"           "LGPL"]
-                                                     [#"(?i)\bGNU\s+Less[eo]r\s+or\s+Library\s+Public\s+Licen[cs]e(\s+\(LGPL\))?\b"           "LGPL"]
-                                                     [#"(?i)\bGeneral\s+Library\s+or\s+Less[eo]r(\s+\(LGPL\))?\b"                             "LGPL"]
-                                                     [#"(?i)\bGeneral\s+Less[eor]\s+or\s+Library(\s+\(LGPL\))?\b"                             "LGPL"]
-                                                     [#"(?i)\bGNU\s+Library\s+or\s+Less[eo]r(\s+\(LGPL\))?\b"                                 "LGPL"]
-                                                     [#"(?i)\bGNU\s+Less[eo]r\s+or\s+Library(\s+\(LGPL\))?\b"                                 "LGPL"]
-                                                     [#"(?i)\b(\(GNU\)\s+)?Library\s+or\s+Less[eo]r\s+GPL\b"                                  "LGPL"]
-                                                     [#"(?i)\b(\(GNU\)\s+)?Less[eo]r\s+or\s+Library\s+GPL\b"                                  "LGPL"]
-                                                     ; CDDL name variations containing "and"
-                                                     [#"(?i)\bCommon\s+Development\s+(and|\&)?\s+Distribution(\s+Licen[cs]e)?\b"              "CDDL"]
-                                                    ])))
-
-;####TODO: USE replace-by-with-ei TO ENSURE EXPRESSIONS INFO IS SYNTHESISED IE BY USING replace-by-with-ei
-;####TODO: as part of this, have to figure out what to do about "two step" replacements (e.g. "Common Development & Distribution" -> "CDDL" -> "CDDL-1.1")
-(defn replace-names-with-ids
-;(defn- replace-names-with-ids
-  "Replaces all listed SPDX license and exception names in `s` with their
-  identifier, returning a `String`.  Returns `nil` if `s` is `nil`."
-  [s]
-  (if (s/blank? s)
-    s
-    (loop [result  s
-           [f & r] @name-regex-id-pairs-d]
-      (if f
-        (recur (s/replace result (first f) (second f)) r)
-        ; Base case - return
-        result))))
-
-(def op-re          #"\s+(and[/\-\\]or|and|&|or|w/|with|\s+)+\s+")
-(def leading-op-re  (lciu/re-concat "(?i)\\A" op-re))
-(def trailing-op-re (lciu/re-concat "(?i)" op-re "\\z"))
-
-(defn- strip-leading-and-trailing-operators
-  "Strips all leading and trailing operators (and, or, and/or, with) from `s`."
-  [s]
-  (when s
-    (let [new-s (-> (str " " s " ")   ; Ensure s has leading and trailing whitespace, as op-re requires it to exist
-                    (s/replace leading-op-re  "")
-                    (s/replace trailing-op-re ""))]
-      (when-not (s/blank? new-s)
-        (s/trim new-s)))))
-
-(def ^:private and-or-splitting-re           #"(?i)(?<=\s)and[/\-\\]or(?=\s)")
-(def ^:private abbreviated-with-splitting-re #"(?i)\bw/")
-(def ^:private abbreviated-and-splitting-re  #"(?i)&")
-(def ^:private and-or-with-splitting-re      #"(?i)\b((and|&)(?![/\-\\]or)|(?<!(and|&)[/\-\\])or(?!\s+lat[eo]r)|with)\b")
-
-(defn- naive-operator-split
-  "Naively splits `s` (a `String`) on potential operators. Returns a sequence
-  (potentially of one element) of `String`s including both the values between
-  operators and the identified operators themselves. Returns `nil` when `s` is
-  `nil`."
-  [s]
-  (when s
-    (->>          (lciu/retained-split s and-or-splitting-re)
-         (mapcat #(lciu/retained-split % abbreviated-with-splitting-re))
-         (mapcat #(lciu/retained-split % abbreviated-and-splitting-re))
-         (mapcat #(lciu/retained-split % and-or-with-splitting-re)))))
-
-(defn- keywordise-operators
-  "Turns operators in `coll` (a sequence of `String`s) into a keyword
-  equivalent.  These keywords are one of:
-  * :and
-  * :or
-  * :with
-
-  Note: and/or 'operators' are removed from the result"
-  [coll]
-  (filter identity (map #(case (s/lower-case %)
-                           ("and" "&")                   :and
-                           "or"                          :or
-                           ("with" "w/")                 :with
-                           ("and/or" "and-or" "and\\or") nil
-                           %)
-                        coll)))
-
-(defn- string->ids-info
-  "Converts the given string (a fragment of a license name) into a **sequence**
-  of singleton expressions-info maps (one per expression), ordered in the same
-  order of appearance as they appear in s.
-
-  If no listed SPDX license or exception identifiers are found in s, returns a
-  sequence containing a single expressions-info map with a String started with
-  \"UNIDENTIFIED-\" and with s appended. Callers are expected to turn this value
-  into a lice-comb unidentified LicenseRef or AdditionRef, depending on context."
-  [s]
-  (when-not (s/blank? s)
-    (let [s   (s/trim s)
-          ids (or
-                ; 1. Is it cursed?
-                (when-let [cursed-name (get @cursed-names-d s)]
-                  (map #(apply hash-map %) cursed-name))
-
-                ; 2. Is it an SPDX license or exception id?
-                (when-let [id (lcis/near-match-id s)]
-                  (if (= id s)
-                    (list {id (list {:id id :type :declared :strategy :spdx-listed-identifier-exact-match :source (list s)})})
-                    (list {id (list {:id id :type :concluded :confidence :high :strategy :spdx-listed-identifier-case-insensitive-match :source (list s)})})))
-
-                ; 3. Is it the name of one or more SPDX licenses or exceptions?
-                (when-let [ids (lcis/near-match-name s)]
-                  (map #(hash-map % (list {:id % :type :concluded :confidence :high :strategy :spdx-listed-name :source (list s)})) ids))
-
-                ; 4. Might it be a URI?  (this is to handle some dumb corner cases that exist in pom.xml files hosted on Clojars & Maven Central)
-                (when-let [ids (parse-uri s)]
-                  (map #(hash-map (key %) (val %)) ids))
-
-                ; 5. Attempt to detect ids in the string
-                (lciid/detect-ids s)
-
-                ; 6. No clue, so return a single info map, but with a made up "UNIDENTIFIED-" value (NOT A LICENSEREF!) instead of an SPDX license or exception identifier
-                (let [id (str "UNIDENTIFIED-" s)]
-                  (list {id (list {:id id :type :concluded :confidence :low :confidence-explanations [:unidentified] :strategy :unidentified :source (list s)})})))]
-      (map (partial lciei/prepend-source s) ids))))
-
-(defn- fix-unidentified
-  "Fixes a singleton UNIDENTIFIED- expression info map by converting the id to
-  either a lice-comb unidentified LicenseRef or AdditionRef, depending on prev.
-  Returns x unchanged if it's neither an expression info map nor has an
-  UNIDENTIFIED- id."
-  ([x] (fix-unidentified nil x))
-  ([prev x]
-   (if-not (map? x)
-     ; It's not an expression info map (i.e. it's an operator keyword), so let it through unchanged
-     x
-     ; It's a (singleton) expression info map 
-     (let [id (first (keys x))]
-       (if (s/starts-with? id "UNIDENTIFIED-")
-         ; It's an expression info map with an unidentified id, so we have to fix it
-         (let [fixed-id  (if (= :with prev)
-                           (lcis/name->unidentified-addition-ref (subs id (count "UNIDENTIFIED-")))
-                           (lcis/name->unidentified-license-ref  (subs id (count "UNIDENTIFIED-"))))
-               v         (first (vals x))
-               fixed-val (map #(if (:id %) (assoc % :id fixed-id) %) v)]
-          {fixed-id fixed-val})
-         ; It's a (singleton) expression info map but with an identified id, so let it through unchanged
-         x)))))
-
-(defn- fix-unidentifieds
-  "Fixes all entries in sequence l that have an UNIDENTIFIED- id by converting
-  those ids to either a lice-comb unidentified LicenseRef or AdditionRef,
-  depending on context (i.e. whether the entry is preceeded by a :with operator
-  or not)."
-  [l]
-  (loop [f      (take 2 l)
-         r      (rest l)
-         result (list (fix-unidentified (first f)))]
-    (if-not (seq f)
-      result
-      (recur (take 2 r)
-             (rest r)
-             (if-let [fixed-id-with-info (fix-unidentified (first f) (second f))]
-               (concat result [fixed-id-with-info])
-               result)))))
-
-(def ^:private push conj)   ; With lists-as-stacks conj == push
-
-(defn- process-expression-element
-  "Processes a single new expression element e (either a keyword representing
-  an SPDX operator, or a map representing an SPDX identifier) in the context of
-  stack (list) s."
-  [s e]
-  (if (keyword? e)
-    ; e is a keyword (SPDX operator): only push a keyword if the prior element was an id, or it's different to the prior keyword
-    (if (= (peek s) e)
-      s
-      (push s e))
-    ; e is a singleton map with an SPDX identifier as a key: depending on how many keywords are currently at the top of s...
-    (case (count (take-while keyword? s))
-      ; No keywords? Push e onto s
-      0 (push s e)
-
-      ; One keyword? See if we should "collapse" the prior value, the keyword and e into an SPDX expression fragment and push the result onto s
-      1 (let [kw        (peek s)
-              operator  (s/upper-case (name kw))
-              s-minus-1 (pop s)
-              prior     (peek s-minus-1)
-              s-minus-2 (pop s-minus-1)]
-          (if (nil? prior)
-            (push s-minus-2 e)       ; s had one keyword on it (which is invalid), so drop it and push e on
-            (if (or (not= :with kw)  ; If the prior keyword was :and or :or, or :with and the current element is a listed exception id or AdditionRef, build an SPDX expression fragment and push the result onto s
-                    (se/listed-id?    (first (keys e)))
-                    (se/addition-ref? (first (keys e))))
-              (let [k                (s/join " " [(first (keys prior)) operator (first (keys e))])
-                    expression-infos (concat (first (vals prior)) (first (vals e)))
-                    v                (distinct (concat (list {:type :concluded :confidence (lciei/calculate-confidence-for-expression expression-infos) :strategy :expression-inference})
-                                                       expression-infos))]
-                (push s-minus-2 {k v}))
-              (push s-minus-1 e))))  ; We had a :with operator without a valid exception id following it, so simply drop the :with keyword from the stack and push the current element on
-
-      ; Many keywords? That's invalid (since we dedupe them when they get pushed on, so this means they're different), so drop all of them and push e onto s
-      (push (drop-while keyword? s) e))))
-
-(defn- build-expressions-info-map
-  "Builds an expressions-info map from the given sequence of keywords and SPDX
-  expression maps."
-  [l]
-  (loop [result '()
-         f      (first l)
-         r      (rest l)]
-    (if f
-      (recur (process-expression-element result f) (first r) (rest r))
-      (manual-fixes (into {} result)))))
-
-
-
-
-
-
-)

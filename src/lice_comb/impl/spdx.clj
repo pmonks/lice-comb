@@ -19,13 +19,13 @@
 (ns lice-comb.impl.spdx
   "SPDX-related functionality. Note: this namespace is not part of the public
   API of lice-comb and may change without notice."
-  (:require [clojure.string            :as s]
-            [embroidery.api            :as e]
-            [spdx.licenses             :as sl]
-            [spdx.exceptions           :as se]
-            [spdx.expressions          :as sexp]
-            [lice-comb.impl.sort-utils :refer [by ascending descending]]
-            [lice-comb.impl.utils      :as lciu]))
+  (:require [clojure.string           :as s]
+            [embroidery.api           :as e]
+            [spdx.licenses            :as sl]
+            [spdx.exceptions          :as se]
+            [spdx.expressions         :as sexp]
+            [lice-comb.impl.3rd-party :refer [by ascending descending]]
+            [lice-comb.impl.utils     :as lciu]))
 
 ; The subset of SPDX license identifiers that we use, as an unordered set
 (def license-ids-d
