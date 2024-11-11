@@ -90,6 +90,18 @@
     (str "-((v|ver|version)-)?"                                  ; Note: - character not escaped because that happens later
          (s/join "." (map #(str "0*" %) version-components)))))  ; Note: . character not escaped because that happens later
 
+; Note: these regexes uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
+; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
+(defn- special-case-ids
+  "Special case handling for specific ids."
+  [s id]
+  (case id
+    "MIT"        (s/replace s #"(?i)\bMIT\b"    "(?<!X11[\\\\\\\\/\\\\-\\\\s]{1,4})MIT(?![\\\\\\\\/\\\\-\\\\s]{1,4}X11)")
+    "X11"        (s/replace s #"(?i)\bX11\b"    "(MIT[\\\\\\\\/\\\\-\\\\s]+)?X11([\\\\\\\\/\\\\-\\\\s]+MIT)?")
+    "Libpng"     (s/replace s #"(?i)\blibpng\b" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
+    "libpng-2.0" (s/replace s #"(?i)\blibpng\b" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
+    s))
+
 ; Only public for the unit tests
 (defn id->regex
   "Turns `id`, an SPDX license or exception id, into a regex that can be used to
@@ -107,6 +119,8 @@
         (s/replace #"-"              "[\\\\-\\\\s]*")                       ; hyphens as optional hyphens or whitespace
         (s/replace #"(?i)\blater\b"  "\\\\b(lat[eo]r|newer|greater)\\\\b")  ; alternative "or later" formulations
         (s/replace #"\."             "\\\\.")                               ; escape . character
+        ; Special cases
+        (special-case-ids id)
         ; Add end expressions and remove redundant word boundary matches
         (str "((?=\\s)|\\z)")
         (s/replace #"(\\b)+"         "\\\\b")
@@ -161,6 +175,29 @@
     (str license-str " ((v|ver|version)[\\-\\s]*)?"  ; Note: whitespace not escaped because that happens later
          (s/join "\\." (map #(str "0*" %) version-components)))))
 
+(defn- special-case-names
+  "Special case handling for specific names."
+  [s n]
+  (cond
+    (s/includes? n "Apache")
+        (s/replace s #"(?i)\bApache\b" "Apache(\\\\s+Software)?")
+
+    (s/includes? n "MIT")
+        (s/replace s #"(?i)\bMIT\b" "(?!X11(/?|\\\\s{1,4}))MIT(?!(/?|\\\\s{1,4})X11)")
+
+    (s/includes? n "Public")
+        (s/replace s #"(?i)\s+Public\b" "(\\\\s+Public)?")
+
+    (and (or  (s/includes? n "libpng") (s/includes? n "Libpng"))
+         (not (s/includes? n "zlib")))
+      (s/replace s #"(?i)\blibpng\b" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
+
+    (and (s/includes? n "zlib"))
+      (s/replace s #"(?i)\bzlib(/libpng)?\b" "zlib(([\\\\\\\\/\\\\-\\\\s]+)libpng)?")
+
+    :else
+      s))
+
 ; Only public for the unit tests
 (defn name->regex
   "Turns `n`, a license or exception name, into a regex that can be used to
@@ -182,8 +219,7 @@
         (s/replace #"(?i)\bmerchant[ai]bility\b"                       "Merchant[ai]bility")
         (s/replace #"(?i)\bnon(\\\-)?commercial\b"                     "Non(\\\\-)?commercial")    ; Note: weird syntax in find regex as hyphens have already been escaped
         ; Special cases
-        (s/replace #"(?i)\bApache\b"                                   "Apache(\\\\s+Software)?")
-        (s/replace #"(?i)\s+Public\b"                                  "(\\\\s+Public)?")
+        (special-case-names n)
         ; Whitespace variance
         (s/replace #"\s+"                                              "\\\\s+")
         ; End clauses

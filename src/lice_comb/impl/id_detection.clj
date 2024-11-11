@@ -315,6 +315,9 @@
     "UPL" {
      :regex #"(?i)\bUniversal\s+Permissive(\s+Licen[cs]e)?([\s,-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?)?\b"
      :fn    (constantly ["UPL-1.0" :high])}  ; There are no other listed versions of this license
+    "W3C" {
+     :regex #"(?i)\bW3C\b"
+     :fn    (constantly ["W3C" :high])}
     "WTFPL" {
      :regex #"(?i)\b(WTFPL|DO-WTF-U-WANT-2|Do\s+What\s+The\s+Fuck\s+You\s+Want\s+To(\s+Public)?(\s+Licen[cs]e)?)\b"
      :fn    (constantly ["WTFPL" :high])}

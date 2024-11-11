@@ -199,10 +199,14 @@
 ;    [s nil]
 ;    ;####TODO: LOSING A LOT OF IMPORTANT CONTEXT HERE!!!!!
 ;    (let [result (lciid/replace-family "GPL"  s)
-;          result (lciid/replace-family "CDDL" (first result))]
+;          result (lciid/replace-family "CDDL" (first result))
+;          result (lciid/replace-family "X11"  (first result))]
 ;      [(first result) nil])))   ;####TODO: BOGUS EI (second tuple element)
 
 (defn- replace-operators-with-keywords
+  "Replaces `String`s that represent SPDX expression operators in `coll` with
+  an equivalent keyword (`:and`, `:or`, `:with`), or nothing if the 'operator'
+  in question is unidentifiable (e.g. `and/or`, `/`, `\\`)."
   [coll]
   (filter identity
     (map #(let [trimmed (s/trim %)
@@ -268,6 +272,28 @@
             %)
          coll)))
 
+(defn- group-expressions
+  "Groups expressions in `coll` into sequences of valid SPDX expressions (albeit
+  in sequence form, rather than `String` form.
+
+  For example:
+  [\"Apache-2.0\" \"MIT\"]                           -> [[\"Apache-2.0\"] [\"MIT\"]]
+  [\"Apache-2.0\" :or \"MIT\"]                       -> [[\"Apache-2.0\" :or \"MIT\"]]
+  [\"Apache-2.0\" :and \"MIT\" \"GPL-2.0-or-later\"] -> [[\"Apache-2.0\" :and \"MIT\"] [\"GPL-2.0-or-later\"]]"
+  [coll]
+  (loop [result  [[]]
+         [f & r] coll]
+    (if-not f
+      ; Base case
+      result
+      ; Recursive case
+      (let [l (last result)]
+        (case [(string? (last l)) (string? f)]
+          [true  true]                (recur (conj result [f])                          r) ; String/string, so start a new nested sequence in result
+          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; String/keyword or keyword/string, so continue the current last collection in result
+;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
+          )))))
+
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the given `fragments` and
   expression-infos (`eis`).  `fragments` is a heterogeneous sequence containing
@@ -281,20 +307,7 @@
   [fragments existing-eis]
   (let [eis                 (concat existing-eis (filter identity (mapcat #(when (map? %) (vals %)) fragments)))
         expr-elements       (mapcat #(if (keyword? %) [%] (keys %)) fragments)
-        regrouped-fragments (loop [result  [[]]
-                                   [f & r] expr-elements]
-                              (if-not f
-                                ; Base case
-                                result
-                                ; Recursive case
-                                (let [l (last result)]
-                                  (case [(string? (last l)) (string? f)]
-                                    [true  true]  (recur (conj result [f])                    r) ; String/string, so add a "gap" to the result
-                                    [true false]  (recur (conj (drop-last result) (conj l f)) r) ; String/keyword, so continue the current last collection in result
-                                    [false true]  (recur (conj (drop-last result) (conj l f)) r) ; Keyword/string, so continue the current last collection in result
-;                                    [false false]  ; Not possible - we've already removed consecutive keywords in fragments (in remove-invalid-operator-keywords/collapse-duplicate-operator-keywords)
-                                    ))))
-        expressions         (map #(sexp/normalise (s/join " " (map name %))) regrouped-fragments)
+        expressions         (map #(sexp/normalise (s/join " " (map name %))) (group-expressions expr-elements))
         ; Now regroup expression-infos with their associated expression(s)
         ei-lookup           (group-by :id eis)
         expr-ei-pairs       (mapcat #(let [ids (sexp/extract-ids (sexp/parse %))]

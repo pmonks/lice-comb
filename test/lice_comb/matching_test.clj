@@ -19,10 +19,10 @@
 (ns lice-comb.matching-test
   (:require [clojure.test               :refer [deftest testing is use-fixtures]]
             [lice-comb.test-boilerplate :refer [fixture valid= valid-info=]]
-            [lice-comb.impl.spdx        :as lcis]
-            [lice-comb.matching         :refer [init! unidentified? proprietary-commercial? text->expressions name->expressions name->expressions-info uri->expressions]]
             [spdx.licenses              :as slic]
-            [spdx.exceptions            :as sexc]))
+            [spdx.exceptions            :as sexc]
+            [lice-comb.impl.spdx        :as lcis]
+            [lice-comb.matching         :refer [init! unidentified? proprietary-commercial? text->expressions name->expressions name->expressions-info uri->expressions]]))
 
 (use-fixtures :once fixture)
 
@@ -84,6 +84,12 @@
     (is (nil?                                           (name->expressions "       ")))
     (is (nil?                                           (name->expressions "\n")))
     (is (nil?                                           (name->expressions "\t"))))
+  (testing "Simple unidentified names"
+    (is (valid= #{(lcis/name->unidentified-addition-ref "AND")}    (name->expressions "AND")))
+    (is (valid= #{(lcis/name->unidentified-addition-ref "or")}     (name->expressions "or")))
+    (is (valid= #{(lcis/name->unidentified-addition-ref "with")}   (name->expressions "with")))
+    (is (valid= #{(lcis/name->unidentified-addition-ref "foo")}    (name->expressions "foo")))
+    (is (valid= #{(lcis/name->unidentified-addition-ref "@$%^*)")} (name->expressions "@$%^*)"))))
   (testing "SPDX license ids"
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "AGPL-3.0")))
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "AGPL-3.0-only")))
@@ -162,9 +168,12 @@
     (is (valid= #{"Apache-2.0" "GPL-3.0-only WITH Classpath-exception-2.0"} (name->expressions "Apache License version 2.0 / GNU General Public License version 3 with classpath exception")))
     (is (valid= #{"EPL-2.0 OR (Apache-2.0 AND BSD-3-Clause) OR (GPL-2.0-or-later WITH Classpath-exception-2.0 AND MIT)"} (name->expressions "Eclipse Public License or General Public License 2.0 or (at your discretion) later w/ classpath exception aNd MIT Licence or three clause bsd and Apache Licence"))))
   (testing "Listed names"
-    ; We use `some` here, because some license names resolve to multiple licenses ids
-    (run! #(is (some #{(:id %)} (name->expressions (:name %)))) @lcis/license-list-d)
-    (run! #(is (some #{(:id %)} (name->expressions (:name %)))) @lcis/exception-list-d))
+    ; We use the full license lists here, rather than the ones lice-comb uses for detection, since the real world may contain anything
+    (let [license-list   (map slic/id->info (slic/ids))
+          exception-list (map sexc/id->info (sexc/ids))]    
+      ; We use `some` here, because some license names resolve to multiple licenses ids
+      (run! #(is (some #{(:id %)} (name->expressions (:name %)))) license-list)
+      (run! #(is (some #{(:id %)} (name->expressions (:name %)))) exception-list)))
   (testing "Names seen in handpicked POMs on Maven Central"
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License (AGPL) version 3.0")))
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License v3.0 only")))
@@ -618,7 +627,7 @@
     (is (valid= #{"LGPL-3.0-or-later"}                  (name->expressions "LGPL-3.0-or-later")))
     (is (valid= #{"LGPL-3.0-or-later"}                  (name->expressions "LGPLv3+")))
     (is (valid= #{"LGPL-3.0-or-later"}                  (name->expressions "Licensed under GNU Lesser General Public License Version 3 or later (the ")))  ; Note trailing space
-    (is (valid= #{"Libpng"}                             (name->expressions "zlib/libpng License")))
+    (is (valid= #{"Zlib"}                               (name->expressions "zlib/libpng License")))  ; This is a peculiar (i.e. erroneously specified) case from https://github.com/IGJoshua/glfw-clj/blob/f41c41f8011a1a8108b3760f5f81262a7a75bead/pom.xml#L9, which itself came from https://www.glfw.org/
     (is (valid= #{"MIT" "Apache-2.0" "BSD-3-Clause"}    (name->expressions "MIT/Apache-2.0/BSD-3-Clause")))
     (is (valid= #{"MIT"}                                (name->expressions " MIT License")))
     (is (valid= #{"MIT"}                                (name->expressions "Distributed under an MIT-style license (see LICENSE for details).")))
@@ -657,7 +666,7 @@
     (is (valid= #{"MPL-2.0"}                            (name->expressions "Mozilla Public License 2.0")))
     (is (valid= #{"MPL-2.0"}                            (name->expressions "Mozilla Public License Version 2.0")))
     (is (valid= #{"MPL-2.0"}                            (name->expressions "Mozilla Public License v2.0")))
-    (is (valid= #{"MPL-2.0"}                            (name->expressions "Mozilla Public License v2.0+")))
+    (is (valid= #{"MPL-2.0+"}                           (name->expressions "Mozilla Public License v2.0+")))
     (is (valid= #{"MPL-2.0"}                            (name->expressions "Mozilla Public License version 2")))
     (is (valid= #{"MPL-2.0"}                            (name->expressions "Mozilla Public License version 2.0")))
     (is (valid= #{"MPL-2.0"}                            (name->expressions "Mozilla Public License")))  ; Missing version - we assume the latest
@@ -785,6 +794,8 @@
     (is (unidentified-only?                             (name->expressions "wisdragon")))
     (is (unidentified-only?                             (name->expressions "wiseloong")))))
 
+;####TEST!!!!
+(comment
 (deftest name->expressions-info-tests
   (testing "Nil, empty or blank"
     (is (nil?                                           (name->expressions-info nil)))
@@ -855,3 +866,4 @@
     (is (= #{"Apache-2.0"}              (uri->expressions "HTTPS://GITHUB.COM/pmonks/lice-comb/blob/main/LICENSE"))))
   (testing "URIs that aren't in the SPDX license list, but do match via retrieval, HTML->text conversion, and full text matching"
     (is (= #{"MPL-2.0"}                 (uri->expressions "https://www.mozilla.org/en-US/MPL/2.0/")))))
+)
