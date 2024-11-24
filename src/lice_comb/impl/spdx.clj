@@ -18,7 +18,7 @@
             [spdx.exceptions          :as se]
             [spdx.expressions         :as sexp]
             [spdx.regexes             :as sre]
-            [lice-comb.impl.3rd-party :refer [by ascending descending]]
+            [lice-comb.impl.3rd-party :refer [by ascending descending] :as lc3]
             [lice-comb.impl.utils     :as lciu]))
 
 ; The subset of SPDX license identifiers that we use, as an unordered set
@@ -78,11 +78,20 @@
       (first (sort-by count ids)))))
 
 (defn- id-version-replacement
-  "Returns a regex fragment for a version number (e.g. 2.0.0) in an id."
+  "Returns a regex fragment for a version number (e.g. 2.0.0) anywhere in an id."
   [[_ version]]
-  (let [version-components (s/split version #"\.")]
-    (str "-((v|ver|version)-)?"                                  ; Note: - character not escaped because that happens later
-         (s/join "." (map #(str "0*" %) version-components)))))  ; Note: . character not escaped because that happens later
+  ; Note: characters are not escaped here, as they're escaped later on
+  (let [version-components                    (seq (s/split version #"\."))
+        first-element                         (first version-components)
+        remaining-version-components-reversed (seq (reverse (rest version-components)))
+        leading-elements                      (seq (reverse (drop-while #(re-matches #"0+" %) remaining-version-components-reversed)))
+        dot-zero-elements                     (seq (reverse (take-while #(re-matches #"0+" %) remaining-version-components-reversed)))]
+    (str "-((v|ver|version)-)?"
+         (str "0*" first-element)
+         (str (s/join (map #(str ".0*" %) leading-elements))
+              (when dot-zero-elements (s/join (map #(str "(.0*" % ")?") dot-zero-elements))))
+;         "(\\z|[^\\d])"
+)))
 
 ; Note: these regexes uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
