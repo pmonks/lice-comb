@@ -14,7 +14,7 @@
             [rencg.api                   :as rencg]
             [lice-comb.impl.utils        :as lcu]
             [lice-comb.test-boilerplate  :refer [fixture testing-with-data]]
-            [lice-comb.impl.id-detection :refer [init! version-re only-or-later-re agpl-re lgpl-re gpl-re gnu-re detect-ids]]))
+            [lice-comb.impl.id-detection :refer [init! version-re only-or-later-re agpl-re lgpl-re gpl-re gnu-re find-ids]]))
 
 (use-fixtures :once fixture)
 
@@ -239,6 +239,6 @@
   (testing "GNU Family Regexes - correct matching - combined GNU family regex"
     (is (every? not-nil? (map (partial test-regex gnu-re) gnu-licenses)))))
 
-(deftest match-regexes-tests
-  (testing-with-data "GNU Family Regexes - correct identifier results" #(mapcat keys (detect-ids %)) gnu-licenses-and-ids)
-  (testing-with-data "CC Family Regexes - correct identifier results"  #(mapcat keys (detect-ids %)) cc-by-licenses-and-ids))
+(deftest find-ids-tests
+  (testing-with-data "GNU Family Regexes - correct identifier results" #(mapcat keys (find-ids %)) gnu-licenses-and-ids)
+  (testing-with-data "CC Family Regexes - correct identifier results"  #(mapcat keys (find-ids %)) cc-by-licenses-and-ids))

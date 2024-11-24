@@ -56,7 +56,7 @@
   value in m."
   [name f m]
   `(clojure.test/testing ~name
-     ~@(map #(list `clojure.test/is `(= (~f ~(key %)) ~(when-pred (val %) list? (partial list 'quote))))
+     ~@(map #(list `clojure.test/is `(= (~f ~(key %)) ~(when-pred (val %) list? (partial list 'quote))) (key %))
             (if (isa? (type m) clojure.lang.Symbol)
               @(resolve m)
               m))))

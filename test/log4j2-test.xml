@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" strict="true">
+  <Properties>
+    <Property name="filename">lice-comb-test.log</Property>
+  </Properties>
+
+  <Appenders>
+    <Appender type="Console" name="Console">
+      <Layout type="PatternLayout" pattern="%d %p [%t] %m%n" />
+    </Appender>
+    <Appender type="File" name="File" fileName="${filename}">
+      <Layout type="PatternLayout" pattern="%d %p %C{1.} [%t] %m%n" />
+    </Appender>
+  </Appenders>
+
+  <Loggers>
+    <Logger name="org.apache" level="FATAL" additivity="false">
+      <AppenderRef ref="File"/>
+    </Logger>
+    <Logger name="org.eclipse" level="FATAL" additivity="false">
+      <AppenderRef ref="File"/>
+    </Logger>
+<!--
+    <Logger name="lice-comb" level="ERROR" additivity="false">
+      <AppenderRef ref="File"/>
+    </Logger>
+    <Logger name="lice-comb.impl" level="TRACE" additivity="false">
+      <AppenderRef ref="File"/>
+    </Logger>
+-->
+    <Root level="WARN">
+      <AppenderRef ref="File"/>
+    </Root>
+  </Loggers>
+</Configuration>

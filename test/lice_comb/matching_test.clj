@@ -122,6 +122,12 @@
     (is (valid= #{"GPL-1.0-or-later"}                   (name->expressions "GPL or later")))
     (is (valid= #{"AGPL-1.0-only"}                      (name->expressions "AGPL only")))
     (is (valid= #{"AGPL-1.0-or-later"}                  (name->expressions "AGPL or later")))
+    (is (valid= #{"BSD-2-Clause-Darwin"}                (name->expressions "BSD 2 clause darwin")))  ; Since SPDX license list v3.23
+    (is (valid= #{"BSD-3-Clause-acpica"}                (name->expressions "BSD 3 CLAUSE ACPICA")))  ; Since SPDX license list v3.23
+    (is (valid= #{(str (lcis/name->unidentified-license-ref "foo") " WITH Classpath-exception-2.0")} (name->expressions "foo with classpath exception")))
+    (is (valid= #{(str "Apache-2.0 WITH " (lcis/name->unidentified-addition-ref "foo"))} (name->expressions "Apache with foo")))  ; Since SPDX specification v3.0
+    (is (valid= #{(str (lcis/name->unidentified-license-ref "foo WITH bar"))} (name->expressions "foo WITH bar"))))  ; Test collapsing of unidentified LicenseRef and AdditionRef
+  (testing "Cursed LGPL variations"
     (is (valid= #{"LGPL-2.0-only"}                      (name->expressions "Lesser GPL only")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser GPL or later")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser GPL")))
@@ -130,17 +136,28 @@
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Library GNU")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "GNU lesser")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "GNU library")))
+    (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "GNU lesser or library")))
+    (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "GNU library or lesser")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or Lesser General Public License")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or Library General Public License")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Lesser General Public License or MIT")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Library General Public License or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or Lesser or Library General Public License")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or Library or Lesser General Public License")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Lesser or Library General Public License or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Lesser or Library General Public License or MIT")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU Lesser or MIT")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU library or MIT")))
-    (is (valid= #{"BSD-2-Clause-Darwin"}                (name->expressions "BSD 2 clause darwin")))  ; Since SPDX license list v3.23
-    (is (valid= #{"BSD-3-Clause-acpica"}                (name->expressions "BSD 3 CLAUSE ACPICA")))  ; Since SPDX license list v3.23
-    (is (valid= #{(str (lcis/name->unidentified-license-ref "foo") " WITH Classpath-exception-2.0")} (name->expressions "foo with classpath exception")))
-    (is (valid= #{(str "Apache-2.0 WITH " (lcis/name->unidentified-addition-ref "foo"))} (name->expressions "Apache with foo")))  ; Since SPDX specification v3.0
-    (is (valid= #{(str (lcis/name->unidentified-license-ref "foo WITH bar"))} (name->expressions "foo WITH bar"))))  ; Test collapsing of unidentified LicenseRef and AdditionRef
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU Lesser or library or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU library or lesser or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or GNU Lesser or Library")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or GNU library or lesser")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Lesser GPL or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "library GPL or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Lesser or library GPL or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "library or lesser GPL or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or Lesser or Library GPL")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or library or lesser GPL"))))
   (testing "Expressions with weird operators"
     (is (valid= #{"Apache-2.0"}                         (name->expressions "and and and Apache License 2.0")))
     (is (valid= #{"Apache-2.0"}                         (name->expressions "Apache Licence 2.0 or or or")))

@@ -66,7 +66,7 @@
           set))
 
 (defn escape-re
-  "Escapes the given string for use in a regex."
+  "Escapes `s` (a `String`) for use in a regex. Returns a `String`."
   [s]
   (when s
     (s/escape s {\< "\\<"

@@ -13,9 +13,11 @@
   API of lice-comb and may change without notice."
   (:require [clojure.string           :as s]
             [embroidery.api           :as e]
+            [rencg.api                :as rencg]
             [spdx.licenses            :as sl]
             [spdx.exceptions          :as se]
             [spdx.expressions         :as sexp]
+            [spdx.regexes             :as sre]
             [lice-comb.impl.3rd-party :refer [by ascending descending]]
             [lice-comb.impl.utils     :as lciu]))
 
@@ -88,10 +90,11 @@
   "Special case handling for specific ids."
   [s id]
   (case id
-    "MIT"        (s/replace s #"(?i)\bMIT\b"    "(?<!X11[\\\\\\\\/\\\\-\\\\s]{1,4})MIT(?![\\\\\\\\/\\\\-\\\\s]{1,4}X11)")
-    "X11"        (s/replace s #"(?i)\bX11\b"    "(MIT[\\\\\\\\/\\\\-\\\\s]+)?X11([\\\\\\\\/\\\\-\\\\s]+MIT)?")
-    "Libpng"     (s/replace s #"(?i)\blibpng\b" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
-    "libpng-2.0" (s/replace s #"(?i)\blibpng\b" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
+    "MIT"        (s/replace s #"(?i)(?<!\\w)MIT(?!\\w)"    "(?<!X11[\\\\\\\\/\\\\-\\\\s]{1,4})MIT(?![\\\\\\\\/\\\\-\\\\s]{1,4}X11)")
+    "X11"        (s/replace s #"(?i)(?<!\\w)X11(?!\\w)"    "(MIT[\\\\\\\\/\\\\-\\\\s]+)?X11([\\\\\\\\/\\\\-\\\\s]+MIT)?")
+    "ISC"        (s/replace s #"(?i)(?<!\\w)ISC(?!\\w)"    "(MIT[\\\\\\\\/\\\\-\\\\s]+)?ISC([\\\\\\\\/\\\\-\\\\s]+MIT)?")
+    "Libpng"     (s/replace s #"(?i)(?<!\\w)libpng(?!\\w)" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
+    "libpng-2.0" (s/replace s #"(?i)(?<!\\w)libpng(?!\\w)" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
     s))
 
 ; Only public for the unit tests
@@ -104,7 +107,7 @@
         ; Trim
         s/trim
         ; Add flags and start expressions
-        (->> (str "(?i)((?<=\\s)|\\A)"))
+        (->> (str "(?i)(?<!\\w)"))
         ; Replacements
         (s/replace "+"               "\\+")                                 ; escape + character
         (s/replace #"-(\d+(\.\d+)*)" id-version-replacement)                ; version numbers
@@ -113,9 +116,9 @@
         (s/replace #"\."             "\\\\.")                               ; escape . character
         ; Special cases
         (special-case-ids id)
-        ; Add end expressions and remove redundant word boundary matches
-        (str "((?=\\s)|\\z)")
-        (s/replace #"(\\b)+"         "\\\\b")
+        ; Remove redundant final word boundary match (if any), and add end expressionssss
+        (s/replace #"(.*)\\b\z"      "$1")
+        (str "(?!\\w)")
         ; And finally turn into a Pattern object
         re-pattern)))
 
@@ -172,20 +175,17 @@
   [s n]
   (cond
     (s/includes? n "Apache")
-        (s/replace s #"(?i)\bApache\b" "Apache(\\\\s+Software)?")
+        (s/replace s #"(?i)(?<!\w)Apache(?!\w)"       "Apache(\\\\s+Software)?")
 
     (s/includes? n "MIT")
-        (s/replace s #"(?i)\bMIT\b" "(?!X11(/?|\\\\s{1,4}))MIT(?!(/?|\\\\s{1,4})X11)")
-
-    (s/includes? n "Public")
-        (s/replace s #"(?i)\s+Public\b" "(\\\\s+Public)?")
+        (s/replace s #"(?i)(?<!\w)MIT(?!\w)"          "(?!X11(/?|\\\\s{1,4}))MIT(?!(/?|\\\\s{1,4})X11)")
 
     (and (or  (s/includes? n "libpng") (s/includes? n "Libpng"))
          (not (s/includes? n "zlib")))
-      (s/replace s #"(?i)\blibpng\b" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
+      (s/replace s #"(?i)(?<!\w)libpng(?!\w)"         "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
 
     (and (s/includes? n "zlib"))
-      (s/replace s #"(?i)\bzlib(/libpng)?\b" "zlib(([\\\\\\\\/\\\\-\\\\s]+)libpng)?")
+      (s/replace s #"(?i)(?<!\w)zlib(/libpng)?(?!\w)" "zlib(([\\\\\\\\/\\\\-\\\\s]+)libpng)?")
 
     :else
       s))
@@ -201,24 +201,27 @@
         s/trim
         lciu/escape-re
         ; Start clauses
-        (->> (str "(?i)(\\A|\\b)"))  ; Note: technically the \A is redundant (since \b also matches "starts of input"), but it's retained here for clarity with the end fragment - see comment below
+        (->> (str "(?i)(?<!\\w)"))
         ; "Version" variations (this must come first)
         (s/replace #"(?i)(Licen[cs]e\s|version\s|v)\s*(\d+(\\\.\d+)*)" name-version-replacement)  ; Note: have to match escaped . here
-        ; SPDX equivalent words (subset of https://spdx.org/licenses/equivalentwords.txt that have been found in a license or exception name as of SPDX license list 3.25.0)
-        (s/replace #"(?i)\blicen[cs]"                                  "Licen[cs]")
+        ; Equivalent words and other variability
+        (s/replace #"(?i)licen[cs]"                                    "licen[cs]")                ; Note: can't start with \b due to names such as "The Unlicense"
+        (s/replace #"(?i)\s+Public\b"                                  "(\\\\s+Public)?")
         (s/replace #"(?i)\backnowledge?ment"                           "Acknowledge?ment")
-        (s/replace #"(?i)\b(and|&)\b"                                  "(and|&)")
+        (s/replace #"(?i)\b(and|&)(?!\w)"                              "(and|&)")
         (s/replace #"(?i)\bmerchant[ai]bility\b"                       "Merchant[ai]bility")
         (s/replace #"(?i)\bnon(\\\-)?commercial\b"                     "Non(\\\\-)?commercial")    ; Note: weird syntax in find regex as hyphens have already been escaped
+        (s/replace #"(?i)\bF(u|\\\*)ck"                                "[f*][u*][c*][k*]")         ; As of SPDX license list v3.25.0, profane names use "F*ck", but we hedge here in case that changes in other versions
         ; Special cases
         (special-case-names n)
         ; Whitespace variance
         (s/replace #"\s+"                                              "\\\\s+")
-        ; End clauses
-        (str "(\\b|\\z)")  ; Because \b doesn't match "end of input" for some bizarre reason (even though it *does* match start of input!  🙄)
         ; Remove redundant word boundary matches
         (s/replace "\\s+\\b"                                           "\\s+")
         (s/replace "\\b\\s+"                                           "\\s+")
+        (s/replace #"(.*)\\b\z"                                        "$1")
+        ; End clauses
+        (str "(?!\\w)")
         ; And finally compile the regex
         re-pattern)))
 
@@ -286,14 +289,22 @@
   (best-identifier (near-match-uri uri)))
 
 (defn lice-comb-license-ref?
-  "Is the given id one of lice-comb's custom LicenseRefs?"
+  "Is `id` one of lice-comb's custom LicenseRefs?"
   [id]
-  (s/starts-with? (s/lower-case id) (s/lower-case lice-comb-license-ref-prefix)))
+  (when id
+    (s/starts-with? (s/lower-case id) (s/lower-case lice-comb-license-ref-prefix))))
 
 (defn lice-comb-addition-ref?
-  "Is the given id one of lice-comb's custom AdditionRefs?"
+  "Is `id` one of lice-comb's custom AdditionRefs?"
   [id]
-  (s/starts-with? (s/lower-case id) (s/lower-case lice-comb-addition-ref-prefix)))
+  (when id
+    (s/starts-with? (s/lower-case id) (s/lower-case lice-comb-addition-ref-prefix))))
+
+(defn lice-comb-ref?
+  "Is `id` a lice-comb custom LicenseRef or AdditionRef"
+  [id]
+  (or (lice-comb-license-ref?  id)
+      (lice-comb-addition-ref? id)))
 
 (defn public-domain?
   "Is the given id lice-comb's custom 'public domain' LicenseRef?"
@@ -319,19 +330,19 @@
   (constantly proprietary-commercial-license-ref))
 
 (defn unidentified-license-ref?
-  "Is the given id a lice-comb custom 'unidentified' LicenseRef?"
+  "Is `id` a lice-comb custom 'unidentified' LicenseRef?"
   [id]
   (when id
     (s/starts-with? (s/lower-case id) (s/lower-case unidentified-license-ref-prefix))))
 
 (defn unidentified-addition-ref?
-  "Is the given id a lice-comb custom 'unidentified' AdditionRef?"
+  "Is `id` a lice-comb custom 'unidentified' AdditionRef?"
   [id]
   (when id
     (s/starts-with? (s/lower-case id) (s/lower-case unidentified-addition-ref-prefix))))
 
 (defn unidentified?
-  "Is the given id a lice-comb custom 'unidentified' LicenseRef or AdditionRef?"
+  "Is `id` a lice-comb custom 'unidentified' LicenseRef or AdditionRef?"
   [id]
   (or (unidentified-license-ref? id) (unidentified-addition-ref? id)))
 
@@ -412,6 +423,15 @@
   (cond
     (unidentified-license-ref?  id) (unidentified-license-ref->human-readable-name id)
     (unidentified-addition-ref? id) (unidentified-addition-ref->human-readable-name id)))
+
+(defn find-ids
+  "Returns a sequence of the distinct listed SPDX license ids, exceptions ids,
+  LicenseRefs and AdditionRefs found in `s` (a `String`), in the order they were
+  found, or `nil` if no listed ids were found or `s` was `nil`."
+  [s]
+  (when s
+    (when-let [matches (map #(get % "Identifier") (rencg/re-seq-ncg (sre/ids-re) s))]
+      (seq (distinct matches)))))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

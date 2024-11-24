@@ -18,6 +18,7 @@
             [spdx.exceptions                 :as se]
             [spdx.matching                   :as sm]
             [spdx.expressions                :as sexp]
+            [spdx.regexes                    :as sre]
             [embroidery.api                  :as e]
             [lice-comb.impl.spdx             :as lcis]
             [lice-comb.impl.id-detection     :as lciid]
@@ -101,10 +102,10 @@
       (= (s/lower-case n) (s/lower-case listed-name)) :spdx-listed-name-case-insensitive-match
       :else                                           :spdx-listed-name-near-match)))
 
-;####TODO: CONSIDER MOVING THIS TO lice-comb.impl.id-detection - THIS WOULD RESOLVE THE TODOS INLINE TOO
-(defn- attempt-to-match-single-id
-  "Attempts to match a single SPDX identifier from `s` (a `String`). The
-  specific steps involve identifying whether `s` is:
+;####TODO: CONSIDER MOVING THIS TO lice-comb.impl.id-detection
+(defn- attempt-to-match-entire-name
+  "Attempts to match a single SPDX expression from `s` (a `String`). The
+  specific steps involve determining whether `s` is:
   1. a 'cursed' name (see resources/lice_comb/names.edn)
   2. an SPDX expression
   3. an SPDX listed identifier (near match)
@@ -121,31 +122,29 @@
     (if-let [cursed-ids (get @cursed-names-d s)]
       (map #(apply hash-map %) cursed-ids)
       (if-let [normalised-expression (sexp/normalise s)]
-        ; 2. n is already an SPDX id / expression
+        ; 2. s is already an SPDX id / expression
         {normalised-expression (list {:type     :declared
                                       :strategy (if (= 1 (count (sexp/extract-ids (sexp/parse normalised-expression)))) :spdx-listed-identifier :spdx-expression)
                                       :source   (list s)})}
         (if-let [id (lcis/best-near-match-id s)]
-          ; 3. n is a near match for an SPDX identifier
+          ; 3. ns is a near match for an SPDX identifier
           {id (list {:id id :type :concluded :confidence :high :strategy (determine-strategy-for-id-match s id) :source (list s)})}
           (if-let [id (lcis/best-near-match-name s)]
-            ; 4. n is an SPDX listed name
+            ; 4. ns is an SPDX listed name
             {id (list {:id id :type :concluded :confidence :high :strategy (determine-strategy-for-name-match s id) :source (list s)})}
             (if (lciu/valid-http-uri? s)
               (if-let [ei-map (parse-uri s)]
-                ; 5.1. n is a URL and it's in the SPDX license or exception list
+                ; 5.1. s is a URL and it's in the SPDX license or exception list
                 ei-map
-                ; 5.2. n is a URL but it's not in the SPDX license or exception list
+                ; 5.2. s is a URL but it's not in the SPDX license or exception list
                 (let [unidentified-license-ref (lcis/name->unidentified-license-ref s)]
                   {unidentified-license-ref (list {:id unidentified-license-ref :type :concluded :confidence :high :strategy :unidentified :source (list s)})}))
-              ;####TODO: THIS REGEX IS DUPLICATED FROM lice-comb.impl.id-detection - THERE SHOULD BE A BETTER WAY
-              (if (re-matches #"(?i)\b(Propriet[aoe]ry|Commercial|Propriet[aoe]ry\s*[/\-\\]\s*Commercial|All\s+Rights\s+Reserved|Private)\b" s)
-                ; 6. n is proprietary / commercial
+              (if (lciid/match-id :proprietary-commercial s)
+                ; 6. s is proprietary / commercial
                 (let [prop-comm-license-ref (lcis/proprietary-commercial)]
                   {prop-comm-license-ref (list {:id prop-comm-license-ref :type :concluded :confidence :high :strategy :regex-matching :source (list s)})})
-                ;####TODO: THIS REGEX IS DUPLICATED FROM lice-comb.impl.id-detection - THERE SHOULD BE A BETTER WAY
-                (when (re-matches #"(?i)\bPublic\s+Domain(?![\s\(]*CC\s*0)" s)
-                  ; 7. n is Public Domain
+                (when (lciid/match-id :public-domain s)
+                  ; 7. s is Public Domain
                   (let [public-domain-license-ref (lcis/public-domain)]
                     {public-domain-license-ref (list {:id public-domain-license-ref :type :concluded :confidence :high :strategy :regex-matching :source (list s)})}))))))))))
 
@@ -181,19 +180,16 @@
 
 (defn- replace-tricky-names
   "Replaces all tricky names in `s` with their SPDX ids, returning a tuple where
-  the first element is the new `String`, and the second element is a sequence of
-  expression info maps or `nil` if no replacements occurred."
+  the first element is the (potentially new) `String`, and the second element is
+  a sequence of expression info maps or `nil` if no replacements occurred."
   [s]
-  ;####TODO: IMPLEMENT ME!!!!
-  [s nil])
-
-;  (if (s/blank? s)
-;    [s nil]
-;    ;####TODO: LOSING A LOT OF IMPORTANT CONTEXT HERE!!!!!
-;    (let [result (lciid/replace-family "GPL"  s)
-;          result (lciid/replace-family "CDDL" (first result))
-;          result (lciid/replace-family "X11"  (first result))]
-;      [(first result) nil])))   ;####TODO: BOGUS EI (second tuple element)
+  (if (s/blank? s)
+    [s nil]
+    (let [[new-s gnu-eis]  (lciid/replace-ids :GNU s)
+          [new-s cddl-eis] (lciid/replace-ids :CDDL new-s)
+          [new-s pc-eis]   (lciid/replace-ids :proprietary-commercial new-s)]
+          ;####TODO: Check all of the families for trickiness (operators in names, negative look-behinds/aheads, etc.) - e.g. X11
+      [new-s (seq (concat gnu-eis cddl-eis pc-eis))])))
 
 (defn- replace-operators-with-keywords
   "Replaces `String`s that represent SPDX expression operators in `coll` with
@@ -204,17 +200,17 @@
     (map #(let [trimmed (s/trim %)
                 val     (-> trimmed
                             s/lower-case
-                            (s/replace #"(?i)w/"           "with")
-                            (s/replace #"&+"               "and")
-                            (s/replace #"/+"               "/")
-                            (s/replace #"\\+"              "/")
-                            (s/replace #"(?i)and\s*/\s*or" "/"))]
+                            (s/replace #"(?i)w/"               "with")
+                            (s/replace #"&+"                   "and")
+                            (s/replace #"(?i)and\s*/+\\+\s*or" "/")
+                            (s/replace #"/+"                   "/")
+                            (s/replace #"\\+"                  "/"))]
             (case val
               "and"    :and
               "or"     :or
               "with"   :with
               ("/" "") nil
-              trimmed))  ; Not a keyword - keep it unchanged (albeit trimmed)
+              trimmed))  ; Not an operator - keep it unchanged (albeit trimmed)
          coll)))
 
 (defn- collapse-duplicate-operator-keywords
@@ -241,8 +237,32 @@
        (lci3/rdrop-while keyword?)
        collapse-duplicate-operator-keywords))
 
+(defn- attempt-to-find-ids-in-fragment
+  "Attempts to find one or more ids in `fragment` (a `String`).
+  For each fragment returns a sequence of maps, where the key(s) are the
+  detected identifier(s), and the value(s) are an expression-info map for that
+  identifer. If no ids are found in a fragment, the identifier for that fragment
+  will be an Unidentified LicenseRef.
+
+  Other elements (i.e. operator keywords) are passed through unchanged)."
+  [fragment]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-find-ids-in-fragment fragment:" (pr-str fragment))
+  ; 1. Is it a listed id, LicenseRef or AdditionRef?
+  (if (re-matches (sre/ids-re) fragment)
+    [{fragment nil}]   ; Don't need an expression-info here, since it will already have one from earlier steps in the parsing process
+    ; 2. Does it contain any SPDX identifiers?
+    (if-let [result (seq (map (fn [id] {id nil}) (lcis/find-ids fragment)))]  ;####TODO: add eis, as in most _BUT NOT ALL_, cases the ids will already have an expression-info from earlier steps in the parsing process
+      result
+      ; 3. Can we detect other ids in it, using custom regexes?
+      (if-let [result (lciid/find-ids fragment)]
+        result
+        ; 4. Give up and use the unidentified LicenseRef
+        (let [unidentified-license-ref (lcis/name->unidentified-license-ref fragment)]
+          [{unidentified-license-ref {:id unidentified-license-ref :type :concluded :confidence :low :strategy :unidentified :source (list fragment)}}])))))
+  
 (defn- attempt-to-find-ids-in-fragments
-  "Attempts to find one or more ids in the fragments (Strings) in `coll`.
+  "Attempts to find one or more ids in the fragments (`String`s) in `coll`.
   For each fragment returns a sequence of maps, where the key(s) are the
   detected identifier(s), and the value(s) are an expression-info map for that
   identifer. If no ids are found in a fragment, the identifier for that fragment
@@ -250,19 +270,11 @@
 
   Other elements (i.e. operator keywords) are passed through unchanged)."
   [coll]
-  (flatten
-    (map #(if (string? %)
-            (if (or (sl/listed-id?                %)
-                    (se/listed-id?                %)
-                    (lcis/lice-comb-license-ref?  %)
-                    (lcis/lice-comb-addition-ref? %))
-              [{% nil}]   ; Don't need an expression-info here, since it will already have one from earlier steps in the parsing process
-              (if-let [ids (lciid/detect-ids %)]
-                ids
-                (let [unidentified-id (lcis/name->unidentified-license-ref %)]
-                  [{unidentified-id {:id unidentified-id :type :concluded :confidence :low :strategy :unidentified :source (list %)}}])))
-            %)
-         coll)))
+  ; This seemingly-redundant let block is only here to facilitate debugging
+  (let [result (flatten (map #(if (string? %) (attempt-to-find-ids-in-fragment %) %) coll))]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-find-ids-in-fragments result:" (pr-str result))
+    result))
 
 (defn- group-expressions
   "Groups expressions in `coll` into sequences of valid SPDX expressions (albeit
@@ -287,8 +299,8 @@
           )))))
 
 (defn- rebuild-expressions
-  "Rebuilds one or more SPDX expressions from the given `fragments` and
-  expression-infos (`eis`).  `fragments` is a heterogeneous sequence containing
+  "Rebuilds one or more SPDX expressions from the given `expr` and
+  expression-infos (`eis`).  `expr` is a heterogeneous sequence containing
   maps and/or keywords.  Each map represents a detected license, with an SPDX
   identifier as the key and an exression-info map as the value.  Each keyword
   represents one of the SPDX expression operators (`:and`, `:or`, `:with`).
@@ -296,9 +308,10 @@
   It returns a sequence of maps, where the keys are SPDX expressions, and the
   associated value is a sequence of expression-info maps related to that
   expression."
-  [fragments existing-eis]
-  (let [eis                 (concat existing-eis (filter identity (mapcat #(when (map? %) (vals %)) fragments)))
-        expr-elements       (mapcat #(if (keyword? %) [%] (keys %)) fragments)
+  [expr existing-eis]
+  (let [eis                 (concat existing-eis (filter identity (mapcat #(when (map? %) (vals %)) expr)))
+        expr-elements       (mapcat #(if (keyword? %) [%] (keys %)) expr)
+        ; ####TODO: WHEN THE KEYWORD IS :with ENSURE THE FOLLOWING ELEMENT IS AN EXCEPTION, OR (IF LICENSEREF), CONVERT IT TO AN ADDITIONREF
         expressions         (map #(sexp/normalise (s/join " " (map name %))) (group-expressions expr-elements))
         ; Now regroup expression-infos with their associated expression(s)
         ei-lookup           (group-by :id eis)
@@ -312,16 +325,33 @@
   "Splits `s` (a `String`) into fragments based on probable separators (SPDX
   expression operators and various other delimiters commonly seen in license
   names), then detects the license and/or exception identifier(s) in each
-  fragment, the finally rebuilds expressions"
+  fragment, the finally rebuilds expression(s).  It returns a sequence of maps,
+  where the keys are SPDX expressions, and the associated value is a sequence of
+  expression-info maps related to that expression.  Returns`nil` if no ids were
+  found, or if `s` is `nil` or blank."
   [s eis]
-  (let [fragments   (some-> (lciu/retained-split s #"(?i)(\band\s*/+\s*or\b|\band\b|\bor\b|\bwith\b|\bw/|&+|/+|\\+)")
+  (when-not (s/blank? s)
+    (let [expr      (some-> (lciu/retained-split s #"(?i)((?<!\\w)and\s*/+\\+\s*or(?!\w)|(?<!\\w)and(?!\w)|(?<!\\w)or(?!-later)(?!\w)|(?<!\\w)with(?!\w)|(?<!\\w)w/|&+|/+|\\+)")
                             replace-operators-with-keywords
                             remove-invalid-operator-keywords
                             attempt-to-find-ids-in-fragments)
-        identifiers (mapcat keys (filter #(not (keyword? %)) fragments))]
-    ; If we only found unidentifieds, return nil
-    (when-not (seq (filter #(lcis/unidentified? %) identifiers))
-      (rebuild-expressions fragments eis))))
+          fragments (mapcat keys (filter #(not (keyword? %)) expr))]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ split-and-detect-fragments parsed:" (pr-str expr))
+;(println "⭐️⭐️⭐️ split-and-detect-fragments fragments:" (pr-str fragments))
+      ; If we only found unidentifieds, return nil
+      (when-not (every? lcis/unidentified? fragments)
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ split-and-detect-fragments - fragments are not solely unidentified")
+        ; Strip out unidentifieds, as we did find some actual licenses and assume the other text is extraneous
+        (let [new-expr (->> expr
+                            (filter #(or (keyword? %) (not (lcis/unidentified? (first (keys %))))))
+                            ; Get rid of any dangling keywords after filtering unidentifieds
+                            (drop-while keyword?)
+                            (lci3/rdrop-while keyword?))]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ split-and-detect-fragments new-expr:" (pr-str new-expr))
+          (lciei/prepend-source s (rebuild-expressions new-expr eis)))))))
 
 (defn- attempt-to-parse-name
   "Attempts to parse `n`ame into an SPDX expression, by:
@@ -332,22 +362,32 @@
 
   Returns `nil` if parsing fails."
   [n]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-parse-name" (pr-str n))
   ; 1. Replace near matches for SPDX listed ids
   (let [[n eis] (replace-listed-ids-near-match n)]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-parse-name step 1" (pr-str n))
     (if-let [normalised-expression (sexp/normalise n)]
       {normalised-expression eis}
       ; 2. Replace near matches for SPDX listed names
       (let [[n new-eis] (replace-listed-names-near-match n)
             eis         (concat eis new-eis)]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-parse-name step 2" (pr-str n))
         (if-let [normalised-expression (sexp/normalise n)]
           {normalised-expression eis}
           ; 3. Replace tricky names (those with operators in them, primarily)
           (let [[n new-eis] (replace-tricky-names n)
                 eis         (concat eis new-eis)]            
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-parse-name step 3" (pr-str n))
             (if-let [normalised-expression (sexp/normalise n)]
               {normalised-expression eis}
               ; 4. Split on operators then detect fragments - note: this is the (only) point where we can end up with multiple expressions
               (when-let [fully-parsed-result (split-and-detect-fragments n eis)]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-parse-name step 4" (pr-str fully-parsed-result))
                 fully-parsed-result))))))))
 
 (defn parse-name
@@ -356,8 +396,8 @@
   [n]
   (when-not (s/blank? n)
     (let [n (s/trim n)]
-      (or ; 1. Is it a 'singleton' case?
-          (attempt-to-match-single-id n)
+      (or ; 1. Is it a 'simple' case?
+          (attempt-to-match-entire-name n)
           ; 2. Is it a 'complex' case?
           (attempt-to-parse-name n)
           ; 3. Could not parse at all - return a single unidentified LicenseRef
