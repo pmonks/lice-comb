@@ -194,7 +194,8 @@
 (defn- replace-operators-with-keywords
   "Replaces `String`s that represent SPDX expression operators in `coll` with
   an equivalent keyword (`:and`, `:or`, `:with`), or nothing if the 'operator'
-  in question is unidentifiable (e.g. `and/or`, `/`, `\\`)."
+  in question is unidentifiable (e.g. `and/or`, `/`, `\\`).  Other values that
+  are not operators are preserved in `coll` (but trimmed of whitespace)."
   [coll]
   (filter identity
     (map #(let [trimmed (s/trim %)
@@ -246,8 +247,6 @@
 
   Other elements (i.e. operator keywords) are passed through unchanged)."
   [fragment]
-;####TEST!!!!
-;(println "⭐️⭐️⭐️ attempt-to-find-ids-in-fragment fragment:" (pr-str fragment))
   ; 1. Is it a listed id, LicenseRef or AdditionRef?
   (if (re-matches (sre/ids-re) fragment)
     [{fragment nil}]   ; Don't need an expression-info here, since it will already have one from earlier steps in the parsing process
@@ -260,7 +259,7 @@
         ; 4. Give up and use the unidentified LicenseRef
         (let [unidentified-license-ref (lcis/name->unidentified-license-ref fragment)]
           [{unidentified-license-ref {:id unidentified-license-ref :type :concluded :confidence :low :strategy :unidentified :source (list fragment)}}])))))
-  
+
 (defn- attempt-to-find-ids-in-fragments
   "Attempts to find one or more ids in the fragments (`String`s) in `coll`.
   For each fragment returns a sequence of maps, where the key(s) are the
@@ -305,9 +304,7 @@
   identifier as the key and an exression-info map as the value.  Each keyword
   represents one of the SPDX expression operators (`:and`, `:or`, `:with`).
 
-  It returns a sequence of maps, where the keys are SPDX expressions, and the
-  associated value is a sequence of expression-info maps related to that
-  expression."
+  Returns an expressions-info map."
   [expr existing-eis]
   (let [eis                 (concat existing-eis (filter identity (mapcat #(when (map? %) (vals %)) expr)))
         expr-elements       (mapcat #(if (keyword? %) [%] (keys %)) expr)
@@ -318,77 +315,85 @@
         expr-ei-pairs       (mapcat #(let [ids (sexp/extract-ids (sexp/parse %))]
                                        [% (seq (filter identity (conj (vec (mapcat (fn [id] (get ei-lookup id)) ids))
                                                                       (when (> (count ids) 1) {:type :concluded :confidence :high :strategy :expression-inference}))))])
-                                    expressions)]
-    (apply hash-map expr-ei-pairs)))
+                                    expressions)
+        result              (apply hash-map expr-ei-pairs)]
+    result))
 
 (defn- split-and-detect-fragments
   "Splits `s` (a `String`) into fragments based on probable separators (SPDX
   expression operators and various other delimiters commonly seen in license
   names), then detects the license and/or exception identifier(s) in each
-  fragment, the finally rebuilds expression(s).  It returns a sequence of maps,
-  where the keys are SPDX expressions, and the associated value is a sequence of
-  expression-info maps related to that expression.  Returns`nil` if no ids were
-  found, or if `s` is `nil` or blank."
+  fragment, the finally rebuilds expression(s).  Returns an expressions-info map
+  or `nil` if `s` is blank."
   [s eis]
+;####TEST!!!!
+;(println "⭐️⭐️⭐️ attempt-to-parse-name - input:" (pr-str [s eis]))
   (when-not (s/blank? s)
-    (let [expr      (some-> (lciu/retained-split s #"(?i)((?<!\\w)and\s*/+\\+\s*or(?!\w)|(?<!\\w)and(?!\w)|(?<!\\w)or(?!-later)(?!\w)|(?<!\\w)with(?!\w)|(?<!\\w)w/|&+|/+|\\+)")
+    (let [expr      (some-> (lciu/retained-split s #"(?i)((?<!\w)and\s*/+\\+\s*or(?!\w)|(?<!\w)and(?!\w)|(?<!\w)or(?!-later)(?!\w)|(?<!\w)with(?!\w)|(?<!\w)w/|&+|/+|\\+)")
                             replace-operators-with-keywords
                             remove-invalid-operator-keywords
                             attempt-to-find-ids-in-fragments)
           fragments (mapcat keys (filter #(not (keyword? %)) expr))]
+      (if (every? lcis/lice-comb-ref? fragments)
+        ; If we only found lice-comb specific LicenseRefs, normalise them based on what we found (i.e. drop duplicate or redundant unidentified LicenseRefs)
+        (let [public-domain?          (boolean (some lcis/public-domain? fragments))
+              proprietary-commercial? (boolean (some lcis/proprietary-commercial? fragments))
+              result                  (case [public-domain? proprietary-commercial?]
+                                        [true true]   {(lcis/proprietary-commercial) eis (lcis/public-domain) eis}   ;####TODO: GROUP eis BY WHICH KEY THEY BELONG TO!!!!
+                                        [true false]  {(lcis/public-domain)          eis}
+                                        [false true]  {(lcis/proprietary-commercial) eis}
+                                        [false false] nil)]
 ;####TEST!!!!
-;(println "⭐️⭐️⭐️ split-and-detect-fragments parsed:" (pr-str expr))
-;(println "⭐️⭐️⭐️ split-and-detect-fragments fragments:" (pr-str fragments))
-      ; If we only found unidentifieds, return nil
-      (when-not (every? lcis/unidentified? fragments)
-;####TEST!!!!
-;(println "⭐️⭐️⭐️ split-and-detect-fragments - fragments are not solely unidentified")
-        ; Strip out unidentifieds, as we did find some actual licenses and assume the other text is extraneous
+;(println "⭐️⭐️⭐️ split-and-detect-fragments - result (case 1):" (pr-str result))
+          result)
         (let [new-expr (->> expr
-                            (filter #(or (keyword? %) (not (lcis/unidentified? (first (keys %))))))
+;                            (filter #(or (keyword? %) (not (lcis/unidentified? (first (keys %))))))
                             ; Get rid of any dangling keywords after filtering unidentifieds
                             (drop-while keyword?)
-                            (lci3/rdrop-while keyword?))]
+                            (lci3/rdrop-while keyword?))
+              result   (rebuild-expressions new-expr eis)]
 ;####TEST!!!!
-;(println "⭐️⭐️⭐️ split-and-detect-fragments new-expr:" (pr-str new-expr))
-          (lciei/prepend-source s (rebuild-expressions new-expr eis)))))))
+;(println "⭐️⭐️⭐️ split-and-detect-fragments - result (case 2):" (pr-str result))
+          result)))))
 
 (defn- attempt-to-parse-name
-  "Attempts to parse `n`ame into an SPDX expression, by:
+  "Attempts to parse `n`ame into one or more SPDX expressions, by:
   1. Replacing listed names with their ids
   2. Replacing listed names with their ids
   3. Replacing 'tricky' names with their ids
-  4. Parsing the input for any elements it contains that haven't yet been converted into an id
+  4. Parsing the input for any elements it contains that haven't yet been
+     converted into an id
 
-  Returns `nil` if parsing fails."
+  Returns an expressions-info map or `nil` if parsing fails to find any SPDX
+  expressions."
   [n]
 ;####TEST!!!!
-;(println "⭐️⭐️⭐️ attempt-to-parse-name" (pr-str n))
+(println "⭐️⭐️⭐️ attempt-to-parse-name - input:" (pr-str n))
   ; 1. Replace near matches for SPDX listed ids
-  (let [[n eis] (replace-listed-ids-near-match n)]
+  (let [[new-n eis] (replace-listed-ids-near-match n)]
 ;####TEST!!!!
-;(println "⭐️⭐️⭐️ attempt-to-parse-name step 1" (pr-str n))
-    (if-let [normalised-expression (sexp/normalise n)]
-      {normalised-expression eis}
+(println "⭐️⭐️⭐️ attempt-to-parse-name - result of step 1 (replace ids):" (pr-str [new-n eis]))
+    (if-let [normalised-expression (sexp/normalise new-n)]
+      (lciei/prepend-source n {normalised-expression eis})
       ; 2. Replace near matches for SPDX listed names
-      (let [[n new-eis] (replace-listed-names-near-match n)
+      (let [[new-n new-eis] (replace-listed-names-near-match new-n)
             eis         (concat eis new-eis)]
 ;####TEST!!!!
-;(println "⭐️⭐️⭐️ attempt-to-parse-name step 2" (pr-str n))
-        (if-let [normalised-expression (sexp/normalise n)]
-          {normalised-expression eis}
+(println "⭐️⭐️⭐️ attempt-to-parse-name - result of step 2 (replace names):" (pr-str [new-n eis]))
+        (if-let [normalised-expression (sexp/normalise new-n)]
+          (lciei/prepend-source n {normalised-expression eis})
           ; 3. Replace tricky names (those with operators in them, primarily)
-          (let [[n new-eis] (replace-tricky-names n)
-                eis         (concat eis new-eis)]            
+          (let [[new-n new-eis] (replace-tricky-names new-n )
+                eis         (concat eis new-eis)]
 ;####TEST!!!!
-;(println "⭐️⭐️⭐️ attempt-to-parse-name step 3" (pr-str n))
-            (if-let [normalised-expression (sexp/normalise n)]
-              {normalised-expression eis}
+(println "⭐️⭐️⭐️ attempt-to-parse-name - result of step 3 (replace tricky names):" (pr-str [new-n eis]))
+            (if-let [normalised-expression (sexp/normalise new-n)]
+              (lciei/prepend-source n {normalised-expression eis})
               ; 4. Split on operators then detect fragments - note: this is the (only) point where we can end up with multiple expressions
-              (when-let [fully-parsed-result (split-and-detect-fragments n eis)]
+              (when-let [fully-parsed-result (split-and-detect-fragments new-n eis)]
 ;####TEST!!!!
-;(println "⭐️⭐️⭐️ attempt-to-parse-name step 4" (pr-str fully-parsed-result))
-                fully-parsed-result))))))))
+(println "⭐️⭐️⭐️ attempt-to-parse-name - result of step 4 (parse):" (pr-str fully-parsed-result))
+                (lciei/prepend-source n fully-parsed-result)))))))))
 
 (defn parse-name
   "Parses the given license `n`ame, returning an expressions-info map or `nil`

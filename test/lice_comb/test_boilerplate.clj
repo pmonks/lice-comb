@@ -25,7 +25,7 @@
                               ; Enable spec validation
                               (spec/check-asserts true)
                               ; Initialise clj-spdx (since this can be slow)
-                              (println "ℹ️ Initialising clj-spdx...")
+                              (println "ℹ️ Initialising clj-spdx (this can take a while)...")
                               (sexp/init!)
                               (println "ℹ️ clj-spdx initialised.")
                               (flush)

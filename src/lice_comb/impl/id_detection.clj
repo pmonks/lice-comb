@@ -289,7 +289,7 @@
      :regex #"(?i)(?<!\w)Apache\s+Licen[cs]e(\s+but)?(\s+with)?(\s+the)?\s+acknowledgment\s+clause\s+removed(?!\w)"
      :fn    (constantly ["Plexus" :medium [:inferred-license-name]])}
    :proprietary-commercial {
-     :regex #"(?i)(?<!\w)(Propriet[aoe]ry|Commercial|(Copyright\s+.{0,20})?All\s+Rights\s+Reserved|Private)[\-\.]*(?!\w)"  ; We consume - and . so that replacement doesn't leave them in and cause problems later on
+     :regex #"(?i)(?<!\w)(Propriet[aoe]ry|Commercial|(Copyright\s+.{0,20})?All\s+Rights\s+Reserved|Private)(\s+Licen[cs]e\s*)?[\-\.]*(?!\w)"  ; We consume - and . so that replacement doesn't leave them in and cause problems later on
      :fn    (constantly [(lcis/proprietary-commercial) :high])}
    :public-domain {
      :regex #"(?i)(?<!\w)Public\s+Domain[\-\.]*(?![\s/\\\(]*CC\s*0\s*\)?)"  ; We consume - and . so that replacement doesn't leave them in and cause problems later on

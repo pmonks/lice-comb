@@ -128,7 +128,8 @@
 
 (defn uri->expressions-info
   "Returns an exceptions-info map for `uri` (a `String`, `URL`, or `URI`), or
-  `nil` if no expressions were found.  It does this via two steps:
+  `nil` if no expressions were found or `uri` is `nil`.  It does this via two
+  steps:
 
   1. Seeing if `uri` is in the SPDX license and/or exception lists
   2. Attempting to retrieve the plain text content of `uri` and if that succeeds
@@ -143,7 +144,8 @@
   2. URIs in the SPDX license and exception lists are not unique - the same URI
      may represent multiple licenses and/or exceptions."
   [uri]
-  (lcip/parse-uri uri))
+  (when uri
+    (lcip/parse-uri uri)))
 
 (defn uri->expressions
   "Returns a set of SPDX expressions (`String`s) for `uri`. See
@@ -155,7 +157,7 @@
 
 (defn name->expressions-info
   "Returns an expressions-info map for `n` (a `String`), or `nil` if no
-  expressions were found.  This involves:
+  expressions were found or `n` is `nil`.  This involves:
 
   1. Determining whether `n` is a valid SPDX license expression, and if so
      normalising it (see [clj-spdx's `spdx.expressions/normalise` fn](https://pmonks.github.io/clj-spdx/spdx.expressions.html#var-normalise))

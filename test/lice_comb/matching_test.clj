@@ -721,7 +721,7 @@
     (is (valid= #{(lcis/proprietary-commercial)}        (name->expressions "Tulos Commercial License")))
     (is (valid= #{(lcis/proprietary-commercial)}        (name->expressions "Wildbit Proprietary License")))
     (is (valid= #{(lcis/proprietary-commercial)}        (name->expressions "proprietary")))
-    (is (valid= #{(str (lcis/proprietary-commercial) " AND MIT")} (name->expressions "Dual MIT & Proprietary")))
+    (is (valid= #{(str "MIT AND " (lcis/proprietary-commercial))} (name->expressions "Dual MIT & Proprietary")))
     (is (valid= #{(lcis/public-domain)}                 (name->expressions "Public Domain")))
     (is (unidentified-only?                             (name->expressions "${license.id}")))
     (is (unidentified-only?                             (name->expressions "A Clojure library for Google Cloud Pub/Sub.")))

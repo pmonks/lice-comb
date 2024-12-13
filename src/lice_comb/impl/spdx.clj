@@ -28,7 +28,8 @@
           "AGPL-1.0" "AGPL-3.0" "GPL-1.0" "GPL-2.0" "GPL-3.0" "LGPL-2.0" "LGPL-2.1" "LGPL-3.0"
           "GPL-2.0-with-autoconf-exception" "GPL-2.0-with-bison-exception" "GPL-2.0-with-classpath-exception"
           "GPL-2.0-with-font-exception" "GPL-2.0-with-GCC-exception" "GPL-3.0-with-autoconf-exception"
-          "GPL-3.0-with-GCC-exception" "StandardML-NJ")))
+          "GPL-3.0-with-GCC-exception" "BSD-2-Clause-FreeBSD" "BSD-2-Clause-NetBSD" "bzip2-1.0.5"
+          "eCos-2.0" "Net-SNMP" "StandardML-NJ" "wxWindows" )))
 
 ; The subset of SPDX exception identifiers that we use, as an unordered set
 (def exception-ids-d
@@ -80,7 +81,7 @@
 (defn- id-version-replacement
   "Returns a regex fragment for a version number (e.g. 2.0.0) anywhere in an id."
   [[_ version]]
-  ; Note: characters are not escaped here, as they're escaped later on
+  ; Note: regex characters are not escaped here, as that's done later on
   (let [version-components                    (seq (s/split version #"\."))
         first-element                         (first version-components)
         remaining-version-components-reversed (seq (reverse (rest version-components)))
@@ -89,9 +90,7 @@
     (str "-((v|ver|version)-)?"
          (str "0*" first-element)
          (str (s/join (map #(str ".0*" %) leading-elements))
-              (when dot-zero-elements (s/join (map #(str "(.0*" % ")?") dot-zero-elements))))
-;         "(\\z|[^\\d])"
-)))
+              (when dot-zero-elements (s/join (map #(str "(.0*" % ")?") dot-zero-elements)))))))
 
 ; Note: these regexes uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
@@ -116,18 +115,19 @@
         ; Trim
         s/trim
         ; Add flags and start expressions
-        (->> (str "(?i)(?<!\\w)"))
+        (->> (str "(?i)(?<=(\\A|\\s))"))
         ; Replacements
-        (s/replace "+"               "\\+")                                 ; escape + character
+        (s/replace #"\+"             "\\\\+")                               ; escape + character
         (s/replace #"-(\d+(\.\d+)*)" id-version-replacement)                ; version numbers
         (s/replace #"-"              "[\\\\-\\\\s]*")                       ; hyphens as optional hyphens or whitespace
         (s/replace #"(?i)\blater\b"  "\\\\b(lat[eo]r|newer|greater)\\\\b")  ; alternative "or later" formulations
         (s/replace #"\."             "\\\\.")                               ; escape . character
         ; Special cases
         (special-case-ids id)
-        ; Remove redundant final word boundary match (if any), and add end expressionssss
+        ; Remove redundant final word boundary match (if any)
         (s/replace #"(.*)\\b\z"      "$1")
-        (str "(?!\\w)")
+        ; Add end expressions
+        (str "(?=(\\s|\\z))")
         ; And finally turn into a Pattern object
         re-pattern)))
 
@@ -214,7 +214,7 @@
         ; "Version" variations (this must come first)
         (s/replace #"(?i)(Licen[cs]e\s|version\s|v)\s*(\d+(\\\.\d+)*)" name-version-replacement)  ; Note: have to match escaped . here
         ; Equivalent words and other variability
-        (s/replace #"(?i)licen[cs]"                                    "licen[cs]")                ; Note: can't start with \b due to names such as "The Unlicense"
+        (s/replace #"(?i)\s+licen[cs]e"                                "(\\\\s+licen[cs]e)?")      ; Note: can't start with \b due to names such as "The Unlicense"
         (s/replace #"(?i)\s+Public\b"                                  "(\\\\s+Public)?")
         (s/replace #"(?i)\backnowledge?ment"                           "Acknowledge?ment")
         (s/replace #"(?i)\b(and|&)(?!\w)"                              "(and|&)")
@@ -224,7 +224,7 @@
         ; Special cases
         (special-case-names n)
         ; Whitespace variance
-        (s/replace #"\s+"                                              "\\\\s+")
+        (s/replace #"\s+"                                              "[\\\\s\\\\-]+")
         ; Remove redundant word boundary matches
         (s/replace "\\s+\\b"                                           "\\s+")
         (s/replace "\\b\\s+"                                           "\\s+")
