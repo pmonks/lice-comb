@@ -19,9 +19,9 @@
 ;; SPDX-License-Identifier: CC0-1.0 OR MIT
 ;;
 (defn rdrop-while
-  "As for clojure.core/drop-while, but drops from the end of the
-  sequence backwards, rather than the front forwards. More efficient
-  when provided with a vector rather than a list."
+  "As for [clojure.core/drop-while](https://clojuredocs.org/clojure.core/drop-while),
+  but drops from the end of `coll` backwards, rather than the front forwards.
+  More efficient when provided with a vector rather than a list."
   ([pred coll]
    (if (reversible? coll)
      (take (- (count coll) (count (take-while pred (rseq coll)))) coll)
@@ -39,6 +39,23 @@
             (let [res (reduce rf acc (conj @stash elt))]
               (vreset! stash [])
               res))))))))
+
+;; when-pred is copyright © Joshua Suskalo (https://github.com/IGJoshua) 2022 and licensed as "CC0-1.0 OR MIT"
+;;
+;; Source: https://discord.com/channels/729136623421227082/878465827979010079/961333852821942322
+;; Link to request access: https://discord.gg/discljord
+;;
+;; Note that the lice-comb project elects to consume this code under the MIT license
+;;
+;; SPDX-License-Identifier: CC0-1.0 OR MIT
+;;
+(defn when-pred
+  "If `pred?` is met when supplied with `value`, apply `then` (a function) to
+  `value` and return the result. Otherwise just return `value` as-is.
+
+  Useful when used with thread-first macros."
+  [value pred? then]
+  (if (pred? value) (then value) value))
 
 
 ;; by, ascending, and descending are copyright © Reddit user u/fredoverflow 2022

@@ -86,21 +86,255 @@
       ; We don't need to sexp/normalise the keys here, as we never detect an expression from a URI
       (lciei/prepend-source uri (lcic/correct result)))))
 
+(defn debug-print
+  ([x] (debug-print x nil))
+  ([x msg]
+   (println "⭐️⭐️⭐️" msg (pr-str x))
+   (flush)
+   x))
+
+(defn- not-blank-string?
+  "`true` when `x` is not a blank `String`."
+  [x]
+  (or (not (string? x))
+      (not (s/blank? x))))
+
+(defn- mapcat-pred
+  "mapcat on `coll`, calling `f` for any/all values for which `pred` returns
+  logical true, passing through other values unchanged."
+  [pred f coll]
+  (when (and pred f coll)
+    (mapcat #(if (pred %)
+               (f %)
+               [%])
+            coll)))
+
+(comment
 (defn- determine-strategy-for-id-match
   "Returns the strategy (a keyword) for the given `m`atch, matched to `id`."
-  [m id]
+  [match id]
   (cond
-    (= (s/lower-case m) (s/lower-case id)) :spdx-listed-identifier
-    :else                                  :spdx-listed-identifier-near-match))
+    (= (s/lower-case match) (s/lower-case id)) :spdx-listed-identifier
+    :else                                      :spdx-listed-identifier-near-match))
+)
 
-(defn- determine-strategy-for-name-match
-  "Returns the strategy (a keyword) for the given `n`ame, matched to `id`."
-  [n id]
-  (let [listed-name (or (:name (sl/id->info id)) (:name (se/id->info id)))]
-    (cond
-      (= n listed-name)                               :spdx-listed-name-exact-match
-      (= (s/lower-case n) (s/lower-case listed-name)) :spdx-listed-name-case-insensitive-match
-      :else                                           :spdx-listed-name-near-match)))
+(defn- determine-strategy
+  "Returns the strategy (a keyword) for the given `match`, matched to
+  `listed-name`."
+  [match id listed-name]
+  (cond
+    (= (s/lower-case match) (s/lower-case id))          :spdx-listed-identifier  ; Because some names are also ids (or close enough that a name regex will match)
+    (= match listed-name)                               :spdx-listed-name-exact-match
+    (= (s/lower-case match) (s/lower-case listed-name)) :spdx-listed-name-case-insensitive-match
+    :else                                               :spdx-listed-name-near-match))
+
+(comment
+(defn- replace-operators-with-keywords
+  "Replaces `String`s that represent SPDX expression operators in `coll` with
+  an equivalent keyword (`:and`, `:or`, `:with`), or nothing if the 'operator'
+  in question is unidentifiable (e.g. `and/or`, `/`, `\\`).  Other values that
+  are not operators are preserved in `coll` (but trimmed of whitespace)."
+  [coll]
+  (filter identity
+    (map #(if (string? %)
+            (let [trimmed (s/trim %)
+                  val     (-> trimmed
+                              s/lower-case
+                              (s/replace #"(?i)w/"               "with")
+                              (s/replace #"&+"                   "and")
+                              (s/replace #"(?i)and\s*/+\\+\s*or" "/")
+                              (s/replace #"/+"                   "/")
+                              (s/replace #"\\+"                  "/"))]
+              (case val
+                "and"    :and
+                "or"     :or
+                "with"   :with
+                ("/" "") nil
+                trimmed))
+            %)  ; Not an operator - keep it unchanged
+         coll)))
+)
+
+(defn- collapse-duplicate-operator-keywords
+  "Collapses sequential runs of keywords in `coll`, either to 1 keyword if
+  the run is identical, or to no keywords if they're heterogeneous. Non-keyword
+  values in `coll` are passed through unchanged."
+  [coll]
+  (filter #(not= ::sentinel %)
+    (reduce #(if (and (keyword? (last %1)) (keyword? %2))
+               (if (= (last %1) %2)
+                 %1
+                 (conj (vec (drop-last %1)) ::sentinel))
+               (conj %1 %2))
+            []
+            coll)))
+
+(def ^:private operator-re #"(?i)((?<!\w)(?<andOr>and\s*/+\\+\s*or)(?!\w)|(?<!\w)(?<and>and)(?!\w)|(?<!\w)(?<or>or)(?!-later)(?!\w)|(?<!\w)(?<with>with)(?!\w)|(?<!\w)w/|(?<ampersand>&+)|(?<forwardSlash>/+)|(?<backSlash>\\+))")
+
+(defn- detect-operators
+  "Detects operators in `String` values in `coll`, replacing them with keywords
+  and normalising invalid combinations."
+  [coll]
+  (->> (filter not-blank-string?
+               (mapcat-pred string?
+                            #(lciu/replacing-split % operator-re (fn [m]
+                                                                   (cond
+                                                                     (get m "and")       :and
+                                                                     (get m "ampersand") :and
+                                                                     (get m "or")        :or
+                                                                     (get m "with")      :with
+                                                                     :else               nil)))
+                            coll))
+       (drop-while keyword?)
+       (lci3/rdrop-while keyword?)
+       collapse-duplicate-operator-keywords))
+
+(defn- done-parsing?
+  "Are we done parsing `coll`?"
+  [coll]
+  (every? (complement string?) coll))
+
+(defn- replace-names
+  "Detects listed license names in the `String`s in `coll`."
+  [coll]
+  (loop [[[re id n] & r] @lcis/name-regex-id-pairs-d   ;####TODO: CONSIDER MOVING THAT VAR HERE!!!!
+         coll            coll]
+    (if (or (not re)
+            (not id)
+            (done-parsing? coll))  ; coll is fully devoid of strings, so we can terminate early
+      coll
+      (let [new-coll (filter not-blank-string?
+                             (mapcat-pred string?
+                                          #(lciu/replacing-split %
+                                                                 re
+                                                                 (fn [m]
+                                                                   (let [strategy (determine-strategy (:match m) id n)]
+                                                                     (merge {:id       id
+                                                                             :strategy strategy
+                                                                             :source   (list (:match m))}
+                                                                            (case strategy
+                                                                              :spdx-listed-identifier {:type :declared}
+                                                                              {:type :concluded :confidence :high})))))
+                                          coll))]
+        (recur r new-coll)))))
+
+(defn- group-expressions
+  "Groups expressions in `coll` into sequences of valid SPDX expressions (albeit
+  in sequence form, rather than `String` form.
+
+  For example:
+  [\"Apache-2.0\" \"MIT\"]                           -> [[\"Apache-2.0\"] [\"MIT\"]]
+  [\"Apache-2.0\" :or \"MIT\"]                       -> [[\"Apache-2.0\" :or \"MIT\"]]
+  [\"Apache-2.0\" :and \"MIT\" \"GPL-2.0-or-later\"] -> [[\"Apache-2.0\" :and \"MIT\"] [\"GPL-2.0-or-later\"]]"
+  [coll]
+  (loop [result  [[]]
+         [f & r] coll]
+    (if-not f
+      ; Base case
+      result
+      ; Recursive case
+      (let [l (last result)]
+        (case [(string? (last l)) (string? f)]
+          [true  true]                (recur (conj result [f])                          r) ; String/string, so start a new nested sequence in result
+          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; String/keyword or keyword/string, so continue the current last collection in result
+;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
+          )))))
+
+(defn- rebuild-expressions
+  "Rebuilds one or more SPDX expressions from the `coll`ection containing eis
+  and operator keywords.  Returns an expressions-info map."
+  [coll]
+  (when (seq coll)
+    (let [eis                 (filter map? coll)
+          expr-elements       (map #(if (keyword? %) % (:id %)) coll)
+; ####TODO: WHEN THE KEYWORD IS :with ENSURE THE FOLLOWING ELEMENT IS AN EXCEPTION, OR (IF LICENSEREF), CONVERT IT TO AN ADDITIONREF
+          expressions         (map #(sexp/normalise (s/join " " (map name %))) (group-expressions expr-elements))
+          ; Now regroup expression-infos with their associated expression(s)
+          ei-lookup           (group-by :id eis)
+          expr-ei-pairs       (mapcat #(let [ids (sexp/extract-ids (sexp/parse %))]
+                                         [% (seq (filter identity (conj (vec (mapcat (fn [id] (get ei-lookup id)) ids))
+                                                                        (when (> (count ids) 1) {:type :concluded :confidence :high :strategy :expression-inference}))))])
+                                      expressions)
+          result              (apply hash-map expr-ei-pairs)]
+      result)))
+
+(defn- parse-XXXXTODO
+  "Parses the given license `n`ame, returning an an expressions-info map or
+  `nil` if no expressions can be found."
+  [n]
+  (when-let [result (-> [n]
+                        (lciu/until-> done-parsing?
+;####TEST!!!!
+;(debug-print "0")
+                                      replace-names        ; Replace names first, as this covers the vast majority of "and", "or", "with" in names cases
+;####TEST!!!!
+;(debug-print "1")
+;                                      replace-trickynames  ; Replace other name variations not covered by the standard name regexes
+;                                      replace-expressions  ; This covers ids
+                                      (-> detect-operators  ; Split the strings on operators, with confidence that they're truly operators and not part of a name
+;####TEST!!!!
+;(debug-print "2")
+;                                          find-ids)
+)
+;                                     mark-unidentifieds
+)
+;####TEST!!!!
+(debug-print "after parse")
+                        rebuild-expressions)]
+;####TEST!!!!
+(debug-print result "after expression rebuild")
+    (lciei/prepend-source n result)))
+
+(defn parse-name
+  "Parses the given license `n`ame, returning an expressions-info map or `nil`
+  when `n`ame is blank."
+  [n]
+  (when-not (s/blank? n)
+    (let [n (s/trim n)]
+      ; 1. If it's cursed, return it
+      (if-let [cursed-ids (get @cursed-names-d n)]
+        (map #(apply hash-map %) cursed-ids)
+        ; 2. If it's a valid SPDX expression, return the normalised rendition of it
+        (if-let [parse-tree (sexp/parse n)]
+          (let [normalised-expression (sexp/unparse parse-tree)]
+            {normalised-expression (list {:type     :declared
+                                          :strategy (case (count (sexp/extract-ids parse-tree))
+                                                      1 :spdx-listed-identifier
+                                                      :spdx-expression)
+                                          :source (list n)})})
+          ; 3. If it's URI, attempt to parse that
+          (if (lciu/valid-http-uri? n)
+            (if-let [ids (parse-uri n)]
+              ids
+              ; It was a URL, but we weren't able to resolve it to any ids, so return it as unidentified
+              {(lcis/name->unidentified-license-ref n) (list {:type :concluded :confidence :low :strategy :unidentified :source (list n)})})
+            ; 4. Parse the name
+            (if-let [result (parse-XXXXTODO n)]
+              result
+              (let [unidentified-id (lcis/name->unidentified-license-ref n)]
+                {unidentified-id (list {:id unidentified-id :type :concluded :confidence :low :strategy :unidentified :source (list n)})}))))))))
+
+(defn init!
+  "Initialises this namespace upon first call (and does nothing on subsequent
+  calls), returning nil. Consumers of this namespace are not required to call
+  this fn, as initialisation will occur implicitly anyway; it is provided to
+  allow explicit control of the cost of initialisation to callers who need it.
+
+  Note: this method has a substantial performance cost."
+  []
+  (lcis/init!)
+  (lciid/init!)
+  (lcihttp/init!)
+  @cursed-names-d
+  nil)
+
+
+
+
+
+
+(comment
+
 
 ;####TODO: CONSIDER MOVING THIS TO lice-comb.impl.id-detection
 (defn- attempt-to-match-entire-name
@@ -191,52 +425,7 @@
           ;####TODO: Check all of the families for trickiness (operators in names, negative look-behinds/aheads, etc.) - e.g. X11
       [new-s (seq (concat gnu-eis cddl-eis pc-eis))])))
 
-(defn- replace-operators-with-keywords
-  "Replaces `String`s that represent SPDX expression operators in `coll` with
-  an equivalent keyword (`:and`, `:or`, `:with`), or nothing if the 'operator'
-  in question is unidentifiable (e.g. `and/or`, `/`, `\\`).  Other values that
-  are not operators are preserved in `coll` (but trimmed of whitespace)."
-  [coll]
-  (filter identity
-    (map #(let [trimmed (s/trim %)
-                val     (-> trimmed
-                            s/lower-case
-                            (s/replace #"(?i)w/"               "with")
-                            (s/replace #"&+"                   "and")
-                            (s/replace #"(?i)and\s*/+\\+\s*or" "/")
-                            (s/replace #"/+"                   "/")
-                            (s/replace #"\\+"                  "/"))]
-            (case val
-              "and"    :and
-              "or"     :or
-              "with"   :with
-              ("/" "") nil
-              trimmed))  ; Not an operator - keep it unchanged (albeit trimmed)
-         coll)))
 
-(defn- collapse-duplicate-operator-keywords
-  "Collapses sequential runs of keywords in `coll`, either to 1 keyword if
-  the run is identical, or to no keywords if they're heterogeneous. Non-keyword
-  values in `coll` are passed through unchanged."
-  [coll]
-  (filter #(not= ::sentinel %)
-    (reduce #(if (and (keyword? (last %1)) (keyword? %2))
-               (if (= (last %1) %2)
-                 %1
-                 (conj (vec (drop-last %1)) ::sentinel))
-               (conj %1 %2))
-            []
-            coll)))
-
-(defn- remove-invalid-operator-keywords
-  "Removes invalid operator keywords from `coll`. This is defined as all leading
-  and trailing keywords, and collapsing sequential runs of keywords (either to
-  1 keyword if they're all the same, or no keywords if they're heterogeneous)."
-  [coll]
-  (->> coll
-       (drop-while keyword?)
-       (lci3/rdrop-while keyword?)
-       collapse-duplicate-operator-keywords))
 
 (defn- attempt-to-find-ids-in-fragment
   "Attempts to find one or more ids in `fragment` (a `String`).
@@ -319,6 +508,8 @@
         result              (apply hash-map expr-ei-pairs)]
     result))
 
+
+
 (defn- split-and-detect-fragments
   "Splits `s` (a `String`) into fragments based on probable separators (SPDX
   expression operators and various other delimiters commonly seen in license
@@ -355,6 +546,7 @@
 ;####TEST!!!!
 ;(println "⭐️⭐️⭐️ split-and-detect-fragments - result (case 2):" (pr-str result))
           result)))))
+
 
 (defn- attempt-to-parse-name
   "Attempts to parse `n`ame into one or more SPDX expressions, by:
@@ -395,30 +587,6 @@
 (println "⭐️⭐️⭐️ attempt-to-parse-name - result of step 4 (parse):" (pr-str fully-parsed-result))
                 (lciei/prepend-source n fully-parsed-result)))))))))
 
-(defn parse-name
-  "Parses the given license `n`ame, returning an expressions-info map or `nil`
-  when `n`ame is blank."
-  [n]
-  (when-not (s/blank? n)
-    (let [n (s/trim n)]
-      (or ; 1. Is it a 'simple' case?
-          (attempt-to-match-entire-name n)
-          ; 2. Is it a 'complex' case?
-          (attempt-to-parse-name n)
-          ; 3. Could not parse at all - return a single unidentified LicenseRef
-          (let [unidentified-id (lcis/name->unidentified-license-ref n)]
-            {unidentified-id (list {:id unidentified-id :type :concluded :confidence :low :strategy :unidentified :source (list n)})})))))
 
-(defn init!
-  "Initialises this namespace upon first call (and does nothing on subsequent
-  calls), returning nil. Consumers of this namespace are not required to call
-  this fn, as initialisation will occur implicitly anyway; it is provided to
-  allow explicit control of the cost of initialisation to callers who need it.
 
-  Note: this method has a substantial performance cost."
-  []
-  (lcis/init!)
-  (lciid/init!)
-  (lcihttp/init!)
-  @cursed-names-d
-  nil)
+)

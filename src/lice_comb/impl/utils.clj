@@ -18,6 +18,34 @@
             [embroidery.api  :as e]
             [rencg.api       :as rencg]))
 
+(defmacro until-recursive->
+  "Recursive portion of until-> - not intended for direct use."
+  [expr pred? & forms]
+  (let [[f & r] forms]
+    (if f
+      (let [threaded (if (seq? f)
+                       (with-meta `(~(first f) ~expr ~@(next f)) (meta f))
+                       `(~f ~expr))]
+        (if (seq r)
+          `(let [new-expr# ~threaded]
+             (if (~pred? new-expr#)
+               new-expr#
+               (until-recursive-> new-expr# ~pred? ~@r)))   ; Note: naive recursion (not a tail position)
+          threaded))
+      expr)))
+
+(defmacro until->
+  "As for `->`, but terminates as soon as `pred?` (a function of one argument)
+  returns logical true, skipping any remaining forms.  Skips all forms when
+  `(pred? expr) is logically true.  If `pred?` is never logically true, returns
+  the result of chaining `expr` through all of the forms."
+  [expr pred? & forms]
+  (if (seq forms)
+    `(if (~pred? ~expr)
+       ~expr
+       (until-recursive-> ~expr ~pred? ~@forms))
+    expr))
+
 (defn mapfonk
   "Returns a new map where f has been applied to all of the keys of m."
   [f m]
@@ -99,16 +127,46 @@
   "As for `clojure.string/split`, but retains whatever `re` matched as distinct
   elements in the result."
   [^CharSequence s ^java.util.regex.Pattern re]
-  (let [m             (re-matcher re s)
-        split-indices (loop [result []
-                             f      (.find m)]
-                        (if f
-                          (recur (concat result [(.start m) (.end m)]) (.find m))
-                          (when-not (empty? result)
-                            (dedupe (concat [0] result [(count s)])))))]
-    (if (empty? split-indices)
-      [s]
-      (mapv #(subs s (first %) (second %)) (partition 2 1 split-indices)))))
+  (let [m (re-matcher re s)]
+    (loop [result []
+           index  0
+           f      (.find m)]
+      (if f
+        (let [match-start (.start m)
+              match-end   (.end m)
+              match       (subs s match-start match-end)]
+          (if (= index match-start)
+            (recur (conj result match) match-end (.find m))  ; Back-to-back matches
+            (recur (vec (concat result [(subs s index match-start) match])) match-end (.find m))))
+        (conj result (subs s index (count s)))))))
+
+(defn replacing-split
+  "As for [[retained-split]], but replaces whatever `re` matched with
+  `replacement`, which can be a value or a function of one argument.
+
+  Notes:
+  * replacement doesn't have to return a `String`, though not doing so will
+    result in a heterogeneous collection.
+  * uses [rencg](https://github.com/pmonks/rencg), so if `replacement` is a
+    function it must accept a map, not a sequence.
+  * does not support the `$1` syntax (as supported by Clojure and the JVM) - use
+    a function instead"
+  [^CharSequence s ^java.util.regex.Pattern re replacement]
+  (let [replacement-fn (if (fn? replacement) replacement (constantly replacement))
+        m              (re-matcher re s)
+        ncgs           (rencg/re-named-groups re)]
+    (loop [result []
+           index  0
+           f      (.find m)]
+      (if f
+        (let [match       (rencg/re-groups-ncg m ncgs)
+              match-start (:start match)
+              match-end   (:end match)
+              rep         (replacement-fn match)]
+          (if (= index match-start)
+            (recur (conj result rep) match-end (.find m))  ; Back-to-back matches
+            (recur (vec (concat result [(subs s index match-start) rep])) match-end (.find m))))
+        (conj result (subs s index (count s)))))))
 
 (defn explaining-replace
   "Similar to `clojure.string/replace`, but returns a tuple where the first
@@ -131,11 +189,11 @@
         (loop [found        true
                replacements []]
           (if found
-            (let [groups (rencg/re-groups-ncg m ncgs)
-                  match  (:match groups)
-                  rep    (replacement-fn groups)]
+            (let [match (rencg/re-groups-ncg m ncgs)
+                  text  (:match match)
+                  rep   (replacement-fn match)]
               (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement rep))
-              (recur (.find m) (conj replacements [match rep])))
+              (recur (.find m) (conj replacements [text rep])))
             (do
               (.appendTail m buffer)
               [(.toString buffer) replacements]))))

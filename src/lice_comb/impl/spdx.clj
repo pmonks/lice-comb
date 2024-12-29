@@ -134,8 +134,8 @@
 ; Notes:
 ; * we normalise each id so that things like GPL family normalisation are correctly handled (i.e. as per clj-spdx)
 ; * we use all ids (including deprecated ones) because the real world may include anything
-(def ^:private id-regex-id-pairs-d (delay (concat (map #(vec [(id->regex %) (sexp/normalise %)]) (map :id @full-license-list-d))       ; Note: we use the license lists as they're already sorted predictably
-                                                  (map #(vec [(id->regex %) %])                  (map :id @full-exception-list-d)))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
+(def ^:private id-regex-id-pairs-d (delay (concat (sort (by #(count (str (first %))) descending) (map #(vec [(id->regex %) (sexp/normalise %)]) (map :id @full-license-list-d)))       ; Note: we use the license lists as they're already sorted predictably
+                                                  (sort (by #(count (str (first %))) descending) (map #(vec [(id->regex %) %])                  (map :id @full-exception-list-d))))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
 
 (defn near-match-id
   "Returns the id(s) (a set) when `s` 'near matches' one or more license or
@@ -234,11 +234,13 @@
         ; And finally compile the regex
         re-pattern)))
 
+;####TODO: CONSIDER MOVING TO lice-comb.impl.parsing!!  THIS WOULD MEAN REMOVING THE VARIOUS FNS HERE THAT USE THIS STRUCTURE!!!
 ; Notes:
 ; * we normalise each id so that things like GPL family normalisation are correctly handled (i.e. as per clj-spdx)
 ; * we use all ids (including deprecated ones) because the real world may include anything
-(def ^:private name-regex-id-pairs-d (delay (concat (map #(vec [(name->regex (:name %)) (sexp/normalise (:id %))]) @full-license-list-d)
-                                                    (map #(vec [(name->regex (:name %)) %])                        @full-exception-list-d))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
+; * we preserve the listed name of the license in the tuple so that we can determine the precise matching strategy
+(def name-regex-id-pairs-d (delay (concat (sort (by #(count (str (first %))) descending) (map #(vec [(name->regex (:name %)) (sexp/normalise (:id %)) (:name %)]) @full-license-list-d))
+                                          (sort (by #(count (str (first %))) descending) (map #(vec [(name->regex (:name %)) % (:name %)])                        @full-exception-list-d)))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
 
 (defn near-match-name
   "Returns the id(s) (a set) when `n`ame 'near matches' one or more license or

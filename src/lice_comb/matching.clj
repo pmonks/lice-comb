@@ -167,20 +167,7 @@
      expressions"
   [n]
   (when-not (s/blank? n)
-    (let [n (s/trim n)]
-      ; 1. If it's a valid SPDX expression, return the normalised rendition of it
-      (if-let [normalised-expression (sexp/normalise n)]
-        {normalised-expression (list {:type :declared :strategy :spdx-expression :source (list n)})}
-        ; 2. Is it a listed license or exception name?
-        (if-let [ids (lcis/near-match-name n)]
-          (into {} (map #(vec [% (list {:id % :type :concluded :confidence :high :strategy :spdx-listed-name :source (list n)})]) ids))
-          ; 3. If it's a URI, use URI matching (this is to handle messed up real world cases where license names in POMs contain a URI)
-          (if (lciu/valid-http-uri? n)
-            (if-let [ids (uri->expressions-info n)]
-              ids
-              {(lcis/name->unidentified-license-ref n) (list {:type :concluded :confidence :low :strategy :unidentified :source (list n)})})  ; It was a URL, but we weren't able to resolve it to any ids, so return it as unidentified
-            ; 4. Attempt to parse the name
-            (lcip/parse-name n)))))))
+    (lcip/parse-name n)))
 
 (defn name->expressions
   "Returns a set of SPDX expressions (`String`s) for `name`. See
