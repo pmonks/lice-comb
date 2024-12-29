@@ -160,8 +160,8 @@
            f      (.find m)]
       (if f
         (let [match       (rencg/re-groups-ncg m ncgs)
-              match-start (:start match)
-              match-end   (:end match)
+              match-start (long (:start match))
+              match-end   (long (:end   match))
               rep         (replacement-fn match)]
           (if (= index match-start)
             (recur (conj result rep) match-end (.find m))  ; Back-to-back matches
