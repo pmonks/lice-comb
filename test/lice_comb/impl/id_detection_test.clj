@@ -240,5 +240,5 @@
     (is (every? not-nil? (map (partial test-regex gnu-re) gnu-licenses)))))
 
 (deftest find-ids-tests
-  (testing-with-data "GNU Family Regexes - correct identifier results" #(mapcat keys (find-ids %)) gnu-licenses-and-ids)
-  (testing-with-data "CC Family Regexes - correct identifier results"  #(mapcat keys (find-ids %)) cc-by-licenses-and-ids))
+  (testing-with-data "GNU Family Regexes - correct identifier results" #(map :id (find-ids %)) gnu-licenses-and-ids)
+  (testing-with-data "CC Family Regexes - correct identifier results"  #(map :id (find-ids %)) cc-by-licenses-and-ids))

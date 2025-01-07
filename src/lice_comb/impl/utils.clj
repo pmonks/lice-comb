@@ -63,8 +63,8 @@
             [k (f v)]))))
 
 (defn map-pad
-  "Like map, but when presented with multiple collections of different lengths,
-  'pads out' the missing elements with nil rather than terminating early."
+  "`map`, but when presented with multiple collections of different lengths,
+  'pads out' the missing elements with `nil` rather than terminating early."
   [f & cs]
   (loop [result nil
          firsts (map first cs)
@@ -75,10 +75,48 @@
              (map first rests)
              (map rest  rests)))))
 
+(defn map-pred
+  "`map` on `coll`, calling `f` for any/all values for which `pred` returns
+  logical true, passing through other values unchanged."
+  [pred f coll]
+  (when (and pred f coll)
+    (map #(if (pred %)
+            (f %)
+            %)
+         coll)))
+
+(defn mapcat-pred
+  "`mapcat` on `coll`, calling `f` for any/all values for which `pred` returns
+  logical true, passing through other values unchanged."
+  [pred f coll]
+  (when (and pred f coll)
+    (mapcat #(if (pred %)
+               (f %)
+               [%])
+            coll)))
+
+(defn not-blank-string?
+  "`true` when `x` is not a blank `String`."
+  [x]
+  (boolean
+    (when x
+      (or (not (string? x))
+          (not (s/blank? x))))))
+
 (defn strim
-  "nil safe version of clojure.string/trim"
+  "`nil` safe version of clojure.string/trim"
   [^String s]
   (when s (s/trim s)))
+
+(defn trim-non-word
+  "Like clojure.string/trim, but trims `s` of all leading and trailing
+  characters that aren't alphanumeric (`[\\w]` regex class, with Unicode
+  support enabled)."
+  [s]
+  (when s
+    (-> s
+        (s/replace #"(?U)\A[^\w]+" "")
+        (s/replace #"(?U)[^\w]+\z" ""))))
 
 (defn is-digits?
   "Does the given string contains digits only?"
@@ -123,25 +161,8 @@
   [& res]
   (re-pattern (s/join res)))
 
-(defn retained-split
-  "As for `clojure.string/split`, but retains whatever `re` matched as distinct
-  elements in the result."
-  [^CharSequence s ^java.util.regex.Pattern re]
-  (let [m (re-matcher re s)]
-    (loop [result []
-           index  0
-           f      (.find m)]
-      (if f
-        (let [match-start (.start m)
-              match-end   (.end m)
-              match       (subs s match-start match-end)]
-          (if (= index match-start)
-            (recur (conj result match) match-end (.find m))  ; Back-to-back matches
-            (recur (vec (concat result [(subs s index match-start) match])) match-end (.find m))))
-        (conj result (subs s index (count s)))))))
-
 (defn replacing-split
-  "As for [[retained-split]], but replaces whatever `re` matched with
+  "As for `clojure.string/split`, but replaces whatever `re` matched with
   `replacement`, which can be a value or a function of one argument.
 
   Notes:
@@ -168,6 +189,14 @@
             (recur (vec (concat result [(subs s index match-start) rep])) match-end (.find m))))
         (conj result (subs s index (count s)))))))
 
+(defn retained-split
+  "As for `clojure.string/split`, but retains whatever `re` matched as distinct
+  elements in the result."
+  [^CharSequence s ^java.util.regex.Pattern re]
+  (replacing-split s re #(get % :match)))   ; Can't use :match literally here, since `(fn? :keyword)` is always false
+
+;####TODO: REMOVE THIS IF UNNEEDED!!!!
+(comment
 (defn explaining-replace
   "Similar to `clojure.string/replace`, but returns a tuple where the first
   element is the new `String`, and the second element is a sequence of tuples,
@@ -198,6 +227,7 @@
               (.appendTail m buffer)
               [(.toString buffer) replacements]))))
       [s nil])))
+)
 
 (defn digit-name-to-number
   "Converts the English name of a single digit (a `String`) to that number (as a
@@ -458,6 +488,7 @@
 (defn file-handle-bounded-pmap
   "bounded-pmap* hardcoded to no more than 8192 virtual threads. This size is
   determined conservatively from macOS, since it's the least common denominator
-  of the major OSes in terms of number of possible open file handles."
+  of the major OSes in terms of number of possible open file handles per
+  process."
   [f coll]
   (e/bounded-pmap* 8192 f coll))

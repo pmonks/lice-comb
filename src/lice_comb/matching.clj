@@ -24,12 +24,12 @@
      information)
 
   An expressions-info map has this structure:
-  
+
   * key:   an SPDX expression (`String`)
   * value: a sequence of 'expression-info' maps
 
   An expression-info map has this structure:
-  
+
   * `:id` (`String`, optional):
     The portion of the SPDX expression that this info map refers to (usually,
     though not always, a single SPDX identifier).

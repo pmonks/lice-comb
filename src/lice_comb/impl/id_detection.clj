@@ -181,7 +181,7 @@
                                  (contains? m "lgpl") "LGPL"
                                  (contains? m "gpl")  "GPL")
         version-present?   (boolean (get-rencgs m ["version"] false))
-        version            (get-rencgs m ["version"] (if (= variant "LGPL") "2.0" "1.0"))
+        version            (get-rencgs m ["version"] (if (= variant "LGPL") "2.0" "1.0"))  ; Note: on the advice of the SPDX technical team, default to earliest version when version not present
         version            (s/replace version #"\p{Punct}+" ".")
         [confidence confidence-explanations]
                            (if version-present?
@@ -195,7 +195,7 @@
         [suffix confidence-explanations]
                            (cond (contains? m "orLater") ["or-later" confidence-explanations]
                                  (contains? m "only")    ["only"     confidence-explanations]
-                                 :else                   [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version not present
+                                 :else                   [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version suffix not present
                                                           (set/union #{:missing-version-suffix} confidence-explanations)])
         id                 (str variant "-" version  "-" suffix)]
     [(assert-listed-id id) confidence confidence-explanations]))
@@ -307,8 +307,12 @@
      :regex #"(?i)(?<!\w)Universal\s+Permissive(\s+Licen[cs]e)?([\s,\-]+(V(ersion)?)?\s*(?<version>\d+(\.\d+)?)?)?(?!\w)"
      :fn    (constantly ["UPL-1.0" :high])}  ; There are no other listed versions of this license
    :WTFPL {
-     :regex #"(?i)(?<!\w)(WTFPL|DO[\s\-]+WTF[\s\-]+(U|YOU)[\s\-]+WANT[\s\-]+(2|TO)|Do\s+What\s+The\s+Fuck\s+You\s+Want\s+To(\s+Public)?(\s+Licen[cs]e)?)(?!\w)"
+     :regex #"(?i)(?<!\w)(WTFPL|DO[\s\-]+(WTF|What[\s\-]+The[\s\-]+[f*][u*][c*][k*])[\s\-]+(U|YOU)[\s\-]+WANT[\s\-]+(2|TO))([\s\-]+Public)?([\s\-]+Licen[cs]e)?([\s\-,]+Version[\s\-]+\d+)?(?!\w)"
      :fn    (constantly ["WTFPL" :high])}
+   :X11 {
+     :regex #"(?i)(?<!\w)(MIT)?[\s,\-\/\\]+X11(\s+Public)?(\s+Licen[cs]e)?(?!\w)"
+     :fn    (constantly ["X11" :high])
+   }
    :Zlib {
      :regex #"(?i)(?<!\w)zlib(?![\s/]+libpng)(?!\w)"
      :fn    (constantly ["Zlib" :high])}
@@ -370,6 +374,8 @@
     (when-let [elem (get @license-family-matching-d family)]
       (detect-id-internal s elem :match))))
 
+;####TODO: REMOVE THESE TWO FNS!!!!
+(comment
 (defn- replace-info
   "Similar to `clojure.string/replace`, but returns a tuple where the first
   element is the new `String`, and the second element is a sequence of
@@ -410,11 +416,37 @@
       (let [re (:regex elem)
             f  (:fn    elem)]
         (replace-info s re f)))))
+)
+
+(defn- replace-id
+  "####TODO: DOCUMENT ME!!!!"
+  [f m]
+  (let [match                                   (:match m)
+        [id confidence confidence-explanations] (f m)]
+    (merge {:id         id
+            :type       :concluded
+            :confidence confidence
+            :strategy   :regex-replacement
+            :source     (list match)}
+            (when confidence-explanations {:confidence-explanations confidence-explanations}))))
+
+(defn replace-ids
+  "Replaces values in `s` with any values that match the regex for `family` (a
+  `:keyword` from [[supported-families]]). Returns a sequence as per
+  [[lice-comb.impl.id-detection/replacing-split]], where replacements (if any)
+  are expression-info maps.  Returns a singleton sequence containing `s` if
+  `family` is invalid (does not identify a family from [[supported-families]].
+  Returns `nil` if `family` or `s` are nil."
+  [family s]
+  (when (and family s)
+    (if-let [elem (get @license-family-matching-d family)]
+      (let [re (:regex elem)
+            f  (:fn    elem)]
+        (lciu/replacing-split s re (partial replace-id f)))
+      [s])))
 
 (defn find-ids
-  "Returns a sequence (NOT A SET!) of maps where each key is a SPDX license or
-  exception identifier (a `String`) that was found in `s`, and the value is an
-  expression-info map.
+  "Returns a sequence (NOT A SET!) of expression-info maps.
 
   Results are in the order in which they appear in `s` (hence why this fn
   returns a sequence not a set), and returns `nil` if there were no matches.
@@ -428,13 +460,13 @@
     (some->> matches
              (med/distinct-by :id)    ;####TODO: THINK ABOUT MERGING INSTEAD OF DROPPING (e.g. if the same id is detected in two different places in s, and we want to preserve the two eis)
              (sort-by :start)
-             (map #(hash-map (:id %) (merge {:id         (:id %)   ; We duplicate this here in case the result gets merged into an expression
-                                             :type       (:type %)
-                                             :confidence (:confidence %)
-                                             :strategy   (:strategy %)
-                                             :source     (:source %)}
-                                            (when (seq (:confidence-explanations %))
-                                              {:confidence-explanations (:confidence-explanations %)})))))))
+             (map #(merge {:id         (:id %)   ; We duplicate this here in case the result gets merged into an expression
+                           :type       (:type %)
+                           :confidence (:confidence %)
+                           :strategy   (:strategy %)
+                           :source     (:source %)}
+                           (when (seq (:confidence-explanations %))
+                             {:confidence-explanations (:confidence-explanations %)}))))))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

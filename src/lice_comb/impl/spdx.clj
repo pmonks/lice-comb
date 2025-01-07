@@ -154,6 +154,8 @@
   [s]
   (best-identifier (near-match-id s)))
 
+;####TODO: REMOVE IF UNNEEDED!!!!
+(comment
 (defn replace-near-match-ids-with-id
   "Replaces all near matched ids in `s` (a `String`) with their actual (best)
   SPDX id. Result is a tuple containing the modified `s` and a sequence of
@@ -170,6 +172,7 @@
               replacement         (seq (filter #(not= (first %) (second %)) replacement))  ; Remove redundant replacements such as ["GPL-2.0-only" "GPL-2.0-only"]
               new-replacements    (if replacement (apply conj replacements replacement) replacements)]
           (recur new-s new-replacements r))))))
+)
 
 (defn- name-version-replacement
   "Returns a regex fragment for a version number (e.g. 2.0.0) in a name."
@@ -230,7 +233,7 @@
         (s/replace "\\b\\s+"                                           "\\s+")
         (s/replace #"(.*)\\b\z"                                        "$1")
         ; End clauses
-        (str "(?!\\w)")
+        (str "(?<orLater>\\s*\\+)?(?!\\w)")
         ; And finally compile the regex
         re-pattern)))
 
@@ -240,8 +243,10 @@
 ; * we use all ids (including deprecated ones) because the real world may include anything
 ; * we preserve the listed name of the license in the tuple so that we can determine the precise matching strategy
 (def name-regex-id-pairs-d (delay (concat (sort (by #(count (str (first %))) descending) (map #(vec [(name->regex (:name %)) (sexp/normalise (:id %)) (:name %)]) @full-license-list-d))
-                                          (sort (by #(count (str (first %))) descending) (map #(vec [(name->regex (:name %)) % (:name %)])                        @full-exception-list-d)))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
+                                          (sort (by #(count (str (first %))) descending) (map #(vec [(name->regex (:name %)) (:id %)                  (:name %)]) @full-exception-list-d)))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
 
+;####TODO: REMOVE IF UNNEEDED!!!!
+(comment
 (defn near-match-name
   "Returns the id(s) (a set) when `n`ame 'near matches' one or more license or
   exception names, or `nil` if `n` is blank or no near matches were found. The
@@ -274,6 +279,7 @@
               [new-s replacement] (lciu/explaining-replace s re id)
               new-replacements    (if replacement (apply conj replacements replacement) replacements)]
           (recur new-s new-replacements r))))))
+)
 
 (defn- urls-to-id-tuples
   "Extracts all urls for a given list (license or exception) entry."
@@ -438,7 +444,9 @@
 (defn find-ids
   "Returns a sequence of the distinct listed SPDX license ids, exceptions ids,
   LicenseRefs and AdditionRefs found in `s` (a `String`), in the order they were
-  found, or `nil` if no listed ids were found or `s` was `nil`."
+  found, or `nil` if no listed ids were found or `s` was `nil`.
+
+  Note: results are NOT normalised."
   [s]
   (when s
     (when-let [matches (map #(get % "Identifier") (rencg/re-seq-ncg (sre/ids-re) s))]
