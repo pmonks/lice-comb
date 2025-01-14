@@ -46,7 +46,7 @@
 (defn join-maps-with-operator
   "Joins `eim`, an expressions-info map with multiple entries into an
   expressions-info map with a single entry that is an SPDX expression joining
-  all of the entries via SPDX operator `op` (either :and or :or)."
+  all of the entries via SPDX operator `op` (either `:and` or `:or`)."
   [op eim]
   (when (and op eim)
     (if (<= (count eim) 1)

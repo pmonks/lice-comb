@@ -88,10 +88,13 @@
       (lciei/prepend-source uri (lcic/correct result)))))
 
 ;####TODO: REMOVE ME!!!!
+(require '[clojure.pprint :as pp])
 (defn debug-print
   ([x] (debug-print x nil))
   ([x msg]
-   (println "⭐️⭐️⭐️" msg (pr-str x))
+   (println "⭐️⭐️⭐️ ➡️" msg)
+   (pp/pprint x)
+   (println "⬅️ ⭐️⭐️⭐️")
    (flush)
    x))
 
@@ -143,11 +146,12 @@
              collapse-duplicate-operator-keywords
              seq)))
 
-(def ^:private operator-re #"(?i)((?<!\w)(?<andOr>and\s*/+\\+\s*or)(?!\w)|(?<!\w)(?<and>and)(?!\w)|(?<!\w)(?<or>or)(?!-later)(?!\w)|(?<!\w)(?<with>with)(?!\w)|(?<!\w)w/|(?<ampersand>&+)|(?<forwardSlash>/+)|(?<backSlash>\\+))")
+(def ^:private operator-re #"(?i)\s*((?<!\w)(?<andOr>and\s*/+\\+\s*or)(?!\w)|(?<!\w)(?<and>and)(?!\w)|(?<!\w)(?<or>or)(?!-later)(?!\w)|(?<!\w)(?<with>with)(?!\w)|(?<!\w)w/|(?<ampersand>&+)|(?<forwardSlash>/+)|(?<backSlash>\\+))\s*")
 
 (defn- detect-operators
-  "Detects operators in `String` values in `coll`, replacing them with keywords
-  and normalising invalid combinations."
+  "Detects operators in `String` values in `coll`, replacing each one with a
+  keyword representing the detected operator. The possible values are: `:and`,
+  `:or`, and `:with`."
   [coll]
   (remove-invalid-operator-combos
     (filter lciu/not-blank-string?
@@ -189,7 +193,7 @@
 (defn- done-parsing?
   "Are we done parsing `coll`?"
   [coll]
-  (every? (complement string?) coll))
+  (every? #(or (not (string? %)) (s/blank? %)) coll))
 
 (def ^:private extraneous-fragment-res-d (delay [#"(?i)dual"
                                                  #"(?i)(public[\s-\\\/]+)?licen[cs]e"
@@ -239,10 +243,27 @@
                                        coll)]
         (recur r new-coll)))))
 
-(defn- replace-other-names
-  "Detects other license names in the `String`s in `coll`, returning a sequence
-  of expression-info maps, one for each detected license name. If no
-  names are found in a fragment, `nil` will be returned."
+;(defn- replace-lgpl-variant
+;  [s]
+
+
+;(defn- replace-lgpl-variants
+;  [coll]
+;  (lciu/mapcat-pred string? replace-lgpl-variant coll))
+
+(defn- replace-handcrafted
+  "Uses handcrafted regexes to replace certain license names in the `String`s in
+  `coll`, returning a new `coll`.  Non-`String` values in `coll` are passed
+  through unchanged."
+  [coll]
+  coll)
+;  (-> coll
+;      replace-lgpl-variants))
+
+(defn- replace-families
+  "Replaces certain families (as defined in lice-comb.impl.id-detection) in the
+  `String`s in `coll`, returning a new `coll`.  Non-`String` values in `coll`
+  are passed through unchanged."
   [coll]
   (loop [[family & r] [:GNU :CDDL :X11]  ;####TODO: consider other families!
          coll         coll]
@@ -266,13 +287,14 @@
                  coll))
 
 (defn- group-expressions
-  "Groups expressions in `coll` into sequences of valid SPDX expressions (albeit
-  in sequence form, rather than `String` form.
+  "Groups expressions in `coll` into sequences that can be turned into valid
+  SPDX expressions.
 
   For example:
-  [\"Apache-2.0\" \"MIT\"]                           -> [[\"Apache-2.0\"] [\"MIT\"]]
-  [\"Apache-2.0\" :or \"MIT\"]                       -> [[\"Apache-2.0\" :or \"MIT\"]]
-  [\"Apache-2.0\" :and \"MIT\" \"GPL-2.0-or-later\"] -> [[\"Apache-2.0\" :and \"MIT\"] [\"GPL-2.0-or-later\"]]"
+  [{:id \"Apache-2.0\" ...}]                                                       -> [[{:id \"Apache-2.0\" ...}]]
+  [{:id \"Apache-2.0\" ...} {:id \"MIT\"}]                                         -> [[{:id \"Apache-2.0\" ...}] [{:id \"MIT\" ...}]]
+  [{:id \"Apache-2.0\" ...} :or {:id \"MIT\" ...}]                                 -> [[\"Apache-2.0\" :or \"MIT\"]]
+  [{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...} {:id \"GPL-2.0-or-later\" ...}] -> [[{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...}] [{:id \"GPL-2.0-or-later\" ...}]]"
   [coll]
   (loop [result  [[]]
          [f & r] coll]
@@ -281,9 +303,9 @@
       result
       ; Recursive case
       (let [l (last result)]
-        (case [(string? (last l)) (string? f)]
-          [true  true]                (recur (conj result [f])                          r) ; String/string, so start a new nested sequence in result
-          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; String/keyword or keyword/string, so continue the current last collection in result
+        (case [(map? (last l)) (map? f)]
+          [true  true]                (recur (conj result [f])                          r) ; map/map, so start a new nested sequence in result
+          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; map/keyword or keyword/map, so continue the current last collection in result
 ;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
           )))))
 
@@ -292,23 +314,30 @@
   and operator keywords.  Returns an expressions-info map."
   [coll]
   (when (seq coll)
-;####TEST!!!!
-;(debug-print coll "rebuild-expressions start")
     (if (every? string? coll)
       nil  ; Didn't detect anything, so fall through and mark the entire thing as unidentified
       (let [eis (filter map? coll)]
         (if (every? lcis/unidentified? (map :id eis))
           nil  ; Detected nothing but unidentifieds, so fall through and mark the entire thing as unidentified
           (let [; ####TODO: WHEN THE KEYWORD IS :with ENSURE THE FOLLOWING ELEMENT IS AN EXCEPTION, OR (IF LICENSEREF), CONVERT IT TO AN ADDITIONREF
-                grouped-expressions (group-expressions (map #(lci3/when-pred % map? :id) coll))
-                expressions         (map #(sexp/normalise (s/join " " (map name %))) grouped-expressions)
+                grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
+;####TEST!!!!
+_ (debug-print grouped-expressions "rebuild-expressions 0")
+                expressions         (map #(sexp/normalise (s/join " " (map name %))) (map :id grouped-expressions))
                 ; Now regroup expression-infos with their associated expression(s)
                 ei-lookup           (group-by :id eis)
-                expr-ei-pairs       (mapcat #(let [ids (sexp/extract-ids (sexp/parse %) {:include-or-later? true})]
-                                               [% (seq (filter identity (conj (vec (mapcat (fn [id] (get ei-lookup id)) ids))
-                                                                              (when (> (count ids) 1) {:type :concluded :confidence :high :strategy :expression-inference}))))])
-                                            expressions)
-                result              (apply hash-map expr-ei-pairs)]
+                result              (into {}
+                                          (map #(let [ids (sexp/extract-ids (sexp/parse %) {:include-or-later? true})]
+                                                  [% (seq (filter identity (conj (vec (mapcat (fn [id] (distinct (get ei-lookup id))) ids))
+                                                                                 (when (> (count ids) 1) {:type :concluded :confidence :high :strategy :expression-inference}))))])
+                                               expressions))]
+
+
+;                expr-ei-pairs       (mapcat #(let [ids (sexp/extract-ids (sexp/parse %) {:include-or-later? true})]
+;                                               [% (seq (filter identity (conj (vec (mapcat (fn [id] (distinct (get ei-lookup id))) ids))
+;                                                                              (when (> (count ids) 1) {:type :concluded :confidence :high :strategy :expression-inference}))))])
+;                                            expressions)
+;                result              (apply hash-map expr-ei-pairs)]
             result))))))
 
 ;####TODO: CAN PROBABLY MOVE THIS INTO parse-name ONCE ITS WORKING!!!!
@@ -319,9 +348,12 @@
   (when-let [result (-> [n]
                         ; Parsing, with short circuiting of steps if we're done
                         (lciu/until-> done-parsing?
-                                      replace-other-names  ; Replace specific name variations that are highly problematic first
+                                      replace-handcrafted  ; Replace specific name variations that are highly problematic first
 ;####TEST!!!!
 ;(debug-print "0")
+                                      replace-families  ; Replace certain difficult license families (e.g. GNU, CDDL)
+;####TEST!!!!
+;(debug-print "1")
                                       replace-spdx-names   ; Replace SPDX listed names; this covers the vast majority of "and", "or", "with" in names cases
 ;####TEST!!!!
 ;(debug-print "2")

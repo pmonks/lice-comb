@@ -18,7 +18,7 @@
             [embroidery.api  :as e]
             [rencg.api       :as rencg]))
 
-(defmacro until-recursive->
+(defmacro until*->
   "Recursive portion of until-> - not intended for direct use."
   [expr pred? & forms]
   (let [[f & r] forms]
@@ -30,7 +30,7 @@
           `(let [new-expr# ~threaded]
              (if (~pred? new-expr#)
                new-expr#
-               (until-recursive-> new-expr# ~pred? ~@r)))   ; Note: naive recursion (not a tail position)
+               (until*-> new-expr# ~pred? ~@r)))   ; Note: naive recursion (not a tail position)
           threaded))
       expr)))
 
@@ -43,7 +43,7 @@
   (if (seq forms)
     `(if (~pred? ~expr)
        ~expr
-       (until-recursive-> ~expr ~pred? ~@forms))
+       (until*-> ~expr ~pred? ~@forms))
     expr))
 
 (defn mapfonk

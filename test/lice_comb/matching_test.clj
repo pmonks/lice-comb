@@ -128,6 +128,7 @@
     (is (valid= #{(str "Apache-2.0 WITH " (lcis/name->unidentified-addition-ref "foo"))} (name->expressions "Apache with foo")))  ; Since SPDX specification v3.0
     (is (valid= #{(str (lcis/name->unidentified-license-ref "foo WITH bar"))} (name->expressions "foo WITH bar"))))  ; Test collapsing of unidentified LicenseRef and AdditionRef
   (testing "Cursed LGPL variations"
+    (is (valid= #{"LGPL-2.0-only"}                      (name->expressions "LGPL")))
     (is (valid= #{"LGPL-2.0-only"}                      (name->expressions "Lesser GPL only")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser GPL or later")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser GPL")))
@@ -145,7 +146,7 @@
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or Lesser or Library General Public License")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "MIT or Library or Lesser General Public License")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Lesser or Library General Public License or MIT")))
-    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Lesser or Library General Public License or MIT")))
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "Library or Lesser General Public License or MIT")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU Lesser or MIT")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU library or MIT")))
     (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU Lesser or library or MIT")))

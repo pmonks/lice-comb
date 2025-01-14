@@ -202,7 +202,7 @@
 
 ; The regex for the GNU family is a nightmare, so we build it up (and test it) in pieces
 (def agpl-re          #"(?<agpl>AGPL|Affero)(\s+GNU)?(\s+Genere?al)?(\s+Pub?lic)?(\s+Licen[cs]e)?(\s+\(?AGPL\)?)?")
-(def lgpl-re          #"(?<lgpl>(GNU\s+(Genere?al\s+)?(Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser))|((Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser)\s+(GNU|GPL|Genere?al)|(L(esser\s)?\s*GPL)))(\s+Genere?al)?(\s+Pub?lic)?(\s+Licen[cs]e)?(\s+\(?L\s*GPL\)?)?")
+(def lgpl-re          #"(?<lgpl>(GNU\s+)?((Genere?al\s+)?(Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser))|((Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser)\s+(GNU|GPL|Genere?al)|(L(esser\s)?\s*GPL)))(\s+Genere?al)?(\s+Pub?lic)?(\s+Licen[cs]e)?(\s+\(?L\s*GPL\)?)?")
 (def gpl-re           #"(?<!(Affero|Lesser|Library)\s+)(?<gpl>GNU(?!\s+Classpath)|(?<!(L|A)\s*)GPL|Genere?al\s+Pub?lic\s+Licen[cs]e)(?!\s+(Affero|Library|Lesser|Genere?al\s+Lesser|Genere?al\s+Library|LGPL|AGPL))((\s+General)?(?!\s+(Affero|Lesser|Library))\s+Pub?lic\s+Licen[cs]e)?(\s+\(?GPL\)?)?")
 (def version-re       #"[\s,\-]*(_?V(ersion)?)?[\s\._]*(?<version>\d+([\._]\d+)?)?")
 (def only-or-later-re #"[\s,\-]*((?<only>\(?only\)?)|(\(?or(\s+\(?at\s+your\s+(option|discretion)\)?)?(\s+any)?)?([\s\-]*(?<orLater>lat[eo]r|newer|greater|\+)))?")
