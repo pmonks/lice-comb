@@ -468,7 +468,7 @@
     (is (valid= #{"EPL-1.0"}                            (name->expressions "Eclipse Public License v1.0")))
     (is (valid= #{"EPL-1.0"}                            (name->expressions "Eclipse Public License version 1.0")))
     (is (valid= #{"EPL-1.0"}                            (name->expressions "Eclipse Public License, version 1.0")))
-    (is (valid= #{"EPL-1.0"}                            (name->expressions "Eclipse Public Licese - v 1.0")))
+    (is (valid= #{"EPL-1.0"}                            (name->expressions "Eclipse Public Licese - v 1.0")))  ; https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
     (is (valid= #{"EPL-1.0"}                            (name->expressions "https://github.com/cmiles74/uio/blob/master/LICENSE")))
     (is (valid= #{"EPL-2.0 AND LGPL-2.0-or-later"}      (name->expressions "Dual: EPL and LGPL")))  ; Missing version - we assume the latest for EPL and 2.0-or-later for LGPL
     (is (valid= #{"EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"} (name->expressions "<script lang=\"javascript\">alert('hi');</script>EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0")))

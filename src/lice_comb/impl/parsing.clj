@@ -30,6 +30,17 @@
             [lice-comb.impl.utils            :as lciu]
             [lice-comb.impl.3rd-party        :as lci3]))
 
+;####TODO: REMOVE ME!!!!
+(require '[clojure.pprint :as pp])
+(defn debug-print
+  ([x] (debug-print x nil))
+  ([x msg]
+   (println "⭐️⭐️⭐️ ➡️" msg)
+   (pp/pprint x)
+   (println "⬅️ ⭐️⭐️⭐️")
+   (flush)
+   x))
+
 ; Names that are so cursed we don't even both trying to parse them
 (def ^:private cursed-names-d (delay (lcid/load-edn-resource "lice_comb/names.edn")))
 
@@ -86,17 +97,6 @@
                           (match-text license-text)))]
       ; We don't need to sexp/normalise the keys here, as we never detect an expression from a URI
       (lciei/prepend-source uri (lcic/correct result)))))
-
-;####TODO: REMOVE ME!!!!
-(require '[clojure.pprint :as pp])
-(defn debug-print
-  ([x] (debug-print x nil))
-  ([x msg]
-   (println "⭐️⭐️⭐️ ➡️" msg)
-   (pp/pprint x)
-   (println "⬅️ ⭐️⭐️⭐️")
-   (flush)
-   x))
 
 (defn- determine-strategy
   "Returns the strategy (a keyword) for the given `match`, matched to

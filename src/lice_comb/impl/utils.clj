@@ -161,11 +161,34 @@
   [& res]
   (re-pattern (s/join res)))
 
+(defn replace-ncg
+  "As for `clojure.string/replace`, but uses rencg for regex processing.
+
+  Notes:
+
+  * uses [rencg](https://github.com/pmonks/rencg), so `replacement-fn` must
+    accept a single argument that is a rencg-style map
+  * only supports a regex as the second argument (for obvious reasons...)
+  * only supports a function as the third argument (for obvious reasons...)"
+  [^CharSequence s ^java.util.regex.Pattern re replacement-fn]
+  (let [m    (re-matcher re s)
+        ncgs (rencg/re-named-groups re)]
+    (if (.find m)
+      (let [buffer (StringBuffer. (.length s))]
+        (loop [found true]
+          (if found
+            (do (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement (replacement-fn (rencg/re-groups-ncg m ncgs))))
+                (recur (.find m)))
+            (do (.appendTail m buffer)
+                (.toString buffer)))))
+      s)))
+
 (defn replacing-split
   "As for `clojure.string/split`, but replaces whatever `re` matched with
   `replacement`, which can be a value or a function of one argument.
 
   Notes:
+
   * replacement doesn't have to return a `String`, though not doing so will
     result in a heterogeneous collection.
   * uses [rencg](https://github.com/pmonks/rencg), so if `replacement` is a
@@ -204,6 +227,7 @@
   replaced with.  This sequence will be `nil` if no replacements were performed.
 
   Notes:
+
   * uses [rencg](https://github.com/pmonks/rencg), so if `replacement` is a
     function it must accept a map, not a sequence. It must also return a
     `String`.

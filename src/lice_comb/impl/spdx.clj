@@ -21,6 +21,17 @@
             [lice-comb.impl.3rd-party :refer [by ascending descending] :as lc3]
             [lice-comb.impl.utils     :as lciu]))
 
+;####TODO: REMOVE ME!!!!
+(require '[clojure.pprint :as pp])
+(defn debug-print
+  ([x] (debug-print x nil))
+  ([x msg]
+   (println "⭐️⭐️⭐️ ➡️" msg)
+   (pp/pprint x)
+   (println "⬅️ ⭐️⭐️⭐️")
+   (flush)
+   x))
+
 ; The subset of SPDX license identifiers that we use, as an unordered set
 (def license-ids-d
   (delay
@@ -78,32 +89,33 @@
       (first (sort-by count non-deprecated-ids))
       (first (sort-by count ids)))))
 
-(defn- id-version-replacement
-  "Returns a regex fragment for a version number (e.g. 2.0.0) anywhere in an id."
-  [[_ version]]
-  ; Note: regex characters are not escaped here, as that's done later on
-  (let [version-components                    (seq (s/split version #"\."))
-        first-element                         (first version-components)
-        remaining-version-components-reversed (seq (reverse (rest version-components)))
-        leading-elements                      (seq (reverse (drop-while #(re-matches #"0+" %) remaining-version-components-reversed)))
-        dot-zero-elements                     (seq (reverse (take-while #(re-matches #"0+" %) remaining-version-components-reversed)))]
-    (str "-((v|ver|version)-)?"
-         (str "0*" first-element)
-         (str (s/join (map #(str ".0*" %) leading-elements))
-              (when dot-zero-elements (s/join (map #(str "(.0*" % ")?") dot-zero-elements)))))))
+(defn- replace-version
+  "Emits a suitable regex for matching the version identified in map `m`
+  (a map as returned by rencg)."
+  [m]
+  (let [version-number     (get m "versionNumber")
+        only?              (boolean (get m "only"))
+        version-components (seq (s/split version-number #"\."))
+        dot-zero?          (boolean (re-matches #"0+" (last version-components)))]
+    (re-pattern (str "((v|ver|versions?)[\\s\\-–—]*)?"  ; Note: hyphen, en-dash, em-dash
+                     "("
+                     (if dot-zero?
+                       (s/join "\\." (map #(str "0*" %) (drop-last version-components)))  ; Version number ends in ".0", so make the last component optional
+                       (s/join "\\." (map #(str "0*" %) version-components)))             ; Version number ends in a non-zero number, so make the last component mandatory
+                     "(\\.0+)*)"                                                          ; Allow any number of ".0" to appear at the end
+                     (if only?
+                      "[\\s\\-–—]*only"
+                      "[\\s\\-–—]*(\\+|or[\\s\\-–—]*later)?")))))  ; Note: hyphen, en-dash, em-dash
 
-; Note: these regexes uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
+(defn- replace-with-re-fragment
+  "For each `String` in `coll`, replaces any matches with `re` with
+  `replacement`, as per [lice-comb.impl.utils/replacing-split]."
+  [coll re replacement]
+  (lciu/mapcat-pred string? #(lciu/replacing-split % re replacement) coll))
+
+
+; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
-(defn- special-case-ids
-  "Special case handling for specific ids."
-  [s id]
-  (case id
-    "MIT"        (s/replace s #"(?i)(?<!\\w)MIT(?!\\w)"    "(?<!X11[\\\\\\\\/\\\\-\\\\s]{1,4})MIT(?![\\\\\\\\/\\\\-\\\\s]{1,4}X11)")
-    "X11"        (s/replace s #"(?i)(?<!\\w)X11(?!\\w)"    "(MIT[\\\\\\\\/\\\\-\\\\s]+)?X11([\\\\\\\\/\\\\-\\\\s]+MIT)?")
-    "ISC"        (s/replace s #"(?i)(?<!\\w)ISC(?!\\w)"    "(MIT[\\\\\\\\/\\\\-\\\\s]+)?ISC([\\\\\\\\/\\\\-\\\\s]+MIT)?")
-    "Libpng"     (s/replace s #"(?i)(?<!\\w)libpng(?!\\w)" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
-    "libpng-2.0" (s/replace s #"(?i)(?<!\\w)libpng(?!\\w)" "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
-    s))
 
 ; Only public for the unit tests
 (defn id->regex
@@ -111,25 +123,21 @@
   near-match it.  Returns `nil` if `id` is blank."
   [id]
   (when-not (s/blank? id)
-    (-> id
-        ; Trim
-        s/trim
-        ; Add flags and start expressions
-        (->> (str "(?i)(?<=(\\A|\\s))"))
-        ; Replacements
-        (s/replace #"\+"             "\\\\+")                               ; escape + character
-        (s/replace #"-(\d+(\.\d+)*)" id-version-replacement)                ; version numbers
-        (s/replace #"-"              "[\\\\-\\\\s]*")                       ; hyphens as optional hyphens or whitespace
-        (s/replace #"(?i)\blater\b"  "\\\\b(lat[eo]r|newer|greater)\\\\b")  ; alternative "or later" formulations
-        (s/replace #"\."             "\\\\.")                               ; escape . character
-        ; Special cases
-        (special-case-ids id)
-        ; Remove redundant final word boundary match (if any)
-        (s/replace #"(.*)\\b\z"      "$1")
-        ; Add end expressions
-        (str "(?=(\\s|\\z))")
-        ; And finally turn into a Pattern object
-        re-pattern)))
+    (-> [#"(?i)(?u)(?U)(?<=(\A|\s))" (s/trim id) #"(?=(\s|\z))"]
+        ; Version component
+        (replace-with-re-fragment #"(?i)(?<=-)(?<versionNumber>\d+\.\d+(\.\d+)*)(-(?<only>only)|or-later)?(?=(-|\z))"
+                                  replace-version)
+         ; Special cases for certain licenses
+        (replace-with-re-fragment #"(?i)(?<!\w)MIT(?!\w)"              #"(?<!(X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(X11|ISC))")
+        (replace-with-re-fragment #"(?i)(?<!\w)X11(?!\w)"              #"(MIT[\\/\-\s]{1,4})?X11([\\/\-\s]{1,4}MIT)?")
+        (replace-with-re-fragment #"(?i)(?<!\w)ISC(?!\w)"              #"(MIT[\\/\-\s]{1,4})?ISC([\\/\-\s]{1,4}MIT)?")
+        (replace-with-re-fragment #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)" #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
+        ; Character equivalents
+        (replace-with-re-fragment #"[\s\-]+"                           #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
+        ; Cleanup and combine into a single pattern
+        (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
+             (lciu/mapcat-pred string? #(vector (lciu/escape-re %)))
+             (apply lciu/re-concat)))))
 
 ; Notes:
 ; * we normalise each id so that things like GPL family normalisation are correctly handled (i.e. as per clj-spdx)
@@ -154,88 +162,43 @@
   [s]
   (best-identifier (near-match-id s)))
 
-;####TODO: REMOVE IF UNNEEDED!!!!
-(comment
-(defn replace-near-match-ids-with-id
-  "Replaces all near matched ids in `s` (a `String`) with their actual (best)
-  SPDX id. Result is a tuple containing the modified `s` and a sequence of
-  tuples describing the replacements that were performed."
-  [s]
-  (when s
-    (loop [s            s
-           replacements []
-           [f & r]      @id-regex-id-pairs-d]
-      (if-not f
-        [s replacements]
-        (let [[re id]             f
-              [new-s replacement] (lciu/explaining-replace s re id)
-              replacement         (seq (filter #(not= (first %) (second %)) replacement))  ; Remove redundant replacements such as ["GPL-2.0-only" "GPL-2.0-only"]
-              new-replacements    (if replacement (apply conj replacements replacement) replacements)]
-          (recur new-s new-replacements r))))))
-)
-
-(defn- name-version-replacement
-  "Returns a regex fragment for a version number (e.g. 2.0.0) in a name."
-  [[_ prefix version]]
-  (let [license-str        (when (s/starts-with? (s/lower-case prefix) "lic") "License")
-        version-components (s/split version #"\\\.")]
-    (str license-str " ((v|ver|version)[\\-\\s]*)?"  ; Note: whitespace not escaped because that happens later
-         (s/join "\\." (map #(str "0*" %) version-components)))))
-
-(defn- special-case-names
-  "Special case handling for specific names."
-  [s n]
-  (cond
-    (s/includes? n "Apache")
-        (s/replace s #"(?i)(?<!\w)Apache(?!\w)"       "Apache(\\\\s+Software)?")
-
-    (s/includes? n "MIT")
-        (s/replace s #"(?i)(?<!\w)MIT(?!\w)"          "(?!X11(/?|\\\\s{1,4}))MIT(?!(/?|\\\\s{1,4})X11)")
-
-    (and (or  (s/includes? n "libpng") (s/includes? n "Libpng"))
-         (not (s/includes? n "zlib")))
-      (s/replace s #"(?i)(?<!\w)libpng(?!\w)"         "(?<!zlib[\\\\\\\\/\\\\-\\\\s]{1,4})libpng")
-
-    (and (s/includes? n "zlib"))
-      (s/replace s #"(?i)(?<!\w)zlib(/libpng)?(?!\w)" "zlib(([\\\\\\\\/\\\\-\\\\s]+)libpng)?")
-
-    :else
-      s))
-
 ; Only public for the unit tests
 (defn name->regex
   "Turns `n`, a license or exception name, into a regex that can be used to
   near-match it.  Returns `nil` if `n` is blank."
   [n]
   (when-not (s/blank? n)
-    (-> n
-        ; Trim & escape
-        s/trim
-        lciu/escape-re
-        ; Start clauses
-        (->> (str "(?i)(?<!\\w)"))
-        ; "Version" variations (this must come first)
-        (s/replace #"(?i)(Licen[cs]e\s|version\s|v)\s*(\d+(\\\.\d+)*)" name-version-replacement)  ; Note: have to match escaped . here
-        ; Equivalent words and other variability
-        (s/replace #"(?i)\s+licen[cs]e"                                "(\\\\s+licen[cs]e)?")      ; Note: can't start with \b due to names such as "The Unlicense"
-        (s/replace #"(?i)\s+Public\b"                                  "(\\\\s+Public)?")
-        (s/replace #"(?i)\backnowledge?ment"                           "Acknowledge?ment")
-        (s/replace #"(?i)\b(and|&)(?!\w)"                              "(and|&)")
-        (s/replace #"(?i)\bmerchant[ai]bility\b"                       "Merchant[ai]bility")
-        (s/replace #"(?i)\bnon(\\\-)?commercial\b"                     "Non(\\\\-)?commercial")    ; Note: weird syntax in find regex as hyphens have already been escaped
-        (s/replace #"(?i)\bF(u|\\\*)ck"                                "[f*][u*][c*][k*]")         ; As of SPDX license list v3.25.0, profane names use "F*ck", but we hedge here in case that changes in other versions
-        ; Special cases
-        (special-case-names n)
-        ; Whitespace variance
-        (s/replace #"\s+"                                              "[\\\\s\\\\-]+")
-        ; Remove redundant word boundary matches
-        (s/replace "\\s+\\b"                                           "\\s+")
-        (s/replace "\\b\\s+"                                           "\\s+")
-        (s/replace #"(.*)\\b\z"                                        "$1")
-        ; End clauses
-        (str "(?<orLater>\\s*\\+)?(?!\\w)")
-        ; And finally compile the regex
-        re-pattern)))
+    (-> [#"(?i)(?u)(?U)(?<!\w)" (s/trim n) #"(?!\w)"]
+        ; Version components (2 variants)
+        (replace-with-re-fragment #"(?i)(?<=[\s\(])((v|ver|versions?)?\s*)?(?<versionNumber>\d+\.\d+(\.\d+)*)([\s\-–]+((?<only>only)|(or[\s\-]lat[eo]r)))?(?=\w?(\s|\z|\)))"
+                                  replace-version)
+        (replace-with-re-fragment #"(?i)(?<=[\s\(])((v|ver|versions?)?\s*)(?<versionNumber>\d+(\.\d+)*)([\s\-–]+((?<only>only)|(or[\s\-–]lat[eo]r)))?(?=\w?(\s|\z|\)))"
+                                  replace-version)
+        ; Alternative spellings, optional words, etc.
+        (replace-with-re-fragment #"(?i)\bthe\s+"                      #"(The\s*)?")
+        (replace-with-re-fragment #"(?i)(?<!\w)(and|&)(?!\w)"          #"(and|&)")
+        (replace-with-re-fragment #"(?i)\s+licen[cs]e"                 #"([\s\-–—]+Licen?[cs]e)?")  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
+        (replace-with-re-fragment #"(?i)\s+public\b"                   #"([\s\-–—]+Public)?")
+        (replace-with-re-fragment #"(?i)\backnowledge?ment"            #"Acknowledge?ment")  ; No trailing \b, to handle plurals etc.
+        (replace-with-re-fragment #"(?i)\bmerchant[ai]bility\b"        #"Merchant[ai]bility")
+        (replace-with-re-fragment #"(?i)\bnon-?commercial\b"           #"Non[-–—]?commercial")  ; Note: hyphen, en-dash, em-dash
+        (replace-with-re-fragment #"(?i)\bf(u|\\\*)ck"                 #"[f*][u*][c*][k*]")  ; As of SPDX license list v3.25.0, profane names use "F*ck", but we hedge here in case that changes in other versions
+        (replace-with-re-fragment #"(?i)\bopen\s+source"               #"(Open[\s\-–—]+Source|OSS|FOSS)")
+         ; Special cases for certain licenses
+        (replace-with-re-fragment #"(?i)(?<!\w)Apache(?!\w)"           #"Apache([\s\-–—]+Software)?")
+        (replace-with-re-fragment #"(?i)(?<!\w)MIT(?!\w)"              #"(?<!(X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(X11|ISC))")
+        (replace-with-re-fragment #"(?i)(?<!\w)X11(?!\w)"              #"(MIT[\\/\-\s]{1,4})?X11([\\/\-\s]{1,4}MIT)?")
+        (replace-with-re-fragment #"(?i)(?<!\w)ISC(?!\w)"              #"(MIT[\\/\-\s]{1,4})?ISC([\\/\-\s]{1,4}MIT)?")
+        (replace-with-re-fragment #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)" #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
+        ; Character equivalents
+        (replace-with-re-fragment #"(?i)é"                             #"[ée]")  ; As of License List v3.26.0 'é' is the only accented character present
+        (replace-with-re-fragment #"\""                                #"[\"“”„‟'‘’‚‛`]")
+        (replace-with-re-fragment #"\s*/\s*"                           #"\s*[\\/\-–—]\s*")  ; Note: hyphen, en-dash, em-dash
+        (replace-with-re-fragment #"[\s\-–]+"                          #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash. en-dash is in e.g. the name of LiLiQ-R-1.1
+        ; Cleanup and combine into a single pattern
+        (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
+             (lciu/mapcat-pred string? #(vector (lciu/escape-re %)))
+             (apply lciu/re-concat)))))
 
 ;####TODO: CONSIDER MOVING TO lice-comb.impl.parsing!!  THIS WOULD MEAN REMOVING THE VARIOUS FNS HERE THAT USE THIS STRUCTURE!!!
 ; Notes:

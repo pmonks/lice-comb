@@ -42,6 +42,12 @@
 (def license-list-d   (delay (map slic/id->info @lic-ids-d)))
 (def exception-list-d (delay (map sexc/id->info @exc-ids-d)))
 
+(def non-deprecated-license-list-d   (delay (filter #(not (:deprecated? %)) @license-list-d)))
+(def non-deprecated-exception-list-d (delay (filter #(not (:deprecated? %)) @exception-list-d)))
+
+(def non-deprecated-lic-ids-d (delay (set (map :id @non-deprecated-license-list-d))))
+(def non-deprecated-exc-ids-d (delay (set (map :id @non-deprecated-exception-list-d))))
+
 (def not-nil? (complement nil?))
 
 (defn when-pred
