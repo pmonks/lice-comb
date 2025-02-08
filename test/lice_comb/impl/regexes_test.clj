@@ -16,16 +16,12 @@
 ; SPDX-License-Identifier: Apache-2.0
 ;
 
-(ns lice-comb.impl.spdx-test
+(ns lice-comb.impl.regexes-test
   (:require [clojure.test               :refer [deftest testing is use-fixtures]]
             [lice-comb.test-boilerplate :refer [fixture lic-ids-d exc-ids-d license-list-d exception-list-d non-deprecated-license-list-d non-deprecated-lic-ids-d]]
-            [lice-comb.impl.spdx        :refer [init! id->regex name->regex]]))
+            [lice-comb.impl.regexes     :refer [id->regex name->regex]]))
 
 (use-fixtures :once fixture)
-
-(deftest init!-tests
-  (testing "Nil response"
-    (is (nil? (init!)))))
 
 (deftest id->regex-tests
   (testing "Nil, blank, etc."
@@ -35,21 +31,24 @@
     (is (nil? (id->regex "\r\n  \n \t"))))
   (let [regex-apache-11 (id->regex "Apache-1.1")
         regex-apache-20 (id->regex "Apache-2.0")
-        regex-mit       (id->regex "MIT")]
+        regex-mit       (id->regex "MIT")
+        regex-lzma-920  (id->regex "LZMA-SDK-9.11-to-9.20")]
     (testing "Id variations - matches"
-      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1"))))           ; Licence with 2 c's
-      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1+"))))          ; "+" suffix
-      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1 or later"))))  ; "or later" suffix
-      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1.0"))))         ; Extra .0 component
-      (is (not (nil? (re-matches regex-apache-20  "Apache 2"))))             ; Whole number version
-      (is (not (nil? (re-matches regex-apache-20  "Apache-2"))))             ; Hyphens instead of spaces
-      (is (not (nil? (re-matches regex-apache-20  "Apache 02"))))            ; Leading zeroes
-      (is (not (nil? (re-matches regex-apache-20  "Apache 002.000"))))       ; Excess zeroes
-      (is (not (nil? (re-matches regex-apache-11  "Apache 001.001"))))       ; Excess zeroes
-      (is (not (nil? (re-matches regex-apache-20  "Apache 2.0.0.0.0.0"))))   ; Excess .0 components
-      (is (not (nil? (re-matches regex-apache-20  "Apache v2.0"))))          ; Version prefix added
-      (is (not (nil? (re-matches regex-apache-20  "Apache ver 2.0"))))       ; Version prefix added
-      (is (not (nil? (re-matches regex-apache-20  "Apache version 2.0")))))  ; Version prefix added
+      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1"))))             ; Licence with 2 c's
+      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1+"))))            ; "+" suffix
+      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1 or later"))))    ; "or later" suffix
+      (is (not (nil? (re-matches regex-apache-11  "Apache 1.1.0"))))           ; Extra .0 component
+      (is (not (nil? (re-matches regex-apache-20  "Apache 2"))))               ; Whole number version
+      (is (not (nil? (re-matches regex-apache-20  "Apache-2"))))               ; Hyphens instead of spaces
+      (is (not (nil? (re-matches regex-apache-20  "Apache 02"))))              ; Leading zeroes
+      (is (not (nil? (re-matches regex-apache-20  "Apache 002.000"))))         ; Excess zeroes
+      (is (not (nil? (re-matches regex-apache-11  "Apache 001.001"))))         ; Excess zeroes
+      (is (not (nil? (re-matches regex-apache-20  "Apache 2.0.0.0.0.0"))))     ; Excess .0 components
+      (is (not (nil? (re-matches regex-apache-20  "Apache v2.0"))))            ; Version prefix added
+      (is (not (nil? (re-matches regex-apache-20  "Apache ver 2.0"))))         ; Version prefix added
+      (is (not (nil? (re-matches regex-apache-20  "Apache version 2.0"))))     ; Version prefix added
+      (is (not (nil? (re-matches regex-lzma-920   "LZMA-SDK-9.11-to-9.20"))))  ; Double version number
+      (is (not (nil? (re-matches regex-lzma-920   "LZMA-SDK-9.11-9.20")))))    ; Removed "to"
     (testing "Id variations - non-matches"
       (is (nil? (re-matches regex-apache-11 "Apache 1.0")))       ; Wrong minor version
       (is (nil? (re-matches regex-apache-11 "Apache 1.10")))      ; Wrong minor version
@@ -87,6 +86,8 @@
         regex-liliq-r-11 (name->regex "Licence Libre du Québec – Réciprocité version 1.1")   ; Note: that's an en-dash, _not_ a hyphen
         regex-oldap-20   (name->regex "Open LDAP Public License v2.0 (or possibly 2.0A and 2.0B)")
         regex-oldap-221  (name->regex "Open LDAP Public License v2.2.1")
+        regex-lzma-920   (name->regex "LZMA SDK License (versions 9.11 to 9.20)")
+        regex-lzma-922   (name->regex "LZMA SDK License (versions 9.22 and beyond)")
         regex-pddl-10    (name->regex "Open Data Commons Public Domain Dedication & License 1.0")
         regex-mit        (name->regex "The MIT License")]
     (testing "Name variations - matches"
@@ -113,6 +114,8 @@
       (is (not (nil? (re-matches regex-liliq-r-11 "Licence Libre du Québec — Réciprocité version 1.1"))))           ; en-dash replaced with em-dash
       (is (not (nil? (re-matches regex-oldap-20   "Open LDAP Public License 2.0 (or possibly 2.0A and 2.0B)"))))    ; Interior version number; version prefix removed
       (is (not (nil? (re-matches regex-oldap-221  "Open LDAP Public License v2.2.1.0.0.0.0"))))                     ; Excess .0 components
+      (is (not (nil? (re-matches regex-lzma-920   "LZMA SDK License (versions 9.11-9.20)"))))                       ; Hyphen instead of "to"
+      (is (not (nil? (re-matches regex-lzma-922   "LZMA SDK License (versions 9.22 & beyond)"))))                   ; and replaced with &
       (is (not (nil? (re-matches regex-pddl-10    "Open Data Commons Public Domain Dedication and License 1.0"))))  ; & replaced with and
       (is (not (nil? (re-matches regex-mit        "MIT License"))))                                                 ; The removed
       (is (not (nil? (re-matches regex-mit        "MIT")))))                                                        ; The and License removed

@@ -85,6 +85,11 @@
             %)
          coll)))
 
+(defn map-str
+  "[map-pred] but with `pred` hardcoded to be `string?`."
+  [f coll]
+  (map-pred string? f coll))
+
 (defn mapcat-pred
   "`mapcat` on `coll`, calling `f` for any/all values for which `pred` returns
   logical true, passing through other values unchanged."
@@ -94,6 +99,11 @@
                (f %)
                [%])
             coll)))
+
+(defn mapcat-str
+  "[mapcat-pred] but with `pred` hardcoded to be `string?`."
+  [f coll]
+  (mapcat-pred string? f coll))
 
 (defn not-blank-string?
   "`true` when `x` is not a blank `String`."
@@ -130,36 +140,6 @@
   [coll]
   (some-> (seq coll)
           set))
-
-(defn escape-re
-  "Escapes `s` (a `String`) for use in a regex. Returns a `String`."
-  [s]
-  (when s
-    (s/escape s {\< "\\<"
-                 \( "\\("
-                 \[ "\\["
-                 \{ "\\{"
-                 \\ "\\\\"
-                 \^ "\\^"
-                 \- "\\-"
-                 \= "\\="
-                 \$ "\\$"
-                 \! "\\!"
-                 \| "\\|"
-                 \] "\\]"
-                 \} "\\}"
-                 \) "\\)"
-                 \? "\\?"
-                 \* "\\*"
-                 \+ "\\+"
-                 \. "\\."
-                 \> "\\>"
-                 })))
-
-(defn re-concat
-  "Concatenate all of the given regexes or strings into a single regex."
-  [& res]
-  (re-pattern (s/join res)))
 
 (defn replace-ncg
   "As for `clojure.string/replace`, but uses rencg for regex processing.
@@ -218,40 +198,11 @@
   [^CharSequence s ^java.util.regex.Pattern re]
   (replacing-split s re #(get % :match)))   ; Can't use :match literally here, since `(fn? :keyword)` is always false
 
-;####TODO: REMOVE THIS IF UNNEEDED!!!!
-(comment
-(defn explaining-replace
-  "Similar to `clojure.string/replace`, but returns a tuple where the first
-  element is the new `String`, and the second element is a sequence of tuples,
-  each of which contains the substring that was replaced and the value it was
-  replaced with.  This sequence will be `nil` if no replacements were performed.
-
-  Notes:
-
-  * uses [rencg](https://github.com/pmonks/rencg), so if `replacement` is a
-    function it must accept a map, not a sequence. It must also return a
-    `String`.
-  * does not support the `$1` syntax (as supported by Clojure and the JVM) - use
-    a function instead"
-  [^CharSequence s ^java.util.regex.Pattern re replacement]
-  (let [m              (re-matcher re s)
-        ncgs           (rencg/re-named-groups re)
-        replacement-fn (if (fn? replacement) replacement (constantly replacement))]
-    (if (.find m)
-      (let [buffer (StringBuffer. (.length s))]
-        (loop [found        true
-               replacements []]
-          (if found
-            (let [match (rencg/re-groups-ncg m ncgs)
-                  text  (:match match)
-                  rep   (replacement-fn match)]
-              (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement rep))
-              (recur (.find m) (conj replacements [text rep])))
-            (do
-              (.appendTail m buffer)
-              [(.toString buffer) replacements]))))
-      [s nil])))
-)
+(defn replace-in-coll
+  "For each `String` in `coll`, replaces any matches with `re` with
+  `replacement`, as per [replacing-split]. Returns a new coll."
+  [coll re replacement]
+  (mapcat-str #(replacing-split % re replacement) coll))
 
 (defn digit-name-to-number
   "Converts the English name of a single digit (a `String`) to that number (as a

@@ -40,7 +40,7 @@
           "GPL-2.0-with-autoconf-exception" "GPL-2.0-with-bison-exception" "GPL-2.0-with-classpath-exception"
           "GPL-2.0-with-font-exception" "GPL-2.0-with-GCC-exception" "GPL-3.0-with-autoconf-exception"
           "GPL-3.0-with-GCC-exception" "BSD-2-Clause-FreeBSD" "BSD-2-Clause-NetBSD" "bzip2-1.0.5"
-          "eCos-2.0" "Net-SNMP" "StandardML-NJ" "wxWindows" )))
+          "eCos-2.0" "Net-SNMP" "StandardML-NJ" "wxWindows")))
 
 ; The subset of SPDX exception identifiers that we use, as an unordered set
 (def exception-ids-d
@@ -68,6 +68,7 @@
 (def ^:private lice-comb-addition-ref-prefix      "AdditionRef-lice-comb")
 (def ^:private unidentified-addition-ref-prefix   (str lice-comb-addition-ref-prefix "-UNIDENTIFIED"))
 
+
 ; Map of lower case SPDX id to correctly cased SPDX id
 (def ^:private spdx-ids-d (delay (merge (into {} (map #(vec [(s/lower-case %) %]) @license-ids-d))
                                         (into {} (map #(vec [(s/lower-case %) %]) @exception-ids-d)))))
@@ -88,161 +89,6 @@
     (if-let [non-deprecated-ids (seq (filter #(not (or (sl/deprecated-id? %) (se/deprecated-id? %))) ids))]
       (first (sort-by count non-deprecated-ids))
       (first (sort-by count ids)))))
-
-(defn- replace-version
-  "Emits a suitable regex for matching the version identified in map `m`
-  (a map as returned by rencg)."
-  [m]
-  (let [version-number     (get m "versionNumber")
-        only?              (boolean (get m "only"))
-        version-components (seq (s/split version-number #"\."))
-        dot-zero?          (boolean (re-matches #"0+" (last version-components)))]
-    (re-pattern (str "((v|ver|versions?)[\\s\\-–—]*)?"  ; Note: hyphen, en-dash, em-dash
-                     "("
-                     (if dot-zero?
-                       (s/join "\\." (map #(str "0*" %) (drop-last version-components)))  ; Version number ends in ".0", so make the last component optional
-                       (s/join "\\." (map #(str "0*" %) version-components)))             ; Version number ends in a non-zero number, so make the last component mandatory
-                     "(\\.0+)*)"                                                          ; Allow any number of ".0" to appear at the end
-                     (if only?
-                      "[\\s\\-–—]*only"
-                      "[\\s\\-–—]*(\\+|or[\\s\\-–—]*later)?")))))  ; Note: hyphen, en-dash, em-dash
-
-(defn- replace-with-re-fragment
-  "For each `String` in `coll`, replaces any matches with `re` with
-  `replacement`, as per [lice-comb.impl.utils/replacing-split]."
-  [coll re replacement]
-  (lciu/mapcat-pred string? #(lciu/replacing-split % re replacement) coll))
-
-
-; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
-; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
-
-; Only public for the unit tests
-(defn id->regex
-  "Turns `id`, an SPDX license or exception id, into a regex that can be used to
-  near-match it.  Returns `nil` if `id` is blank."
-  [id]
-  (when-not (s/blank? id)
-    (-> [#"(?i)(?u)(?U)(?<=(\A|\s))" (s/trim id) #"(?=(\s|\z))"]
-        ; Version component
-        (replace-with-re-fragment #"(?i)(?<=-)(?<versionNumber>\d+\.\d+(\.\d+)*)(-(?<only>only)|or-later)?(?=(-|\z))"
-                                  replace-version)
-         ; Special cases for certain licenses
-        (replace-with-re-fragment #"(?i)(?<!\w)MIT(?!\w)"              #"(?<!(X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(X11|ISC))")
-        (replace-with-re-fragment #"(?i)(?<!\w)X11(?!\w)"              #"(MIT[\\/\-\s]{1,4})?X11([\\/\-\s]{1,4}MIT)?")
-        (replace-with-re-fragment #"(?i)(?<!\w)ISC(?!\w)"              #"(MIT[\\/\-\s]{1,4})?ISC([\\/\-\s]{1,4}MIT)?")
-        (replace-with-re-fragment #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)" #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-        ; Character equivalents
-        (replace-with-re-fragment #"[\s\-]+"                           #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
-        ; Cleanup and combine into a single pattern
-        (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
-             (lciu/mapcat-pred string? #(vector (lciu/escape-re %)))
-             (apply lciu/re-concat)))))
-
-; Notes:
-; * we normalise each id so that things like GPL family normalisation are correctly handled (i.e. as per clj-spdx)
-; * we use all ids (including deprecated ones) because the real world may include anything
-(def ^:private id-regex-id-pairs-d (delay (concat (sort (by #(count (str (first %))) descending) (map #(vec [(id->regex %) (sexp/normalise %)]) (map :id @full-license-list-d)))       ; Note: we use the license lists as they're already sorted predictably
-                                                  (sort (by #(count (str (first %))) descending) (map #(vec [(id->regex %) %])                  (map :id @full-exception-list-d))))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
-
-(defn near-match-id
-  "Returns the id(s) (a set) when `s` 'near matches' one or more license or
-  exception identifiers, or `nil` if `n` is blank or no near matches were found.
-  The result may include deprecated ids."
-  [s]
-  (when-not (s/blank? s)
-    (let [n (s/trim s)]
-      (some-> (seq (filter identity (map #(when (re-matches (first %) n) (second %)) @id-regex-id-pairs-d)))
-                   set))))
-
-(defn best-near-match-id
-  "Returns the 'best match' id (a `String`) for `s`, or `nil` if no ids were
-  found.  A 'best match' is defined as the shortest non-deprecated id (if any),
-  or (worst case) the shortest deprecated id."
-  [s]
-  (best-identifier (near-match-id s)))
-
-; Only public for the unit tests
-(defn name->regex
-  "Turns `n`, a license or exception name, into a regex that can be used to
-  near-match it.  Returns `nil` if `n` is blank."
-  [n]
-  (when-not (s/blank? n)
-    (-> [#"(?i)(?u)(?U)(?<!\w)" (s/trim n) #"(?!\w)"]
-        ; Version components (2 variants)
-        (replace-with-re-fragment #"(?i)(?<=[\s\(])((v|ver|versions?)?\s*)?(?<versionNumber>\d+\.\d+(\.\d+)*)([\s\-–]+((?<only>only)|(or[\s\-]lat[eo]r)))?(?=\w?(\s|\z|\)))"
-                                  replace-version)
-        (replace-with-re-fragment #"(?i)(?<=[\s\(])((v|ver|versions?)?\s*)(?<versionNumber>\d+(\.\d+)*)([\s\-–]+((?<only>only)|(or[\s\-–]lat[eo]r)))?(?=\w?(\s|\z|\)))"
-                                  replace-version)
-        ; Alternative spellings, optional words, etc.
-        (replace-with-re-fragment #"(?i)\bthe\s+"                      #"(The\s*)?")
-        (replace-with-re-fragment #"(?i)(?<!\w)(and|&)(?!\w)"          #"(and|&)")
-        (replace-with-re-fragment #"(?i)\s+licen[cs]e"                 #"([\s\-–—]+Licen?[cs]e)?")  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
-        (replace-with-re-fragment #"(?i)\s+public\b"                   #"([\s\-–—]+Public)?")
-        (replace-with-re-fragment #"(?i)\backnowledge?ment"            #"Acknowledge?ment")  ; No trailing \b, to handle plurals etc.
-        (replace-with-re-fragment #"(?i)\bmerchant[ai]bility\b"        #"Merchant[ai]bility")
-        (replace-with-re-fragment #"(?i)\bnon-?commercial\b"           #"Non[-–—]?commercial")  ; Note: hyphen, en-dash, em-dash
-        (replace-with-re-fragment #"(?i)\bf(u|\\\*)ck"                 #"[f*][u*][c*][k*]")  ; As of SPDX license list v3.25.0, profane names use "F*ck", but we hedge here in case that changes in other versions
-        (replace-with-re-fragment #"(?i)\bopen\s+source"               #"(Open[\s\-–—]+Source|OSS|FOSS)")
-         ; Special cases for certain licenses
-        (replace-with-re-fragment #"(?i)(?<!\w)Apache(?!\w)"           #"Apache([\s\-–—]+Software)?")
-        (replace-with-re-fragment #"(?i)(?<!\w)MIT(?!\w)"              #"(?<!(X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(X11|ISC))")
-        (replace-with-re-fragment #"(?i)(?<!\w)X11(?!\w)"              #"(MIT[\\/\-\s]{1,4})?X11([\\/\-\s]{1,4}MIT)?")
-        (replace-with-re-fragment #"(?i)(?<!\w)ISC(?!\w)"              #"(MIT[\\/\-\s]{1,4})?ISC([\\/\-\s]{1,4}MIT)?")
-        (replace-with-re-fragment #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)" #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-        ; Character equivalents
-        (replace-with-re-fragment #"(?i)é"                             #"[ée]")  ; As of License List v3.26.0 'é' is the only accented character present
-        (replace-with-re-fragment #"\""                                #"[\"“”„‟'‘’‚‛`]")
-        (replace-with-re-fragment #"\s*/\s*"                           #"\s*[\\/\-–—]\s*")  ; Note: hyphen, en-dash, em-dash
-        (replace-with-re-fragment #"[\s\-–]+"                          #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash. en-dash is in e.g. the name of LiLiQ-R-1.1
-        ; Cleanup and combine into a single pattern
-        (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
-             (lciu/mapcat-pred string? #(vector (lciu/escape-re %)))
-             (apply lciu/re-concat)))))
-
-;####TODO: CONSIDER MOVING TO lice-comb.impl.parsing!!  THIS WOULD MEAN REMOVING THE VARIOUS FNS HERE THAT USE THIS STRUCTURE!!!
-; Notes:
-; * we normalise each id so that things like GPL family normalisation are correctly handled (i.e. as per clj-spdx)
-; * we use all ids (including deprecated ones) because the real world may include anything
-; * we preserve the listed name of the license in the tuple so that we can determine the precise matching strategy
-(def name-regex-id-pairs-d (delay (concat (sort (by #(count (str (first %))) descending) (map #(vec [(name->regex (:name %)) (sexp/normalise (:id %)) (:name %)]) @full-license-list-d))
-                                          (sort (by #(count (str (first %))) descending) (map #(vec [(name->regex (:name %)) (:id %)                  (:name %)]) @full-exception-list-d)))))  ; Note: can't normalise a solitary exception id since they're not a valid expression alone
-
-;####TODO: REMOVE IF UNNEEDED!!!!
-(comment
-(defn near-match-name
-  "Returns the id(s) (a set) when `n`ame 'near matches' one or more license or
-  exception names, or `nil` if `n` is blank or no near matches were found. The
-  result may include deprecated ids."
-  [n]
-  (when-not (s/blank? n)
-    (let [n (s/trim n)]
-      (some-> (seq (filter identity (map #(when (re-matches (first %) n) (second %)) @name-regex-id-pairs-d)))
-                   set))))
-
-(defn best-near-match-name
-  "Returns the 'best match' id (a `String`) for `n`ame, or `nil` if no ids were
-  found.  A 'best match' is defined as the shortest non-deprecated id (if any),
-  or (worst case) the shortest deprecated id."
-  [n]
-  (best-identifier (near-match-name n)))
-
-(defn replace-near-match-names-with-id
-  "Replaces all near matched names in `s` (a `String`) with their actual (best)
-  SPDX id.  Result is a tuple containing the modified `s` and a sequence of
-  explanation tuples as returned by [[lice-comb.impl.utils/explaining-replace]]."
-  [s]
-  (when s
-    (loop [s            s
-           replacements []
-           [f & r]      @name-regex-id-pairs-d]
-      (if-not f
-        [s replacements]
-        (let [[re id]             f
-              [new-s replacement] (lciu/explaining-replace s re id)
-              new-replacements    (if replacement (apply conj replacements replacement) replacements)]
-          (recur new-s new-replacements r))))))
-)
 
 (defn- urls-to-id-tuples
   "Extracts all urls for a given list (license or exception) entry."
@@ -438,6 +284,5 @@
   @license-list-d
   @exception-list-d
   @spdx-ids-d
-  @name-regex-id-pairs-d
   @index-uri-to-id-d
   nil)

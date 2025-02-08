@@ -9,7 +9,11 @@
 ;
 
 (ns lice-comb.test-boilerplate
-  (:require [clojure.spec.alpha :as spec]
+  (:require [clojure.string     :as s]
+            [clojure.java.io    :as io]
+            [clojure.reflect    :as cr]
+            [clojure.edn        :as edn]
+            [clojure.spec.alpha :as spec]
             [spdx.licenses      :as slic]
             [spdx.exceptions    :as sexc]
             [spdx.expressions   :as sexp]))
@@ -114,3 +118,33 @@
     (when-not values-are-sequentials? (print "\n* Not all values are sequential:" (pr-str (map type (vals actual)))))
     (when-not all-valid-expressions?  (print "\n* Not all keys are valid SPDX expressions"))
     result))
+
+(defn load-string-resource
+  "Loads the given classpath resources from the classpath, returning it as a
+  String. Throws ex-info on error.
+
+  Notes:
+  * Classpath resource paths must not start with a forward slash ('/').  They
+    are always classpath-root relative.
+  * The JVM does not support hyphens ('-') in classpath resource path elements.
+    Use underscore ('_') instead, both in the filename and in any strings used
+    to refer to the resource.
+  * Unlike during namespace loading, Clojure does not automatically switch
+    hyphens in classpath resource path elements to underscores. This
+    inconsistency can be a time-wasting foot gun."
+  [path]
+  (when-not (s/blank? path)
+    (try
+      (if-let [resource (io/resource path)]
+        (slurp resource)
+        (throw (ex-info (str "No resource found in classpath at " path) {})))
+      (catch clojure.lang.ExceptionInfo ie
+        (throw ie))
+      (catch Exception e
+        (throw (ex-info (str "Unexpected " (cr/typename (type e)) " while reading classpath resource " path) {} e))))))
+
+(defn load-edn-resource
+  "Loads and parses the given EDN file from the classpath."
+  [path]
+  (when-let [edn-string (load-string-resource path)]
+    (edn/read-string edn-string)))

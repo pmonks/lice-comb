@@ -55,10 +55,8 @@
   (:require [clojure.string         :as s]
             [spdx.licenses          :as sl]
             [spdx.exceptions        :as se]
-            [spdx.expressions       :as sexp]
             [lice-comb.impl.spdx    :as lcis]
-            [lice-comb.impl.parsing :as lcip]
-            [lice-comb.impl.utils   :as lciu]))
+            [lice-comb.impl.parsing :as lcip]))
 
 (defn lice-comb-license-ref?
   "Is the given id one of lice-comb's custom LicenseRefs?"
