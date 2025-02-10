@@ -1,5 +1,5 @@
 #{
-  "GNU GENERAL PUBLIC LICENSE Version 2, June 1991"
+;  "GNU GENERAL PUBLIC LICENSE Version 2, June 1991"  ; Dates are stripped after substitution
   "GNU GENERAL PUBLIC LICENSE Version 3"
   "GNU GENERAL PUBLIC LICENSE"
   "GNU GPL 3"
@@ -10,7 +10,8 @@
   "GNU GPL v3+"
   "GNU GPL v3.0"
   "GNU GPL"
-  "GNU GPL, version 3, 29 June 2007"
+  "GNU GPL, version 3"
+;  "GNU GPL, version 3, 29 June 2007"  ; Dates are stripped after substitution
   "GNU GPLv3+"
   "GNU General Public License (GPL) version 2, or any later version"
   "GNU General Public License (GPL) version 2, or any lator version"
@@ -19,7 +20,7 @@
   "GNU General Public License 2"
   "GNU General Public License V3"
   "GNU General Public License Version 3"
-  "GNU General Public License v2.0 w/Classpath exception"
+;  "GNU General Public License v2.0 w/Classpath exception"  ; Expression
   "GNU General Public License v3"
   "GNU General Public License v3.0 or later"
   "GNU General Public License v3.0"
@@ -28,8 +29,8 @@
   "GNU General Public License, Version 2"
   "GNU General Public License, Version 3 (or later)"
   "GNU General Public License, Version 3"
-  "GNU General Public License, version 2 (GPL2), with the classpath exception"
-  "GNU General Public License, version 2 with the GNU Classpath Exception"
+;  "GNU General Public License, version 2 (GPL2), with the classpath exception"  ;Expression
+;  "GNU General Public License, version 2 with the GNU Classpath Exception"  ; Expression
   "GNU General Public License, version 2"
   "GNU General Public License, version 3 (GPLv3)"
   "GNU General Public License, version 3"

@@ -54,15 +54,17 @@
          (case (:strategy m)
            :maven-pom-multi-license-rule                  "00"
            :spdx-expression                               "01"
-           :spdx-listed-identifier-exact-match            "02"
-           :spdx-listed-identifier-case-insensitive-match "03"
+           :spdx-listed-identifier                        "02"
+           :spdx-listed-identifier-near-match             "03"
            :spdx-matching-guidelines                      "04"
-           :spdx-listed-name                              "05"
-           :spdx-listed-uri                               "06"
-           :manual-verification                           "07"
-           :expression-inference                          "08"
-           :regex-matching                                "09"
-           :unidentified                                  "10"))))
+           :spdx-listed-name-exact-match                  "05"
+           :spdx-listed-name-case-insensitive-match       "06"
+           :spdx-listed-name-near-match                   "07"
+           :spdx-listed-uri-near-match                    "08"
+           :expression-inference                          "09"
+           :regex-matching                                "10"
+           :manual-verification                           "11"
+           :unidentified                                  "12"))))
 
 (defn expression-info->string
   "Converts `m`, an expression-info map, into a human-readable `String`.  This

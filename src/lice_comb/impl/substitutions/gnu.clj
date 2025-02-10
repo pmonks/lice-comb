@@ -19,6 +19,15 @@
             [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
+; Unlike the other substitution namespaces, for the GNU family we use a "word salad" strategy for matching.  Basically
+; this involves matching any words that are known to appear in a GNU family license *in any order*.  So even nonsensical
+; values that don't appear in the wild will match, such as "Open Source License License GNU v3 Licensed Under or later"
+;
+; For this reason, the `sub`stitution function in this namespace should be called *last, after all other substitutions
+; have already been performed*.
+;
+; We do this because of the sheer number of variations of GNU family license names in the wild.
+
 (defn- base-id
   "Returns the 'base id' of a GNU family id.  This is the id with version
   suffixes removed (`+`, `-or-later`, or `-only`)."
@@ -42,7 +51,9 @@
       (or (s/ends-with? id "+") (s/ends-with? id "-or-later")) :or-later)))
 
 (defn- gnu-id-comparator
-  "Compares GNU family ids, by putting the `-only` variants first."
+  "Compares GNU family ids, by putting the `-only` variants first.  This order
+  is important as there are certain license name values that both the -only and
+  -or-later regex will match, but the -only id is the more correct choice."
   [id1 id2]
   (if (= id1 id2)
     0
@@ -65,14 +76,15 @@
 (def ^:private lgpl-license-ids-d (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/lgpl-license? (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
 (def ^:private gpl-license-ids-d  (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/gpl-license?  (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
 
-(defn- gnu-ei-fn
+(defn- match->ei
   "Construct an expression-info map from `m`, a map returned from a rencg regex
-  match/find."
+  match/find match."
   [variant m]
-  (let [match              (:match m)
+  (let [match              (s/trim (:match m))
         version-present?   (boolean (lcisu/get-rencgs m ["versionNumber"] false))
-        version            (lcisu/get-rencgs m ["versionNumber"] (if (= variant "LGPL") "2.0" "1.0"))  ; Note: on the advice of the SPDX technical team, default to earliest version when version not present
-        version            (s/replace version #"\p{Punct}+" ".")
+        default-version    (if (= variant "LGPL") "2.0" "1.0")  ; Note: on the advice of the SPDX technical team, default to earliest version when version not present
+        version            (lcisu/get-rencgs m ["versionNumber"] default-version)
+        version            (s/replace version #"[\s\p{Punct}]+" ".")   ; Turn other version number point separators into . (undercore appears in at least one license name, for example)
         [confidence confidence-explanations]
                            (if version-present?
                              (if (s/includes? version ".")
@@ -85,9 +97,15 @@
         [suffix confidence-explanations]
                            (cond (contains? m "orLater") ["or-later" confidence-explanations]
                                  (contains? m "only")    ["only"     confidence-explanations]
-                                 :else                   [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version suffix not present
+                                 :else                   [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version or suffix not present
                                                           (set/union #{:missing-version-suffix} confidence-explanations)])
-        id                 (str variant "-" version  "-" suffix)]
+        id                 (str variant "-" version  "-" suffix)
+        [id confidence confidence-explanations]
+                           (if (lcisu/listed-id? id)
+                             [id confidence confidence-explanations]
+                             [(str variant "-" default-version "-or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version not valid
+                              :low
+                              (set/union #{:invalid-version-for-variant} confidence-explanations)])]
     (merge {:id         (lcisu/assert-listed-id id)
             :type       :concluded
             :confidence confidence
@@ -95,56 +113,52 @@
             :source     (list match)}
             (when confidence-explanations {:confidence-explanations confidence-explanations}))))
 
-;####TODO: REMOVE THIS ONCE IT HAS BEEN SUPERCEDED!!!!
-; The regex for the GNU family is a nightmare, so we build it up (and test it) in pieces
-;(def agpl-re          #"(?<agpl>AGPL|Affero)(\s+GNU)?(\s+Genere?al)?(\s+Pub?lic)?(\s+Licen[cs]e)?(\s+\(?AGPL\)?)?")
-;(def lgpl-re          #"(?<lgpl>(GNU\s+)?((Genere?al\s+)?(Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser))|((Library\s+or\s+Lesser|Lesser\s+or\s+Library|Library|Lesser)\s+(GNU|GPL|Genere?al)|(L(esser\s)?\s*GPL)))(\s+Genere?al)?(\s+Pub?lic)?(\s+Licen[cs]e)?(\s+\(?L\s*GPL\)?)?")
-;(def gpl-re           #"(?<!(Affero|Lesser|Library)\s+)(?<gpl>GNU(?!\s+Classpath)|(?<!(L|A)\s*)GPL|Genere?al\s+Pub?lic\s+Licen[cs]e)(?!\s+(Affero|Library|Lesser|Genere?al\s+Lesser|Genere?al\s+Library|LGPL|AGPL))((\s+General)?(?!\s+(Affero|Lesser|Library))\s+Pub?lic\s+Licen[cs]e)?(\s+\(?GPL\)?)?")
-;(def version-re       #"[\s,\-]*(_?V(ersion)?)?[\s\._]*(?<version>\d+([\._]\d+)?)?")
-;(def only-or-later-re #"[\s,\-]*((?<only>\(?only\)?)|(\(?or(\s+\(?at\s+your\s+(option|discretion)\)?)?(\s+any)?)?([\s\-]*(?<orLater>lat[eo]r|newer|greater|\+)))?")
-;(def gnu-re           (lciu/re-concat "(?x)(?i)(?<!\\w)(\n# Alternative 1: AGPL\n"
-;                                      agpl-re
-;                                      "\n# Alternative 2: LGPL\n|"
-;                                      lgpl-re
-;                                      "\n# Alternative 3: GPL\n|"
-;                                      gpl-re
-;                                      "\n)\n# Version\n"
-;                                      version-re
-;                                      "\n# Only/or-Later suffix\n"
-;                                      only-or-later-re
-;                                      #"(?!\w)"))
-
-; only/or-later suffix
-(def ^:private suffix-re #"[\s\-–—]*((?<only>only)?|(?<orLater>\+|\(?or[\s\-–—\(]*(at[\s\-–—]+your[\s\\-–—]+(option|discretion))?([\s\-–—\)]*any)?[\s\-–—]+(lat[eo]r|newer)([\s\-–—]+(v|ver|versions?))?\)?)?)?")
+; Generic GNU family regex fragments
+(def ^:private re-fragment-gnu-words (lcir/re-concat #"The|GNU|GPL|Genere?al|Pub?lic|Licen[cs]ed?([\s\-–—]+Under)?|Open[\s\-–—]+Source|FOSS|OSS" "|" lcir/re-fragment-date))
 
 ; AGPL regexes
-(def ^:private agpl-res-d (delay [
-  ;####TODO: IMPLEMENT ME!!!!
-  ]))
+(def ^:private re-fragment-agpl-words         (lcir/re-concat re-fragment-gnu-words "|" #"LGPL|Lesser([\s\-–—]+or[\s\-–—]+Library)?|Library([\s\-–—]+or[\s\-–—]+Lesser)?"))
+(def ^:private re-fragment-agpl-words-and-ver (lcir/re-concat re-fragment-agpl-words "|" lcir/re-fragment-ver-and-suf ))
+(def re-agpl                                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                                              "\n\n#### Leading words ####\n"
+                                                              "((" re-fragment-agpl-words ")" #"[\s\-–—,\(\)]+" ")*"
+                                                              "\n\n#### Matching words ####\n"
+                                                              #"\(?(AGPL|Affero)\)?"  ; "Primary key" for AGPL
+                                                              "\n\n#### Trailing words and version ####\n"
+                                                              "(" #"[\s\-–—,\(\)]*" "(" re-fragment-agpl-words-and-ver "))*"))  ; Whitespace needs to be optional here for values such as "AGPLv3+"
 
 ; LGPL regexes
-(def ^:private lgpl-res-d (delay [
-  ;####TODO: IMPLEMENT ME!!!!
-;  #"(?iuU)(?<!\w)(?<lgpl>(The[\s\-–—]+)?(GNU[\s\-–—]+)?(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+General[\s\-–—]+Public[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\.]*\))?[\s\-–—,]+((v|ver|versions?)[\s\-–—]*)?(?<version>0*\d+(\.d+)*)[\s\-–—]*(?<only>\+|\(?only\)?)?)(?!\w)"
-;  #"(?iuU)(?<!\w)(?<lgpl>(The[\s\-–—]+)?(GNU[\s\-–—]+)?(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+General[\s\-–—]+Public[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\.]*\))?[\s\-–—,]+((v|ver|versions?)[\s\-–—]*)?(?<version>0*\d+(\.d+)*)[\s\-–—]*(?<orLater>\+|\(?or[\s\-–—]*later\)?)?)(?!\w)"
-  ]))
+(def ^:private re-fragment-lgpl-words         (lcir/re-concat re-fragment-gnu-words "|" #"LGPL|Lesser([\s\-–—]+or[\s\-–—]+Library)?|Library([\s\-–—]+or[\s\-–—]+Lesser)?"))
+(def ^:private re-fragment-lgpl-words-and-ver (lcir/re-concat re-fragment-lgpl-words "|" lcir/re-fragment-ver-and-suf ))
+(def re-lgpl                                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                                              "\n\n#### Leading words ####\n"
+                                                              "((" re-fragment-lgpl-words ")" #"[\s\-–—,\(\)]+" ")*"
+                                                              "\n\n#### Matching words ####\n"
+                                                              #"\(?(LGPL|Lesser([\s\-–—]+or[\s\-–—]+Library)?|Library([\s\-–—]+or[\s\-–—]+Lesser)?)\)?"  ; "Primary key" for LGPL
+                                                              "\n\n#### Trailing words and version ####\n"
+                                                              "(" #"[\s\-–—,\(\)]*" "(" re-fragment-lgpl-words-and-ver "))*"))  ; Whitespace needs to be optional here for values such as "LGPLv3+"
 
 ; GPL regexes
-(def ^:private gpl-res-d (delay [
-  ;####TODO: IMPLEMENT ME!!!!
-  (lcir/re-concat #"(The[\s\-–—]*)?(GNU[\s\-–—]*)?(GPL|General[\s\-–—]*Public[\s\-–—]*Licen[cs]e)" suffix-re)
-  (lcir/re-concat #"(The[\s\-–—]*)?GNU[\s\-–—]*Public[\s\-–—]*Licen[cs]e"                          suffix-re)
-  ]))
+(def ^:private re-fragment-gpl-words         re-fragment-gnu-words)
+(def ^:private re-fragment-gpl-words-and-ver (lcir/re-concat re-fragment-gpl-words "|" lcir/re-fragment-ver-and-suf))
+(def re-gpl                                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                                              "\n\n#### Leading words ####\n"
+                                                              "((" re-fragment-gpl-words ")" #"[\s\-–—,\(\)]+" ")*"
+                                                              "\n\n#### Matching words ####\n"
+                                                              #"\(?(GNU|GPL|Genere?al([\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?)\)?"  ; "Primary key" for GPL
+                                                              "\n\n#### Trailing words and version ####\n"
+                                                              "(" #"[\s\-–—,\(\)]*" "(" re-fragment-gpl-words-and-ver "))*"))  ; Whitespace needs to be optional here for values such as "GPLv3+"
 
 (def ^:private pairs-d (delay (concat ; AGPL matching pairs
+                                      [[re-agpl (partial match->ei "AGPL")]]
                                       (lcisu/spdx-match-pairs @agpl-license-ids-d)
-                                      (map vector @agpl-res-d (repeat (partial gnu-ei-fn "AGPL")))
                                       ; LGPL matching pairs
+                                      [[re-lgpl (partial match->ei "LGPL")]]
                                       (lcisu/spdx-match-pairs @lgpl-license-ids-d)
-                                      (map vector @lgpl-res-d (repeat (partial gnu-ei-fn "LGPL")))
-                                      ; GPL matching pairs (these must go last)
+                                      ; GPL matching pairs (these must go after AGPL and LGPL)
+                                      [[re-gpl (partial match->ei "GPL")]]
                                       (lcisu/spdx-match-pairs @gpl-license-ids-d)
-                                      (map vector @gpl-res-d (repeat (partial gnu-ei-fn "GPL"))))))
+                                      )))
 
 (defn sub
   "Substitutes any GNU family licenses found in the `String`s in `coll` with an

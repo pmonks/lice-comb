@@ -46,6 +46,20 @@
   [& res]
   (re-pattern (s/join res)))
 
+; Regex fragments - these should all be prefixed with #"(?iuU)" by users
+(def re-fragment-version     #"([\s\-–—,\._]*((v(er(sions?)?)?)?[\s\-–—,\._]*)(?<versionNumber>\d+([,\._]\d+)*))?")
+(def re-fragment-only        #"(?<only>only)")
+(def re-fragment-or-later    #"(?<orLater>\+|(\(?or([\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(option|discretion)[\),]*)?([\s\-–—]+a(ny)?)?[\s\-–—]+(lat[eo]r|newer)([\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(option|discretion)\)?)?([\s\-–—]+(v(er(sions?)?)?))?\)?))")
+(def re-fragment-suffix      (re-concat "("
+                                        #"[\s\-–—,\.]*"
+                                        "("
+                                        re-fragment-only
+                                        "|"
+                                        re-fragment-or-later
+                                        "))?"))
+(def re-fragment-ver-and-suf (re-concat re-fragment-version re-fragment-suffix))
+(def re-fragment-date        #"((\d\d?([\s\-–—,]+(st|nd|rd|th))?)?[\s\-–—,\()]*(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[\s\-–—,]*\d\d(\d\d)?[\s\-–—,\)]*)")
+
 (defn- replace-version
   "Emits a suitable regex for matching the version identified in map `m`
   (a map as returned by rencg)."
@@ -54,15 +68,19 @@
         only?              (boolean (get m "only"))
         version-components (seq (s/split version-number #"\."))
         dot-zero?          (boolean (re-matches #"0+" (last version-components)))]
-    (re-pattern (str "[\\s\\-–—,\\.\\(]*((v|ver|versions?)[\\s\\-–—,\\.]*)?"
-                     "(?<versionNumber>"
-                     (if dot-zero?
-                       (s/join "\\." (map #(str "0*" %) (drop-last version-components)))  ; Version number ends in ".0", so make the last component optional
-                       (s/join "\\." (map #(str "0*" %) version-components)))             ; Version number ends in a non-zero number, so make the last component mandatory
-                     "(\\.0+)*)"                                                          ; Allow any number of ".0" to appear at the end
-                     (if only?
-                      "([\\s\\-–—\\)]*only)?(?![\\s\\-–—]+or[\\s\\-–—]+(lat[eo]r|newer))"
-                      "[\\s\\-–—\\)]*(?<orLater>\\+|\\(?or[\\s\\-–—\\(]*(at[\\s\\-–—]+your[\\s\\-–—]+(option|discretion))?([\\s\\-–—\\)]*any)?[\\s\\-–—]+(lat[eo]r|newer)([\\s\\-–—]+(v|ver|versions?))?\\)?)?")))))
+    (re-concat #"[\s\-–—,\.\(]*((v(er(sions?)?)?)[\s\-–—,\.]*)?"
+               "(?<versionNumber>"  ; Open versionNumber NCG
+               (if dot-zero?
+                 (s/join "\\." (map #(str "0*" %) (drop-last version-components)))  ; Version number ends in ".0", so make the last component optional
+                 (s/join "\\." (map #(str "0*" %) version-components)))             ; Version number ends in a non-zero number, so make the last component mandatory
+               #"(\.0+)*"                                                           ; Allow any number of ".0" to appear at the end
+               ")"  ; Close versionNumber NCG
+               (if only?
+                 (re-concat #"[\s\-–—,\.]*" re-fragment-only     "?")
+                 (re-concat #"[\s\-–—,\.]*" re-fragment-or-later "?"))
+;                 #"(?<only>[\s\-–—\),]*only)?(?![\s\-–—]+or[\s\-–—]+(lat[eo]r|newer|[\(,]*at))"
+;                 #"(?<orLater>[\s\-–—\),]*(\+|\(?or([\s\-–—,]*\(?at[\s\-–—]+your[\s\-–—]+(option|discretion)\)?)?([\s\-–—]+any)?[\s\-–—,]+(lat[eo]r|newer)([\s\-–—]+(v(er(sions?)?)?))?\)?))?")
+               #"[\s\-–—,\.\)]*")))
 
 ; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
@@ -102,10 +120,10 @@
     (-> [#"(?iuU)(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
         ; Special case GNU family first, as they're such a massive pita
         (lciu/replace-in-coll #"(?i)(?<!\w)GNU\s+"                                  #"(GNU[\s\-–—]+)?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)Affero General Public License"           #"Affero[\s\-–—]+General[\s\-–—]+Public[\s\-–—]+Licen[cs]e([\s\-–—]+\(?A[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\.]*\))?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)Library General Public License"          #"(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+General[\s\-–—]+Public[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\.]*\))?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)Lesser General Public License"           #"(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+General[\s\-–—]+Public[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\.]*\))?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)General Public License"                  #"General[\s\-–—]+Public[\s\-–—]+Licen[cs]e([\s\-–—]+\(?GPL([\s\-–—]*v)?[\s\d\.]*\))?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)Affero General Public License"           #"Affero[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?A[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\._]*\))?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)Library General Public License"          #"(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\._]*\))?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)Lesser General Public License"           #"(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\._]*\))?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)General Public License"                  #"Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?GPL([\s\-–—]*v)?[\s\d\._]*\))?")
          ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)Apache(?!\w)"                            #"Apache([\s\-–—]*Software)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Creative Commons(?!\w)"                  #"(Creative[\s\-–—]*Commons|CC)")
@@ -139,8 +157,8 @@
         (lciu/replace-in-coll #"(?i)Lizenz(?!\w)"                                   #"(Lizenz)?")
         (lciu/replace-in-coll #"(?i)\s+free(?!\w)"                                  #"([\s\-–—]+free)?")
         (lciu/replace-in-coll #"(?i)free(?!\w)"                                     #"(free)?")
-        (lciu/replace-in-coll #"(?i)\s+public(?!\w)"                                #"([\s\-–—]+Public)?")
-        (lciu/replace-in-coll #"(?i)public(?!\w)"                                   #"(Public)?")
+        (lciu/replace-in-coll #"(?i)\s+public(?!\w)"                                #"([\s\-–—]+Pub?lic)?")  ; Note: the optional missing `b` is a known misspelling in a POM license name: e.g. https://repo.clojars.org/org/immutant/immutant-common/1.1.4/immutant-common-1.1.4.pom (there are others too)
+        (lciu/replace-in-coll #"(?i)public(?!\w)"                                   #"(Pub?lic)?")
         (lciu/replace-in-coll #"(?i)\s+software(?!\w)"                              #"([\s\-–—]+Software)?")
         (lciu/replace-in-coll #"(?i)software(?!\w)"                                 #"(Software)?")
         (lciu/replace-in-coll #"(?i)\s+hardware(?!\w)"                              #"([\s\-–—]+Hardware)?")
@@ -163,7 +181,7 @@
         (lciu/replace-in-coll #"(?i)(?<!\w)acknowledge?ment(?!\w)"                  #"Acknowledge?ment")  ; No trailing \b, to handle plurals etc.
         (lciu/replace-in-coll #"(?i)(?<!\w)merchant[ai]bility(?!\w)"                #"Merchant[ai]bility")
         (lciu/replace-in-coll #"(?i)(?<!\w)non-?commercial(?!\w)"                   #"Non[-–—]?commercial")  ; Note: hyphen, en-dash, em-dash
-        (lciu/replace-in-coll #"(?i)(?<!\w)open\s+source"                           #"(Open[\s\-–—]+Source|OSS|FOSS)")
+        (lciu/replace-in-coll #"(?i)(?<!\w)open\s+source"                           #"(Open[\s\-–—]+Source|FOSS|OSS)")
         (lciu/replace-in-coll #"(?i)(?<!\w)the\s+"                                  #"(The[\s\-–—]+)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)w/"                                      #"(w/|with[\s\-–—]+)")
         (lciu/replace-in-coll #"(?i)(?<!\w)(and|&)(?!\w)"                           #"(and|&)")

@@ -22,6 +22,17 @@
             [lice-comb.impl.parsing-utils :as lcip]
             [lice-comb.impl.utils         :as lciu]))
 
+(defn listed-id?
+  "Is `id` a listed SPDX identifier (license or exception)?
+
+  Notes:
+  * Supports 'identifiers' (technically an SDPX expression) containing an 'or
+    later' flag (a single '+' character at the end)"
+  [id]
+  (let [raw-id (s/replace id #"\+\z" "")]
+    (or (contains? @lcis/license-ids-d   raw-id)
+        (contains? @lcis/exception-ids-d raw-id))))
+
 (defn assert-listed-id
   "Checks that `id` is a listed SPDX identifier (license or exception) and
   throws if not. Returns `id` unchanged on success.
@@ -30,14 +41,12 @@
   * Supports 'identifiers' (technically an SDPX expression) containing an 'or
     later' flag (a single '+' character at the end)"
   [id]
-  (let [raw-id (s/replace id #"\+\z" "")]
-    (if (or (contains? @lcis/license-ids-d   raw-id)
-            (contains? @lcis/exception-ids-d raw-id))
-      id
-      (throw (ex-info (str "Invalid SPDX id constructed: '" id
-                           "' - please raise an issue at "
-                           "https://github.com/pmonks/lice-comb/issues/new?assignees=pmonks&labels=bug&template=Invalid_id_constructed.md&title=Invalid+SPDX+identifer+constructed:+" id)
-                      {:id id})))))
+  (if (listed-id? id)
+    id
+    (throw (ex-info (str "Invalid SPDX id constructed: '" id
+                         "' - please raise an issue at "
+                         "https://github.com/pmonks/lice-comb/issues/new?assignees=pmonks&labels=bug&template=Invalid_id_constructed.md&title=Invalid+SPDX+identifer+constructed:+" id)
+                    {:id id}))))
 
 (defn get-rencgs
   "Get a value for an re-ncg, potentially looking at multiple ncgs in order
@@ -110,7 +119,7 @@
       (let [id                  (str id (when (get m "orLater") "+"))            ; This can end up with things like GPL-2.0-or-later+, but those get normalised in the next step
             id                  (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: exception ids won't normalise
             gnu-suffix-missing? (and (gnu-family? id) (not (get m "orLater")) (not (get m "only")))  ; Special case GNU family licenses missing version suffixes
-            match               (:match m)
+            match               (s/trim (:match m))
             strategy            (cond
                                   (= (s/lower-case match) (s/lower-case id)) :spdx-listed-identifier  ; Because some name regexes will also match the associated id
                                   (= match n)                                :spdx-listed-name-exact-match
@@ -118,7 +127,7 @@
                                   :else                                      :spdx-listed-name-near-match)]
         (merge {:id       id
                 :strategy strategy
-                :source   (list (:match m))}
+                :source   (list match)}
                (case strategy
                  :spdx-listed-identifier {:type :declared}
                  (if gnu-suffix-missing?
@@ -144,9 +153,10 @@
   [id]
   (fn [m]
     (let [id (str id (when (get m "orLater") "+"))
-          id (if-let [new-id (sexp/normalise id)] new-id id)]  ; Note: naked exception identifiers won't normalise
+          id (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: naked exception identifiers won't normalise
+          match      (s/trim (:match m))]
       {:id         id
        :type       :concluded
        :confidence :high
        :strategy   :regex-matching
-       :source     (list (:match m))})))
+       :source     (list match)})))

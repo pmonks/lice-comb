@@ -23,6 +23,7 @@
             [lice-comb.impl.correction                :as lcic]
             [lice-comb.impl.utils                     :as lciu]
             [lice-comb.impl.parsing-utils             :as lcipu]
+            [lice-comb.impl.regexes                   :as lcir]
             [lice-comb.impl.3rd-party                 :as lci3]
             [lice-comb.impl.substitutions.cursed      :as cursed]
             [lice-comb.impl.substitutions.bsd         :as bsd]
@@ -140,11 +141,14 @@
              collapse-duplicate-operator-keywords
              seq)))
 
-(def ^:private extraneous-fragment-res-d (delay [#"(?U)\W+"   ; Strip fragments containing no (Unicode) alphabetic characters
+(def ^:private extraneous-fragment-res-d (delay [#"(?i)copyright([\s\-–—,]+\(c\))?([\s\-–—,]*©️)?([\s\-–—,]*©)?"
+                                                 #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"
+;                                                 #"(?i)Licen[cs]ed([\s\-–—,]+under)?"
                                                  #"(?i)dual"
-                                                 #"(?i)(public[\s-\\\/]+)?licen[cs]e"
-                                                 #"(?i)copyright(\s+\(c\))?(\s+©️)?(\s+©)?"
-                                                 #"(?i)[\s-,]*version[\s-,]+\d+"]))  ; Some listed names leave dangling versions (e.g. "Do What The Fuck You Want To Public License, Version 2" - there's only a single version of that license')
+                                                 (lcir/re-concat #"(?i)" lcir/re-fragment-date)
+;                                                 #"(?i)[\s\-–—,\()]*(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[\s\-–—,]*\d\d(\d\d)?[\s\-–—,\)]*"
+;                                                 #"(?i)[\s\-–—,]*version[\s\-–—,]+\d+"  ; Some names leave dangling versions (e.g. "Do What The Fuck You Want To Public License, Version 2" - there's only a single version of that license')
+                                                 #"(?U)\W+"]))   ; Strip fragments containing no (Unicode) alphabetic characters
 
 (defn- remove-extraneous-fragments
   "Removes 'extraneous' fragments (`String`s) from `coll`."
@@ -154,8 +158,8 @@
     (if (or (not re)
             (lcipu/done-parsing? coll))
       (filter lciu/not-blank-string? coll)
-      (let [new-coll (lciu/map-str #(when-not (or (< (count %) 4)              ; Strip anything shorter than 4 characters long
-                                                  (re-matches re (s/trim %)))  ; or that matches one of the extraneous fragment regexes
+      (let [new-coll (lciu/map-str #(when (and (>= (count %) 4)                   ; Strip anything shorter than 4 characters long
+                                               (not (re-matches re (s/trim %))))  ; or that matches one of the extraneous fragment regexes
                                       %)
                                    coll)]
         (recur r new-coll)))))
@@ -175,7 +179,7 @@
                                     (get m "and")       :and
                                     (get m "ampersand") :and
                                     (get m "or")        :or
-                                    (get m "andOr")     :or
+                                    (get m "andOr")     :or   ; We assume the least restrictive interpretation
                                     (get m "with")      :with
                                     :else               nil)))))
 
@@ -247,7 +251,6 @@
                         ; Parsing, with short circuiting of steps if we're done early
                         (lciu/until-> lcipu/done-parsing?
                                       cursed/sub
-                                      gnu/sub
                                       bsd/sub
                                       cc/sub
                                       cddl/sub
@@ -258,6 +261,7 @@
                                       wtf/sub
                                       custom/sub
                                       others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
+                                      gnu/sub          ; This needs to go last, as the "word salad" matching approach it uses is overly greedy
                                       sub-operators)
                         ; Cleanup
                         remove-extraneous-fragments
