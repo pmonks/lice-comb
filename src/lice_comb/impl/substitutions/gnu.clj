@@ -114,50 +114,53 @@
             (when confidence-explanations {:confidence-explanations confidence-explanations}))))
 
 ; Generic GNU family regex fragments
-(def ^:private re-fragment-gnu-words (lcir/re-concat #"The|GNU|GPL|Genere?al|Pub?lic|Licen[cs]ed?([\s\-–—]+Under)?|Open[\s\-–—]+Source|FOSS|OSS" "|" lcir/re-fragment-date))
+(def ^:private fre-gnu-words (lcir/re-concat #"The|GNU|GPL|Genere?al|Pub?lic|Licen[cs]ed?([\s\-–—]+Under)?|Open[\s\-–—]+Source|FOSS|OSS" "|" lcir/fre-date))
 
 ; AGPL regexes
-(def ^:private re-fragment-agpl-words         (lcir/re-concat re-fragment-gnu-words "|" #"LGPL|Lesser([\s\-–—]+or[\s\-–—]+Library)?|Library([\s\-–—]+or[\s\-–—]+Lesser)?"))
-(def ^:private re-fragment-agpl-words-and-ver (lcir/re-concat re-fragment-agpl-words "|" lcir/re-fragment-ver-and-suf ))
-(def re-agpl                                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                                              "\n\n#### Leading words ####\n"
-                                                              "((" re-fragment-agpl-words ")" #"[\s\-–—,\(\)]+" ")*"
-                                                              "\n\n#### Matching words ####\n"
-                                                              #"\(?(AGPL|Affero)\)?"  ; "Primary key" for AGPL
-                                                              "\n\n#### Trailing words and version ####\n"
-                                                              "(" #"[\s\-–—,\(\)]*" "(" re-fragment-agpl-words-and-ver "))*"))  ; Whitespace needs to be optional here for values such as "AGPLv3+"
+(def ^:private fre-agpl-words         (lcir/re-concat fre-gnu-words "|" #"AGPL|Affero"))
+(def ^:private fre-agpl-words-and-ver (lcir/re-concat fre-agpl-words "|" lcir/fre-ver-and-suf ))
+(def re-agpl                          (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                                      "\n\n#### Leading words ####\n"
+                                                      "((" fre-agpl-words ")" #"[\s\-–—,\(\)]+" ")*"
+                                                      "\n\n#### Matching words ####\n"
+                                                      #"(?<agpl>(A\s?GPL|Affero))"  ; "Primary key" for AGPL
+                                                      "\n\n#### Trailing words and version ####\n"
+                                                      "(" #"[\s\-–—,\(\)]*" "(" fre-agpl-words-and-ver "))*"  ; Whitespace needs to be optional here for values such as "AGPLv3+"
+                                                      #"(?!\w)"))
 
 ; LGPL regexes
-(def ^:private re-fragment-lgpl-words         (lcir/re-concat re-fragment-gnu-words "|" #"LGPL|Lesser([\s\-–—]+or[\s\-–—]+Library)?|Library([\s\-–—]+or[\s\-–—]+Lesser)?"))
-(def ^:private re-fragment-lgpl-words-and-ver (lcir/re-concat re-fragment-lgpl-words "|" lcir/re-fragment-ver-and-suf ))
-(def re-lgpl                                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                                              "\n\n#### Leading words ####\n"
-                                                              "((" re-fragment-lgpl-words ")" #"[\s\-–—,\(\)]+" ")*"
-                                                              "\n\n#### Matching words ####\n"
-                                                              #"\(?(LGPL|Lesser([\s\-–—]+or[\s\-–—]+Library)?|Library([\s\-–—]+or[\s\-–—]+Lesser)?)\)?"  ; "Primary key" for LGPL
-                                                              "\n\n#### Trailing words and version ####\n"
-                                                              "(" #"[\s\-–—,\(\)]*" "(" re-fragment-lgpl-words-and-ver "))*"))  ; Whitespace needs to be optional here for values such as "LGPLv3+"
+(def ^:private fre-lgpl-words         (lcir/re-concat fre-gnu-words "|" #"LGPL|(Lesser([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Library)?)|(Library([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Lesser)?)"))
+(def ^:private fre-lgpl-words-and-ver (lcir/re-concat fre-lgpl-words "|" lcir/fre-ver-and-suf ))
+(def re-lgpl                          (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                                      "\n\n#### Leading words ####\n"
+                                                      "((" fre-lgpl-words ")" #"[\s\-–—,\(\)]+" ")*"
+                                                      "\n\n#### Matching words ####\n"
+                                                      #"(?<lgpl>(L\s?GPL|((GNU|GPL)[\s\-–—,\(\)]+Lesser([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Library)?)|((GNU|GPL)[\s\-–—,\(\)]+Library([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Lesser)?|(Lesser([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Library)?[\s\-–—,\(\)]+(GNU|GPL|General))|(Library([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Lesser)?[\s\-–—,\(\)]+(GNU|GPL|General)))))"  ; "Primary key" for LGPL
+                                                      "\n\n#### Trailing words and version ####\n"
+                                                      "(" #"[\s\-–—,\(\)]*" "(" fre-lgpl-words-and-ver "))*"  ; Whitespace needs to be optional here for values such as "LGPLv3+"
+                                                      #"(?!\w)"))
 
 ; GPL regexes
-(def ^:private re-fragment-gpl-words         re-fragment-gnu-words)
-(def ^:private re-fragment-gpl-words-and-ver (lcir/re-concat re-fragment-gpl-words "|" lcir/re-fragment-ver-and-suf))
-(def re-gpl                                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                                              "\n\n#### Leading words ####\n"
-                                                              "((" re-fragment-gpl-words ")" #"[\s\-–—,\(\)]+" ")*"
-                                                              "\n\n#### Matching words ####\n"
-                                                              #"\(?(GNU|GPL|Genere?al([\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?)\)?"  ; "Primary key" for GPL
-                                                              "\n\n#### Trailing words and version ####\n"
-                                                              "(" #"[\s\-–—,\(\)]*" "(" re-fragment-gpl-words-and-ver "))*"))  ; Whitespace needs to be optional here for values such as "GPLv3+"
+(def ^:private fre-gpl-words         fre-gnu-words)  ; GPL has no extra words
+(def ^:private fre-gpl-words-and-ver (lcir/re-concat fre-gpl-words "|" lcir/fre-ver-and-suf))
+(def re-gpl                          (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                                     "\n\n#### Leading words ####\n"
+                                                     "((" fre-gpl-words ")" #"[\s\-–—,\(\)]+" ")*"
+                                                     "\n\n#### Matching words ####\n"
+                                                     #"(?<gpl>(GNU|GPL|(Genere?al([\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?)))"  ; "Primary key" for GPL
+                                                     "\n\n#### Trailing words and version ####\n"
+                                                     "(" #"[\s\-–—,\(\)]*" "(" fre-gpl-words-and-ver "))*"  ; Whitespace needs to be optional here for values such as "GPLv3+"
+                                                     #"(?!\w)"))
 
 (def ^:private pairs-d (delay (concat ; AGPL matching pairs
                                       [[re-agpl (partial match->ei "AGPL")]]
-                                      (lcisu/spdx-match-pairs @agpl-license-ids-d)
+                                      (lcisu/spdx-match-pairs @agpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       ; LGPL matching pairs
                                       [[re-lgpl (partial match->ei "LGPL")]]
-                                      (lcisu/spdx-match-pairs @lgpl-license-ids-d)
+                                      (lcisu/spdx-match-pairs @lgpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       ; GPL matching pairs (these must go after AGPL and LGPL)
                                       [[re-gpl (partial match->ei "GPL")]]
-                                      (lcisu/spdx-match-pairs @gpl-license-ids-d)
+                                      (lcisu/spdx-match-pairs @gpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       )))
 
 (defn sub

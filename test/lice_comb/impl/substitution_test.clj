@@ -32,6 +32,8 @@
 (def lgpl-names-d (delay (load-edn-resource "lice_comb/data/name_lists/lgpl.edn")))
 (def gpl-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/gpl.edn")))
 
+(def bsd-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
+
 (def mpl-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/mpl.edn")))
 
 (deftest gnu-sub-tests
@@ -39,15 +41,22 @@
     (is (nil? (gnu/sub nil)))
     (is (nil? (gnu/sub []))))
   (testing "AGPL substitutions"
-    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute '" % "'")) @agpl-names-d))
+    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @agpl-names-d))
   (testing "LGPL substitutions"
-    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute '" % "'")) @lgpl-names-d))
+    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @lgpl-names-d))
   (testing "GPL substitutions"
-    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute '" % "'")) @gpl-names-d)))
+    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @gpl-names-d)))
+
+(deftest bsd-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (bsd/sub nil)))
+    (is (nil? (bsd/sub []))))
+  (testing "BSD substitutions"
+    (run! #(is (done-parsing? (bsd/sub [%])) (str "Failed to substitute \"" % "\"")) @bsd-names-d)))
 
 (deftest mpl-sub-tests
   (testing "Nil, empty"
     (is (nil? (mpl/sub nil)))
     (is (nil? (mpl/sub []))))
   (testing "MPL substitutions"
-    (run! #(is (done-parsing? (mpl/sub [%])) (str "Failed to substitute '" % "'")) @mpl-names-d)))
+    (run! #(is (done-parsing? (mpl/sub [%])) (str "Failed to substitute \"" % "\"")) @mpl-names-d)))

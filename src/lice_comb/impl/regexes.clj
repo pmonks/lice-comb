@@ -47,20 +47,52 @@
   (re-pattern (s/join res)))
 
 ; Regex fragments - these should all be prefixed with #"(?iuU)" by users
-(def re-fragment-version     #"([\s\-–—,\._]*((v(er(sions?)?)?)?[\s\-–—,\._]*)(?<versionNumber>\d+([,\._]\d+)*))?")
-(def re-fragment-only        #"(?<only>only)")
-(def re-fragment-or-later    #"(?<orLater>\+|(\(?or([\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(option|discretion)[\),]*)?([\s\-–—]+a(ny)?)?[\s\-–—]+(lat[eo]r|newer)([\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(option|discretion)\)?)?([\s\-–—]+(v(er(sions?)?)?))?\)?))")
-(def re-fragment-suffix      (re-concat "("
-                                        #"[\s\-–—,\.]*"
-                                        "("
-                                        re-fragment-only
-                                        "|"
-                                        re-fragment-or-later
-                                        "))?"))
-(def re-fragment-ver-and-suf (re-concat re-fragment-version re-fragment-suffix))
-(def re-fragment-date        #"((\d\d?([\s\-–—,]+(st|nd|rd|th))?)?[\s\-–—,\()]*(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[\s\-–—,]*\d\d(\d\d)?[\s\-–—,\)]*)")
+(def fre-ws          #"[\s\-–—_,\.]")
+(def fre-ows         (re-concat fre-ws "*"))
+(def fre-mws         (re-concat fre-ws "+"))
+(def fre-quote       #"[\"“”„‟'‘’‚‛`]")
+(def fre-oquote      (re-concat fre-quote "?"))
+(def fre-version     #"([\s\-–—,\._]*((v(er(sions?)?)?)?[\s\-–—,\._]*)(?<versionNumber>\d+([,\._]\d+)*))?")
+(def fre-only        #"(?<only>only)")
+(def fre-or-later    #"(?<orLater>\+|(\(?or([\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(option|discretion)[\),]*)?([\s\-–—]+a(ny)?)?[\s\-–—]+(lat[eo]r|newer)([\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(option|discretion)\)?)?([\s\-–—]+(v(er(sions?)?)?))?\)?))")
+(def fre-suffix      (re-concat "(" fre-ows "(" fre-only "|" fre-or-later "))?"))
+(def fre-ver-and-suf (re-concat fre-version fre-suffix))
+(def fre-date        #"((\d\d?([\s\-–—,]+(st|nd|rd|th))?)?[\s\-–—,\()]*(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[\s\-–—,]*\d\d(\d\d)?[\s\-–—,\)]*)")
 
-(defn- replace-version
+(defn re-or
+  "Regex for inclusive or.  This is implemented using the pattern (A?B|B?A).
+  Optional `separator` will be placed between `a` and `b`."
+  ([a b] (re-or a b nil))
+  ([a b separator]
+   (re-concat "(((" a separator ")?(" b "))"
+               "|(" b separator ")?(" a "))")))
+
+;####TODO: REMOVE IF UNUSED
+(comment
+(defn re-or-then
+  "`a` or `b` or `ab`, but _not_ `ba`.  This is implemented using the pattern (A?B|A).
+  Optional `separator` will be placed between `a` and `b`."
+  ([a b] (re-or-then a b nil))
+  ([a b separator]
+   (re-concat "(((" a separator ")?"
+                "(" b "))"
+               "|(" a "))")))
+)
+
+(defn re-any
+  "Returns a regex that will match any one of the provided regexes.  This is
+  done using alternation."
+  [& res]
+  (apply re-concat (concat ["(("] (interpose ")|(" res) ["))"])))
+
+(defn re-ncg
+  "Returns `re` in named capturing group `n`."
+  [n re]
+  (if (s/blank? n)
+    re
+    (re-concat "(?<" n ">" re ")")))
+
+(defn- re-version-replacement
   "Emits a suitable regex for matching the version identified in map `m`
   (a map as returned by rencg)."
   [m]
@@ -76,10 +108,8 @@
                #"(\.0+)*"                                                           ; Allow any number of ".0" to appear at the end
                ")"  ; Close versionNumber NCG
                (if only?
-                 (re-concat #"[\s\-–—,\.]*" re-fragment-only     "?")
-                 (re-concat #"[\s\-–—,\.]*" re-fragment-or-later "?"))
-;                 #"(?<only>[\s\-–—\),]*only)?(?![\s\-–—]+or[\s\-–—]+(lat[eo]r|newer|[\(,]*at))"
-;                 #"(?<orLater>[\s\-–—\),]*(\+|\(?or([\s\-–—,]*\(?at[\s\-–—]+your[\s\-–—]+(option|discretion)\)?)?([\s\-–—]+any)?[\s\-–—,]+(lat[eo]r|newer)([\s\-–—]+(v(er(sions?)?)?))?\)?))?")
+                 (re-concat #"[\s\-–—,\.]*" fre-only     "?")
+                 (re-concat #"[\s\-–—,\.]*" fre-or-later "?"))
                #"[\s\-–—,\.\)]*")))
 
 ; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
@@ -95,7 +125,7 @@
         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11([\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
         ; Version component
         (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(\.\d+)*)(-((?<only>only)|or-later))?(?=(-|\z))"
-                                  #(re-concat #"[\s\-–—]*" (replace-version %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
+                                  #(re-concat #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
         ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)AGPL(?!\w)"                #"(GNU[\s\-–—]+)?A[\s\-–—]*GPL")
         (lciu/replace-in-coll #"(?i)(?<!\w)LGPL(?!\w)"                #"(GNU[\s\-–—]+)?L[\s\-–—]*GPL")
@@ -118,12 +148,14 @@
   [n]
   (when-not (s/blank? n)
     (-> [#"(?iuU)(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
+;####TODO: TEST WHETHER THESE ARE EVEN NEEDED
         ; Special case GNU family first, as they're such a massive pita
         (lciu/replace-in-coll #"(?i)(?<!\w)GNU\s+"                                  #"(GNU[\s\-–—]+)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Affero General Public License"           #"Affero[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?A[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\._]*\))?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Library General Public License"          #"(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\._]*\))?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Lesser General Public License"           #"(Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?L[\s\-–—]*GPL([\s\-–—]*v)?[\s\d\._]*\))?")
         (lciu/replace-in-coll #"(?i)(?<!\w)General Public License"                  #"Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?GPL([\s\-–—]*v)?[\s\d\._]*\))?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)\"Original\" or \"Old\" License"         #"(\"?Original\"?([\s\-–—]+or[\s\-–—]+\"?Old\"?)?([\s\-–—]+Licen[cs]e)?)?")  ; BSD-4-Clause
          ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)Apache(?!\w)"                            #"Apache([\s\-–—]*Software)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Creative Commons(?!\w)"                  #"(Creative[\s\-–—]*Commons|CC)")
@@ -146,10 +178,10 @@
         (lciu/replace-in-coll #"\d{3,4}(\-\d{2}\-\d{2})?"                           (fn [m] (re-pattern (re-escape (:match m)))))
         ; Version components - 2 & 3 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)?(?<versionNumber>\d+\.\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
-                                  replace-version)
+                                  re-version-replacement)
         ; Version components - 1 & 2 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)(?<versionNumber>\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
-                                  replace-version)
+                                  re-version-replacement)
         ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
         (lciu/replace-in-coll #"(?i)\s+licen[cs]e(?!\w)"                            #"([\s\-–—]+Licen?[cs]e)?")  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
         (lciu/replace-in-coll #"(?i)licen[cs]e(?!\w)"                               #"(Licen?[cs]e)?")
@@ -165,6 +197,8 @@
         (lciu/replace-in-coll #"(?i)hardware(?!\w)"                                 #"(Hardware)?")
         (lciu/replace-in-coll #"(?i)\s+generic(?!\w)"                               #"([\s\-–—]+Generic)?")
         (lciu/replace-in-coll #"(?i)generic(?!\w)"                                  #"(Generic)?")
+        (lciu/replace-in-coll #"(?i)\s+variant(?!\w)"                               #"([\s\-–—]+Variant)?")
+        (lciu/replace-in-coll #"(?i)variant(?!\w)"                                  #"(Variant)?")
         (lciu/replace-in-coll #"(?i)\s+international(?!\w)"                         #"([\s\-–—]+International)?")
         (lciu/replace-in-coll #"(?i)international(?!\w)"                            #"(International)?")
         ; Alternative spellings

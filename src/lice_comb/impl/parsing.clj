@@ -145,7 +145,7 @@
                                                  #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"
 ;                                                 #"(?i)Licen[cs]ed([\s\-–—,]+under)?"
                                                  #"(?i)dual"
-                                                 (lcir/re-concat #"(?i)" lcir/re-fragment-date)
+                                                 (lcir/re-concat #"(?i)" lcir/fre-date)
 ;                                                 #"(?i)[\s\-–—,\()]*(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[\s\-–—,]*\d\d(\d\d)?[\s\-–—,\)]*"
 ;                                                 #"(?i)[\s\-–—,]*version[\s\-–—,]+\d+"  ; Some names leave dangling versions (e.g. "Do What The Fuck You Want To Public License, Version 2" - there's only a single version of that license')
                                                  #"(?U)\W+"]))   ; Strip fragments containing no (Unicode) alphabetic characters
