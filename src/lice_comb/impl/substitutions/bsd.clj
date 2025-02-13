@@ -127,21 +127,22 @@
                 (lcir/re-concat "(" (when prefix (str "?<" prefix "3Clause>")) (re-bsd-clause 3 ["New" "Revised" "Modified" "Standard"]) ")")  ; Note: "Standard" is unofficial, but used by e.g. https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
                 (lcir/re-concat "(" (when prefix (str "?<" prefix "4Clause>")) (re-bsd-clause 4 ["Original" "Old"]) ")"))))
 
-; These regexes match the "clause" count of a BSD family license, including the various non-numeric variations ("original", "old", "new", "revised", "simplified", etc.)
-;(def ^:private fre-0-clause (re-bsd-clause 0))
-;(def ^:private fre-1-clause (re-bsd-clause 1))
-;(def ^:private fre-2-clause (re-bsd-clause 2 ["Simplified"]))
-;(def ^:private fre-3-clause (re-bsd-clause 3 ["New" "Revised" "Modified"]))
-;(def ^:private fre-4-clause (re-bsd-clause 4 ["Original" "Old"]))
+(defn- fre-clauses-before
+  []
+  (lcir/re-concat (re-bsd-any-clause "before") "?"))
 
-(def ^:private fre-clauses-before (lcir/re-concat (re-bsd-any-clause "before") "?"))
-(def ^:private fre-clauses-after  (lcir/re-concat (re-bsd-any-clause "after") "?(" lcir/fre-mws #"(Pub?lic[\s\-–—]+)licen[cs]e" ")?"))
+(defn- fre-clauses-after
+  []
+  (lcir/re-concat (re-bsd-any-clause "after") "?(" lcir/fre-mws #"(Pub?lic[\s\-–—]+)licen[cs]e" ")?"))
 
 ; Possible prefixes for BSD licenses
-(def ^:private fre-prefix-clauses #"(?<systemics>Systemics(?<w3works>[\s\-–—]+W3Works)?)")
+(defn- fre-prefix-clauses
+  []
+  #"(?<systemicsBefore>Systemics(?<w3worksBefore>[\s\-–—]+W3Works)?)")
 
 ; Possible suffixes for BSD licenses
-(def ^:private fre-suffix-clauses
+(defn- fre-suffix-clauses
+  []
   (lcir/re-any
     ; BSD 1-4 clause suffixes
     (lcir/re-ncg "darwin"               #"(Ian[\s\-–—]+)?Darwin")
@@ -162,7 +163,7 @@
     (lcir/re-ncg "openMPI"              #"Open[\s\-–—]+MPI")
     (lcir/re-ncg "sun"                  #"Sun([\s\-–—]+Microsystems)?")
     (lcir/re-ncg "shortened"            #"Shortened")
-    (lcir/re-ncg "uc"                   #"\(?(University[\s\-–—]+of[\s\-–—]+California([\s\-–—]+Specific)?|UC|Cal)\)?")
+    (lcir/re-ncg "uc"                   #"\(?(University[\s\-–—]+of[\s\-–—]+California|UC|Cal)([\s\-–—]+Specific)?\)?")
 
     ; Suffixes with distinct identifiers, unrelated to 1-4 clause licenses
     (lcir/re-ncg "reno43"               #"4\.3[\s\-–—]+RENO")
@@ -174,21 +175,24 @@
     (lcir/re-ncg "scaBOF"               #"Source[\s\-–—]+Code[\s\-–—]+Attribution[\s\-–—]+beginning[\s\-–—]+of[\s\-–—]+file")
     (lcir/re-ncg "sca"                  #"Source[\s\-–—]+Code[\s\-–—]+Attribution")
     (lcir/re-ncg "freeBSD"              #"FreeBSD")
-    (lcir/re-ncg "netBSD"               #"NetBSD")))
+    (lcir/re-ncg "netBSD"               #"NetBSD")
+
+    ; Prefixes, but just in case they ever appear in suffix position (as happens in the identifier)
+    #"(?<systemicsAfter>Systemics(?<w3worksAfter>[\s\-–—]+W3Works)?)"))
 
 (def re (lcir/re-concat #"(?iuUx)(?<!\w)(The[\s\-–—]+)?"  ; Only public for ease of testing
                         "\n\n#### Prefix ####\n"
-                        "(" fre-prefix-clauses lcir/fre-mws ")?"
+                        "(" (fre-prefix-clauses) lcir/fre-mws ")?"
                         "\n\n#### Leading clause ####\n"
-                        "(" fre-clauses-before lcir/fre-ows ")?"  ; We use optional ws here to catch values like "0BSD"
+                        "(" (fre-clauses-before) lcir/fre-ows ")?"  ; We use optional ws here to catch values like "0BSD"
                         "\n\n#### Matching word ####\n"
-                        #"(?<bsd>BSD)([\s\-–—]*style)?([\s\-–—]*licen[cs]e)?"
+                        #"(BSD)([\s\-–—]*style)?([\s\-–—]*licen[cs]e)?"
                         "\n\n#### Trailing clause ####\n"
-                        "(" lcir/fre-mws fre-clauses-after ")?"
+                        "(" lcir/fre-mws (fre-clauses-after) ")?"
                         "\n\n#### Suffix ####\n"
-                        "(" lcir/fre-mws fre-suffix-clauses ")?"
+                        "(" lcir/fre-mws (fre-suffix-clauses) ")?"
                         "\n\n#### Random dingleberries ####\n"
-                        "(" lcir/fre-mws #"(variant|licen[cs]e)" ")*"
+                        "(" lcir/fre-mws #"(variant|(Pub?lic[\s\-–—]+)licen[cs]e)" ")*"
                         "(" lcir/fre-version ")?"
                         #"(?!\w)"))
 
