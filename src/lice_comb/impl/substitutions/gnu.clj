@@ -113,44 +113,60 @@
             :source     (list match)}
             (when confidence-explanations {:confidence-explanations confidence-explanations}))))
 
-; Generic GNU family regex fragments
-(def ^:private fre-gnu-words (lcir/re-concat #"The|GNU|GPL|Genere?al|Pub?lic|Licen[cs]ed?([\s\-–—]+Under)?|Open[\s\-–—]+Source|FOSS|OSS" "|" lcir/fre-date))
+; Generic GNU family word regexes - don't use lcir/re-any here since we don't want this grouped (yet)
+(def ^:private fre-gnu-words (lcir/re-concat #"\(?The|GNU|GPL|Genere?al|Pub?lic|Licen[cs]ed?(?:[\s\-–—]+Under)?|Open[\s\-–—]+Source|FOSS|OSS"))
 
 ; AGPL regexes
-(def ^:private fre-agpl-words         (lcir/re-concat fre-gnu-words "|" #"AGPL|Affero"))
-(def ^:private fre-agpl-words-and-ver (lcir/re-concat fre-agpl-words "|" lcir/fre-ver-and-suf ))
-(def re-agpl                          (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                                      "\n\n#### Leading words ####\n"
-                                                      "((" fre-agpl-words ")" #"[\s\-–—,\(\)]+" ")*"
-                                                      "\n\n#### Matching words ####\n"
-                                                      #"(?<agpl>(A\s?GPL|Affero))"  ; "Primary key" for AGPL
-                                                      "\n\n#### Trailing words and version ####\n"
-                                                      "(" #"[\s\-–—,\(\)]*" "(" fre-agpl-words-and-ver "))*"  ; Whitespace needs to be optional here for values such as "AGPLv3+"
-                                                      #"(?!\w)"))
+(def ^:private fre-agpl-words (lcir/re-group fre-gnu-words "|" #"AGPL|Affero"))
+(def re-agpl                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                              "\n\n#### Leading words ####\n"
+                                              (lcir/re-zomgroup fre-agpl-words lcir/fre-mws)
+                                              "\n\n#### Matching words ####\n"
+                                              (lcir/re-ncg "agpl" #"(?:A\s?GPL|Affero)")
+                                              "\n\n#### Trailing words ####\n"
+                                              (lcir/re-zomgroup lcir/fre-mws fre-agpl-words)
+                                              "\n\n#### Version and version qualifier ####\n"
+                                              (lcir/re-ogroup lcir/fre-ows lcir/fre-ver-and-qual)
+                                              "\n\n#### Date ####\n"
+                                              (lcir/re-ogroup lcir/fre-mws lcir/fre-date)
+                                              "\n\n#### Coda ####\n"
+                                              #"(?!\w)"))
 
 ; LGPL regexes
-(def ^:private fre-lgpl-words         (lcir/re-concat fre-gnu-words "|" #"LGPL|(Lesser([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Library)?)|(Library([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Lesser)?)"))
-(def ^:private fre-lgpl-words-and-ver (lcir/re-concat fre-lgpl-words "|" lcir/fre-ver-and-suf ))
+(def ^:private fre-lesser-or-library  (lcir/re-or #"Lesser" #"Library" (lcir/re-concat lcir/fre-mws #"or" lcir/fre-mws)))
+(def ^:private fre-lgpl-words         (lcir/re-group fre-gnu-words "|" #"LGPL" "|" fre-lesser-or-library))
 (def re-lgpl                          (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
                                                       "\n\n#### Leading words ####\n"
-                                                      "((" fre-lgpl-words ")" #"[\s\-–—,\(\)]+" ")*"
+                                                      (lcir/re-zomgroup fre-lgpl-words lcir/fre-mws)
                                                       "\n\n#### Matching words ####\n"
-                                                      #"(?<lgpl>(L\s?GPL|((GNU|GPL)[\s\-–—,\(\)]+Lesser([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Library)?)|((GNU|GPL)[\s\-–—,\(\)]+Library([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Lesser)?|(Lesser([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Library)?[\s\-–—,\(\)]+(GNU|GPL|General))|(Library([\s\-–—,\(\)]+or[\s\-–—,\(\)]+Lesser)?[\s\-–—,\(\)]+(GNU|GPL|General)))))"  ; "Primary key" for LGPL
-                                                      "\n\n#### Trailing words and version ####\n"
-                                                      "(" #"[\s\-–—,\(\)]*" "(" fre-lgpl-words-and-ver "))*"  ; Whitespace needs to be optional here for values such as "LGPLv3+"
+                                                      (lcir/re-ncg "lgpl"
+                                                                   (lcir/re-any #"L\s*GPL"
+                                                                                (lcir/re-concat #"(?:GNU|GPL)" lcir/fre-mws fre-lesser-or-library)
+                                                                                (lcir/re-concat fre-lesser-or-library lcir/fre-mws #"(?:GNU|GPL|General)")))
+                                                      "\n\n#### Trailing words ####\n"
+                                                      (lcir/re-zomgroup lcir/fre-mws fre-lgpl-words)
+                                                      "\n\n#### Version and version qualifier ####\n"
+                                                      (lcir/re-ogroup lcir/fre-ows lcir/fre-ver-and-qual)
+                                                      "\n\n#### Date ####\n"
+                                                      (lcir/re-ogroup lcir/fre-mws lcir/fre-date)
+                                                      "\n\n#### Coda ####\n"
                                                       #"(?!\w)"))
 
 ; GPL regexes
-(def ^:private fre-gpl-words         fre-gnu-words)  ; GPL has no extra words
-(def ^:private fre-gpl-words-and-ver (lcir/re-concat fre-gpl-words "|" lcir/fre-ver-and-suf))
-(def re-gpl                          (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                                     "\n\n#### Leading words ####\n"
-                                                     "((" fre-gpl-words ")" #"[\s\-–—,\(\)]+" ")*"
-                                                     "\n\n#### Matching words ####\n"
-                                                     #"(?<gpl>(GNU|GPL|(Genere?al([\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?)))"  ; "Primary key" for GPL
-                                                     "\n\n#### Trailing words and version ####\n"
-                                                     "(" #"[\s\-–—,\(\)]*" "(" fre-gpl-words-and-ver "))*"  ; Whitespace needs to be optional here for values such as "GPLv3+"
-                                                     #"(?!\w)"))
+(def ^:private fre-gpl-words (lcir/re-group fre-gnu-words))  ; GPL has no extra words
+(def re-gpl                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                             "\n\n#### Leading words ####\n"
+                                             (lcir/re-zomgroup fre-gpl-words lcir/fre-mws)
+                                             "\n\n#### Matching words ####\n"
+                                             (lcir/re-ncg "gpl" #"(?:GNU|GPL|(Genere?al(?:[\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?))")
+                                             "\n\n#### Trailing words ####\n"
+                                             (lcir/re-zomgroup lcir/fre-mws fre-gpl-words)
+                                             "\n\n#### Version and version qualifier ####\n"
+                                             (lcir/re-ogroup lcir/fre-ows lcir/fre-ver-and-qual)
+                                             "\n\n#### Date ####\n"
+                                             (lcir/re-ogroup lcir/fre-mws lcir/fre-date)
+                                             "\n\n#### Coda ####\n"
+                                             #"(?!\w)"))
 
 (def ^:private pairs-d (delay (concat ; AGPL matching pairs
                                       [[re-agpl (partial match->ei "AGPL")]]

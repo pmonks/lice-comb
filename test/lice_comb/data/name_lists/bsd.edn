@@ -3,9 +3,9 @@
   "2-Clause BSD"
   "3-Clause BSD License"
   "3-Clause BSD"
-  "3-clause BSD licence (Revised BSD licence), also included in the jar file"
+;  "3-clause BSD licence (Revised BSD licence), also included in the jar file"  ; Expression, with trailing garbage that won't be consumed
   "3-clause BSD license"
-  "3-clause license (New BSD License or Modified BSD License)"  ; Redundant expression
+;  "3-clause license (New BSD License or Modified BSD License)"  ; Expression
   "Aduna BSD license"
   "BSD (2 Clause)"
   "BSD (2-Clause)"
@@ -37,7 +37,7 @@
   "BSD C2"
   "BSD License 3"
   "BSD License"
-  "BSD New, Version 3.0"  ; cursed
+  "BSD New, Version 3.0"
   "BSD Standard License"
   "BSD license"
   "BSD"
@@ -47,8 +47,8 @@
   "BSD-style"
   "FreeBSD License"
   "Modified BSD License"
-  "New BSD 2-clause license"
-  "New BSD License or Modified BSD License"  ; Redundant expression
+  "New BSD 2-clause license"  ; The "New" BSD license is BSD-3-Clause! 🤡
+;  "New BSD License or Modified BSD License"  ; Expression
   "New BSD License"
   "New BSD license"
   "New-BSD"
@@ -57,7 +57,7 @@
   "Simplified BSD license"
   "The 3-Clause BSD License"
   "The BSD 2-Clause License"
-  "The BSD 3-Clause License (BSD3)"  ; cursed
+;  "The BSD 3-Clause License (BSD3)"  ; Expression
   "The BSD 3-Clause License"
   "The BSD License"
   "The New BSD License"

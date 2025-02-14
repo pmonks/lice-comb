@@ -10,10 +10,9 @@
 
 (ns lice-comb.impl.parsing-utils
   "License name, URI, and text parsing functionality. Note: this namespace is
-  not part of the public API of lice-comb and may change without notice."
-  (:require [clojure.string :as s]))
+  not part of the public API of lice-comb and may change without notice.")
 
 (defn done-parsing?
   "Are we done parsing `coll`?"
   [coll]
-  (every? #(or (not (string? %)) (s/blank? %)) coll))
+  (every? #(or (not (string? %)) (re-matches #"\W*" %)) coll))

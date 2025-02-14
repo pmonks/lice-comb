@@ -135,6 +135,14 @@
     (when-not (s/blank? s)
       (every? #(Character/isDigit ^Character %) s))))
 
+(defn parse-dbl
+  "Parses `s` (a `String`) as a double, returning `nil` if it can't be parsed."
+  [s]
+  (when (not (s/blank? s))
+    (let [s (s/trim s)]
+      (when (re-matches #"-?\d+(\.\d+)?" s)
+        (java.lang.Double/parseDouble s)))))  ; We use interop instead of clojure.core/parse-double for backwards compatibility with older Clojure versions
+
 (defn nset
   "nil preserving version of clojure.core/set"
   [coll]

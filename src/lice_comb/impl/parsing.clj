@@ -141,15 +141,16 @@
              collapse-duplicate-operator-keywords
              seq)))
 
+;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
 (def ^:private extraneous-fragment-res-d (delay [#"(?i)copyright([\s\-–—,]+\(c\))?([\s\-–—,]*©️)?([\s\-–—,]*©)?"
                                                  #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"
 ;                                                 #"(?i)Licen[cs]ed([\s\-–—,]+under)?"
                                                  #"(?i)dual"
                                                  (lcir/re-concat #"(?i)" lcir/fre-date)
-;                                                 #"(?i)[\s\-–—,\()]*(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)[\s\-–—,]*\d\d(\d\d)?[\s\-–—,\)]*"
 ;                                                 #"(?i)[\s\-–—,]*version[\s\-–—,]+\d+"  ; Some names leave dangling versions (e.g. "Do What The Fuck You Want To Public License, Version 2" - there's only a single version of that license')
                                                  #"(?U)\W+"]))   ; Strip fragments containing no (Unicode) alphabetic characters
 
+;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
 (defn- remove-extraneous-fragments
   "Removes 'extraneous' fragments (`String`s) from `coll`."
   [coll]
@@ -158,13 +159,22 @@
     (if (or (not re)
             (lcipu/done-parsing? coll))
       (filter lciu/not-blank-string? coll)
-      (let [new-coll (lciu/map-str #(when (and (>= (count %) 4)                   ; Strip anything shorter than 4 characters long
-                                               (not (re-matches re (s/trim %))))  ; or that matches one of the extraneous fragment regexes
-                                      %)
+      (let [new-coll (lciu/map-str #(let [s (s/trim (s/replace % #"\W+" ""))]  ; Remove all non-alphanumeric ("word") characters and trim the result
+                                      (when (and (>= (count s) 4)              ; Strip anything with fewer than 4 characters left
+                                               (not (re-matches re (s/trim %))))        ; or that matches one of the extraneous fragment regexes
+                                        %))
                                    coll)]
         (recur r new-coll)))))
 
-(def ^:private operator-re #"(?i)\s*((?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)|(?<!\w)(?<and>and)(?!\w)|(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)|(?<!\w)(?<with>with)(?!\w)|(?<!\w)w/|(?<ampersand>&+)|(?<forwardSlash>/+)|(?<backSlash>\\+))\s*")
+(def ^:private operator-re (lcir/re-concat #"(?i)\s*"
+                                           (lcir/re-any #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
+                                                        #"(?<!\w)(?<and>and)(?!\w)"
+                                                        #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
+                                                        #"(?<!\w)(?<with>with(?!\w)|w/)"
+                                                        #"(?<ampersand>&+)"
+                                                        #"(?<forwardSlash>/+)"
+                                                        #"(?<backSlash>\\+)")
+                                           #"\s*"))
 
 (defn- sub-operators
   "Substitutes operators in `String` values in `coll`, replacing each one with a
@@ -262,7 +272,8 @@
                                       custom/sub
                                       others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
                                       gnu/sub          ; This needs to go last, as the "word salad" matching approach it uses is overly greedy
-                                      sub-operators)
+                                      )
+                        sub-operators
                         ; Cleanup
                         remove-extraneous-fragments
                         remove-invalid-operator-combos
