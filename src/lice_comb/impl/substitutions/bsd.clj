@@ -15,84 +15,141 @@
   without notice."
   (:require [clojure.string                     :as s]
             [clojure.set                        :as set]
+            [wreck.api                          :as re]
+            [spdx.licenses                      :as sl]
+            [spdx.expressions                   :as sexp]
             [lice-comb.impl.spdx                :as lcis]
             [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.utils               :as lciu]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
-(def ids-d (delay (set (concat ["0BSD"] (map :id (filter #(s/starts-with? (:id %) "BSD-") @lcis/full-license-list-d))))))
+(def ids-d (delay (set (concat ["0BSD" "AMPAS" "FreeBSD-DOC"] (map :id (filter #(s/starts-with? (:id %) "BSD-") @lcis/full-license-list-d))))))
 
-;(defn- determine-clause
-;  "Determines the most appropriate clause from match `m`, returning a tuple of
-;  clause (a number 0-4) and "
-;  [m]
-;  (let [clause-0?                       (boolean (lcisu/get-rencgs m ["before0Clause" "after0Clause"]))
-;        clause-1?                       (boolean (lcisu/get-rencgs m ["before1Clause" "after1Clause"]))
-;        clause-2?                       (boolean (lcisu/get-rencgs m ["before2Clause" "after2Clause"]))
-;        clause-3?                       (boolean (lcisu/get-rencgs m ["before3Clause" "after3Clause"]))
-;        clause-4?                       (boolean (lcisu/get-rencgs m ["before4Clause" "after4Clause"]))
-;        clause                          (case [clause-0? clause-1? clause-2? clause-3? clause-4?]
-;                                          [true false false false false] 0
-;                                          [false true false false false] 1
-;                                          [false false true false false] 2
-;                                          [false false false true false] 3
-;                                          [false false false false true] 4
-;                                          (when-let [versionNumber (lciu/parse-dbl (lcisu/get-rencgs m "versionNumber"))]
-;                                            (int versionNumber)))]
 
+;;
+;; EXPRESSION-INFO CONSTRUCTION FROM A MATCH
+;;
+
+(defn- valid-clause-count?
+  "Is `clause-count` valid (i.e. 0 to 4)?"
+  [clause-count]
+  (and (>= clause-count 0)
+       (<= clause-count 4)))
+
+(defn- clause-counts
+  "Returns all clause counts, as a sequence of numbers, found in match `m`, or
+  `nil` if no matches were found.  Duplicates will be removed, but invalid
+  clause counts will not be removed."
+  [m]
+  (let [version-number (when-let [version-number-dbl (lciu/parse-dbl (lcisu/get-rencgs m "versionNumber"))] (int version-number-dbl))]
+    (seq
+      (distinct
+        (filter identity
+                (vector (when (lcisu/get-rencgs m ["before0Clause" "after0Clause"]) 0)
+                        (when (lcisu/get-rencgs m ["before1Clause" "after1Clause"]) 1)
+                        (when (lcisu/get-rencgs m ["before2Clause" "after2Clause"]) 2)
+                        (when (lcisu/get-rencgs m ["before3Clause" "after3Clause"]) 3)
+                        (when (lcisu/get-rencgs m ["before4Clause" "after4Clause"]) 4)
+                        (when version-number version-number)))))))
+
+(defn- clause-based-identifier
+  "Returns a thruple of [identifier confidence confidence-explanations] if match
+  `m` represents a standard BSD N clause identifier (such as `BSD-4-Clause`).
+  Returns `nil` is `m` did not match a 'clause based identifier."
+  [m]
+  (let [clause-counts (clause-counts m)
+        [clause-count confidence confidence-explanations]
+                      (case (count clause-counts)
+                        0     [4 :medium #{:missing-clause-count}]
+                        1     (let [clause-count (first clause-counts)]
+                                (if (valid-clause-count? clause-count)
+                                  [clause-count :high nil]
+                                  [4            :low  #{:invalid-clause-count}]))
+                        ; Multiple distinct clause counts, so we pick the least restrictive one (i.e. the lowest)
+                        (let [clause-count (apply min clause-counts)]
+                          (if (valid-clause-count? clause-count)
+                            [clause-count :low  #{:conflicting-clause-counts}]
+                            ; Invalid clause count found, try again with invalid clause counts filtered out
+                            (if-let [valid-clause-counts (seq (filter valid-clause-count? clause-counts))]
+                              [(apply min valid-clause-counts) :low #{:conflicting-clause-counts}]
+                              [4                               :low #{:conflicting-clause-counts :invalid-clause-count}]))))
+        id            (str "BSD-" clause-count "-Clause")]
+    [id confidence confidence-explanations]))  ; We don't assert or normalise the identifier here, as that has to happen after we've appended any suffix
+
+(defn- suffix
+  "Returns the suffix for the given match (including a leading hyphen) or `nil`
+  if there wasn't one.  Does NOT handle 'faux suffixes'."
+  [m]
+  (cond
+    (get m "darwin")               "-Darwin"
+    (get m "firstLines")           "-first-lines"
+    (get m "patent")               "-Patent"
+    (get m "views")                "-Views"
+    (get m "acpica")               "-acpica"
+    (get m "attribution")          "-Attribution"
+    (get m "clear")                "-Clear"
+    (get m "flex")                 "-flex"
+    (get m "HP")                   "-HP"
+    (get m "LBNL")                 "-LBNL"
+    (get m "modification")         "-Modification"
+    (get m "noMilitary")           "-No-Military-License"
+    (get m "noNuclearWarranty")    "-No-Nuclear-Warranty"
+    (get m "noNuclearLicense2014") "-No-Nuclear-License-2014"
+    (get m "noNuclearLicense")     "-No-Nuclear-License"
+    (get m "openMPI")              "-Open-MPI"
+    (get m "sun")                  "-Sun"
+    (get m "shortened")            "-Shortened"
+    (get m "uc")                   "-UC"))
+
+(defn- suffix-based-identifier
+  "Returns a thruple of [identifier confidence confidence-explanations] if match
+  `m` represents a 'faux suffix' based identifier (such as `BSD-4.3RENO`).
+  Returns `nil` is `m` did not match a 'faux suffix' based identifier."
+  [m]
+  (when-let [id (cond
+                  (get m "reno43")                                          "BSD-4.3RENO"
+                  (get m "tahoe43")                                         "BSD-4.3TAHOE"
+                  (get m "advertising")                                     "BSD-Advertising-Acknowledgement"
+                  (get m "attributionHPND")                                 "BSD-Attribution-HPND-disclaimer"
+                  (get m "inferno")                                         "BSD-Inferno-Nettverk"
+                  (get m "protection")                                      "BSD-Protection"
+                  (get m "scaBOF")                                          "BSD-Source-beginning-file"
+                  (get m "sca")                                             "BSD-Source-Code"
+                  (get m "freeBSDDoc")                                      "FreeBSD-DOC"
+                  (lcisu/get-rencgs m ["beforeSystemics" "afterSystemics"]) "BSD-Systemics"
+                  (lcisu/get-rencgs m ["beforeW3works"   "afterW3works"])   "BSD-Systemics-W3Works"
+                  (lcisu/get-rencgs m ["beforeAMPAS"     "afterAMPAS"])     "AMPAS"
+                  (lcisu/get-rencgs m ["beforeFreeBSD"   "freeBSD"])        "BSD-2-Clause-FreeBSD"
+                  (lcisu/get-rencgs m ["beforeNetBSD"    "netBSD"])         "BSD-2-Clause-NetBSD")]
+    (concat [(sexp/normalise id)]
+            (if (or (clause-counts m) (suffix m))
+              [:medium #{:invalid-bsd-combination}]
+              [:high nil]))))
 
 (defn- match->ei
   [m]
-  (let [clause-0?                       (boolean (lcisu/get-rencgs m ["before0Clause"   "after0Clause"]))
-        clause-1?                       (boolean (lcisu/get-rencgs m ["before1Clause"   "after1Clause"]))
-        clause-2?                       (boolean (lcisu/get-rencgs m ["before2Clause"   "after2Clause"]))
-        clause-3?                       (boolean (lcisu/get-rencgs m ["before3Clause"   "after3Clause"]))
-        clause-4?                       (boolean (lcisu/get-rencgs m ["before4Clause"   "after4Clause"]))
-        clause                          (case [clause-0? clause-1? clause-2? clause-3? clause-4?]
-                                          [true false false false false] 0
-                                          [false true false false false] 1
-                                          [false false true false false] 2
-                                          [false false false true false] 3
-                                          [false false false false true] 4
-                                          (if-let [versionNumber (lciu/parse-dbl (lcisu/get-rencgs m "versionNumber"))]
-                                            (int versionNumber)
-                                            :not-provided))
-        systemics?                      (boolean (lcisu/get-rencgs m ["beforeSystemics" "afterSystemics"]))
-        w3works?                        (boolean (lcisu/get-rencgs m ["beforeW3works"   "afterW3works"]))
-        suffix-darwin?                  (boolean (lcisu/get-rencgs m ["darwin"]))
-        suffix-first-lines?             (boolean (lcisu/get-rencgs m ["firstLines"]))
-        suffix-patent?                  (boolean (lcisu/get-rencgs m ["patent"]))
-        suffix-views?                   (boolean (lcisu/get-rencgs m ["views"]))
-        suffix-acpica?                  (boolean (lcisu/get-rencgs m ["acpica"]))
-        suffix-attribution?             (boolean (lcisu/get-rencgs m ["attribution"]))
-        suffix-clear?                   (boolean (lcisu/get-rencgs m ["clear"]))
-        suffix-flex?                    (boolean (lcisu/get-rencgs m ["flex"]))
-        suffix-hp?                      (boolean (lcisu/get-rencgs m ["HP"]))
-        suffix-lbnl?                    (boolean (lcisu/get-rencgs m ["LBNL"]))
-        suffix-modification?            (boolean (lcisu/get-rencgs m ["modification"]))
-        suffix-no-military?             (boolean (lcisu/get-rencgs m ["noMilitary"]))
-        suffix-no-nuclear-warranty?     (boolean (lcisu/get-rencgs m ["noNuclearWarranty"]))
-        suffix-no-nuclear-variant-2014? (boolean (lcisu/get-rencgs m ["noNuclearVariant2014"]))
-        suffix-no-nuclear-variant?      (boolean (lcisu/get-rencgs m ["noNuclearVariant"]))
-        suffix-open-mpi?                (boolean (lcisu/get-rencgs m ["openMPI"]))
-        suffix-sun?                     (boolean (lcisu/get-rencgs m ["sun"]))
-        suffix-shortened?               (boolean (lcisu/get-rencgs m ["shortened"]))
-        suffix-uc?                      (boolean (lcisu/get-rencgs m ["uc"]))
-        suffix-reno43?                  (boolean (lcisu/get-rencgs m ["reno43"]))
-        suffix-tahoe43?                 (boolean (lcisu/get-rencgs m ["tahoe43"]))
-        suffix-advertising?             (boolean (lcisu/get-rencgs m ["advertising"]))
-        suffix-attribution-hpnd?        (boolean (lcisu/get-rencgs m ["attributionHPND"]))
-        suffix-inferno?                 (boolean (lcisu/get-rencgs m ["inferno"]))
-        suffix-protection?              (boolean (lcisu/get-rencgs m ["protection"]))
-        suffix-sca-bof?                 (boolean (lcisu/get-rencgs m ["scaBOF"]))
-        suffix-sca?                     (boolean (lcisu/get-rencgs m ["sca"]))
-        suffix-freebsd?                 (boolean (lcisu/get-rencgs m ["beforeFreeBSD" "freeBSD"]))
-        suffix-netbsd?                  (boolean (lcisu/get-rencgs m ["beforeNetBSD"  "netBSD"]))]
-    ;####TEST!!!!
-    (when (= clause :not-provided)
-      (println "⭐️⭐️⭐️" (pr-str m)))
-    ;####TODO: IMPLEMENT ME PROPERLY!!!!
-    {:id "foo"}))
+  (let [match (:match m)
+        [id confidence confidence-explanations]
+              (if-let [sbi (suffix-based-identifier m)]  ; First check if it's a suffix-based identifier
+                sbi
+                (let [cbi              (clause-based-identifier m)
+                      [id con con-exp] cbi
+                      suffix           (suffix m)
+                      id-and-suffix    (str id suffix)]
+                  (if (sl/listed-id? id-and-suffix)
+                    [id-and-suffix con  con-exp]
+                    [id            :low (set/union #{:invalid-bsd-combination} con-exp)])))]
+    (merge {:id         (lcisu/assert-listed-id id)
+            :type       :concluded
+            :confidence confidence
+            :strategy   :regex-matching
+            :source     (list match)}
+            (when confidence-explanations {:confidence-explanations confidence-explanations}))))
+
+
+;;
+;; BSD REGEX CONSTRUCTION
+;;
 
 (def ^:private number->name {
   0 "Zero"
@@ -104,9 +161,9 @@
 (defn- re-bsd-numeric-clause
   "Returns a regex that will match a numeric rendition of BSD `n` clause."
   [n]
-  (lcir/re-concat "(" #"(C(lause)?|Type)" lcir/fre-ows ")?"
-                   "(" (number->name n) "|0*" n ")"
-                   "(" lcir/fre-ows "Clause)?"))
+  (re/grp (re/opt-grp (re/grp (re/alt #"C(?:lause)?" "Type")) lcir/fre-ows)
+          (re/grp     (re/alt (number->name n) "0*") n)
+          (re/opt-grp lcir/fre-ows "Clause")))
 
 (defn- re-bsd-textual-clause
   "Returns a regex that will match the textual rendition of a BSD clause count,
@@ -114,10 +171,18 @@
   [clause-names]
   (when (seq clause-names)
     (if (= 1 (count clause-names))
-      (lcir/re-concat lcir/fre-oquote (first clause-names) lcir/fre-oquote)
-      (let [alt-group (str "(" (s/join "|" (map lcir/re-escape clause-names)) ")")]
-        (lcir/re-concat lcir/fre-oquote "(" alt-group ")" lcir/fre-oquote
-                        "(" lcir/fre-mws "or" lcir/fre-mws lcir/fre-oquote alt-group lcir/fre-oquote ")*")))))
+      (re/grp lcir/fre-oquote (first clause-names) lcir/fre-oquote)
+      (let [fre-names (apply re/alt-grp (map re/esc clause-names))]
+        (re/grp lcir/fre-oquote
+                fre-names
+                lcir/fre-oquote
+                (re/zom-grp
+                  (re/alt-grp (re/grp lcir/fre-mws "or"     lcir/fre-mws)
+                              (re/grp lcir/fre-ows #"[\\/]" lcir/fre-ows)
+                              lcir/fre-mws)
+                  lcir/fre-oquote
+                  fre-names
+                  lcir/fre-oquote))))))
 
 (defn- re-bsd-clause
   "Returns a regex that will match both numeric and textual renditions of a BSD
@@ -125,90 +190,96 @@
   ([n] (re-bsd-clause n nil))
   ([n clause-names]
    (if (seq clause-names)
-     (lcir/re-or (re-bsd-numeric-clause n) (re-bsd-textual-clause clause-names) lcir/fre-mws)
+     (re/or-grp (re-bsd-numeric-clause n) (re-bsd-textual-clause clause-names) lcir/fre-mws)
      (re-bsd-numeric-clause n))))
 
 (defn- re-bsd-any-clause
   "Returns a regex that will match any BSD clause clause, in either numeric or
-  textual renditions. Optional `prefix` is a prefix to use for each named
-  capturing group, and will be followed by `#Clause` (where `#` is the clause
-  count number - 0-4)."
-  ([] (re-bsd-any-clause nil))
-  ([prefix]
-   (lcir/re-any (lcir/re-concat "(" (when prefix (str "?<" prefix "0Clause>")) (re-bsd-clause 0) ")")
-                (lcir/re-concat "(" (when prefix (str "?<" prefix "1Clause>")) (re-bsd-clause 1) ")")
-                (lcir/re-concat "(" (when prefix (str "?<" prefix "2Clause>")) (re-bsd-clause 2 ["Simplified"]) ")")
-                (lcir/re-concat "(" (when prefix (str "?<" prefix "3Clause>")) (re-bsd-clause 3 ["New" "Revised" "Modified" "Standard"]) ")")  ; Note: "Standard" is unofficial, but used by e.g. https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
-                (lcir/re-concat "(" (when prefix (str "?<" prefix "4Clause>")) (re-bsd-clause 4 ["Original" "Old"]) ")"))))
+  textual renditions. `prefix` is a prefix to use for each named capturing
+  group, and will be followed by `#Clause` (where `#` is the clause count
+  number - 0-4)."
+  [prefix]
+  (re/alt-grp
+    (re/ncg (str prefix "0Clause") (re-bsd-clause 0))
+    (re/ncg (str prefix "1Clause") (re-bsd-clause 1))
+    (re/ncg (str prefix "2Clause") (re-bsd-clause 2 ["Simplified"]))
+    (re/ncg (str prefix "3Clause") (re-bsd-clause 3 ["New" "Revised" "Modified" "Standard"]))  ; Note: "Standard" is unofficial, but used by e.g. https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
+    (re/ncg (str prefix "4Clause") (re-bsd-clause 4 ["Original" "Old"]))))
 
 ; Possible prefixes for BSD licenses
-(defn- fre-prefix-clauses
+(defn- re-prefix-clauses
   []
-  (lcir/re-any
+  (re/alt-grp
     #"(?<beforeSystemics>Systemics(?<beforeW3works>[\s\-–—]+W3Works)?)"
-    #"Aduna"))  ; Not an official suffix, but it appears in some license names, so we consume and ignore it
+    #"(?<beforeAMPAS>AMPAS|Academy[\s\-–—]+of[\s\-–—]+Motion[\s\-–—]+Picture[\s\-–—]+Arts[\s\-–—]+(?:and|&)[\s\-–—]+Sciences)"
+    #"Aduna"))  ; Not an official prefix, but it appears in some license names, so we consume and ignore it e.g. https://repo.clojars.org/art/uniroma2/it/org/openrdf/sesame/sesame-onejar/2.7.10/sesame-onejar-2.7.10.pom
 
 ; Possible suffixes for BSD licenses
-(defn- fre-suffix-clauses
+(defn- re-suffix-clauses
   []
-  (lcir/re-any
+  (re/alt-grp
     ; BSD 1-4 clause suffixes
-    (lcir/re-ncg "darwin"               #"(Ian[\s\-–—]+)?Darwin")
-    (lcir/re-ncg "firstLines"           #"(1st|first)[\s\-–—]+lines([\s\-–—]+req(uirement)?)")
-    (lcir/re-ncg "patent"               #"(Plus[\s\-–—]+)?Patent")
-    (lcir/re-ncg "views"                #"((with|w/)[\s\-–—]+)?Views([\s\-–—]+sentence)?")
-    (lcir/re-ncg "acpica"               #"acpica")
-    (lcir/re-ncg "attribution"          #"(with|w/[\s\-–—]+)?attribution")
-    (lcir/re-ncg "clear"                #"Clear")
-    (lcir/re-ncg "flex"                 #"Flex")
-    (lcir/re-ncg "HP"                   #"(HP|Hewlett[\s\-–—]+Packard)")
-    (lcir/re-ncg "LBNL"                 #"(LBNL|Lawrence[\s\-–—]+Berkeley[\s\-–—]+National[\s\-–—]+Labs)")
-    (lcir/re-ncg "modification"         #"Modification")
-    (lcir/re-ncg "noMilitary"           #"No[\s\-–—]+Military")
-    (lcir/re-ncg "noNuclearWarranty"    #"No[\s\-–—]+Nuclear[\s\-–—]+Warranty")
-    (lcir/re-ncg "noNuclearVariant2014" #"No[\s\-–—]+Nuclear([\s\-–—]+(variant|licen[cs]e))*[\s\-–—]+2014")
-    (lcir/re-ncg "noNuclearVariant"     #"No[\s\-–—]+Nuclear")
-    (lcir/re-ncg "openMPI"              #"Open[\s\-–—]+MPI")
-    (lcir/re-ncg "sun"                  #"Sun([\s\-–—]+Microsystems)?")
-    (lcir/re-ncg "shortened"            #"Shortened")
-    (lcir/re-ncg "uc"                   #"\(?(University[\s\-–—]+of[\s\-–—]+California|UC|Cal)([\s\-–—]+Specific)?\)?")
+    (re/ncg "darwin"               #"(?:Ian[\s\-–—]+)?Darwin")
+    (re/ncg "firstLines"           #"(?:1st|first)[\s\-–—]+lines([\s\-–—]+req(uirement)?)")
+    (re/ncg "patent"               #"(?:Plus[\s\-–—]+)?Patent")
+    (re/ncg "views"                #"(?:(?:with|w/)[\s\-–—]+)?Views(?:[\s\-–—]+sentence)?")
+    (re/ncg "acpica"               #"acpica")
+    (re/ncg "attribution"          #"(?:with|w/[\s\-–—]+)?attribution")
+    (re/ncg "clear"                #"Clear")
+    (re/ncg "flex"                 #"Flex")
+    (re/ncg "HP"                   #"HP|Hewlett[\s\-–—]+Packard")
+    (re/ncg "LBNL"                 #"LBNL|Lawrence[\s\-–—]+Berkeley[\s\-–—]+National[\s\-–—]+Labs")
+    (re/ncg "modification"         #"Modification")
+    (re/ncg "noMilitary"           #"No[\s\-–—]+Military")
+    (re/ncg "noNuclearWarranty"    #"No[\s\-–—]+Nuclear[\s\-–—]+Warranty")
+    (re/ncg "noNuclearLicense2014" #"No[\s\-–—]+Nuclear(?:[\s\-–—]+(?:variant|licen[cs]e))*[\s\-–—]+2014")
+    (re/ncg "noNuclearLicense"     #"No[\s\-–—]+Nuclear(?:[\s\-–—]+(?:variant|licen[cs]e))*")
+    (re/ncg "openMPI"              #"Open[\s\-–—]+MPI")
+    (re/ncg "sun"                  #"Sun(?:[\s\-–—]+Microsystems)?")
+    (re/ncg "shortened"            #"Shortened")
+    (re/ncg "uc"                   #"\(?(?:University[\s\-–—]+of[\s\-–—]+California|UC|Cal)(?:[\s\-–—]+Specific)?\)?")
 
     ; Suffixes with distinct identifiers, unrelated to 1-4 clause licenses
-    (lcir/re-ncg "reno43"               #"4\.3[\s\-–—]+RENO")
-    (lcir/re-ncg "tahoe43"              #"4\.3[\s\-–—]+TAHOE")
-    (lcir/re-ncg "advertising"          #"Advertising[\s\-–—]+Acknowledge?ment")
-    (lcir/re-ncg "attributionHPND"      #"(with|w/)[\s\-–—]+Attribution[\s\-–—]+(and|&)[\s\-–—]+(HPND|Historical[\s\-–—]+Permission[\s\-–—]+Notice[\s\-–—]+(and|&)[\s\-–—]+Disclaimer)[\s\-–—]+disclaimer")
-    (lcir/re-ncg "inferno"              #"Inferno[\s\-–—]+Nettverk")
-    (lcir/re-ncg "protection"           #"Protection")
-    (lcir/re-ncg "scaBOF"               #"Source[\s\-–—]+Code[\s\-–—]+Attribution[\s\-–—]+beginning[\s\-–—]+of[\s\-–—]+file")
-    (lcir/re-ncg "sca"                  #"Source[\s\-–—]+Code[\s\-–—]+Attribution")
-    (lcir/re-ncg "freeBSD"              #"FreeBSD")
-    (lcir/re-ncg "netBSD"               #"NetBSD")
+    (re/ncg "ampas"                #"")
+    (re/ncg "reno43"               #"4\.3[\s\-–—]+RENO")
+    (re/ncg "tahoe43"              #"4\.3[\s\-–—]+TAHOE")
+    (re/ncg "advertising"          #"Advertising[\s\-–—]+Acknowledge?ment")
+    (re/ncg "attributionHPND"      #"(?:with|w/[\s\-–—]+)?Attribution[\s\-–—]+(?:and|&)[\s\-–—]+(?:HPND|Historical[\s\-–—]+Permission[\s\-–—]+Notice[\s\-–—]+(?:and|&)[\s\-–—]+Disclaimer)[\s\-–—]+disclaimer")
+    (re/ncg "inferno"              #"Inferno[\s\-–—]+Nettverk")
+    (re/ncg "protection"           #"Protection")
+    (re/ncg "scaBOF"               #"Source[\s\-–—]+Code[\s\-–—]+Attribution[\s\-–—]+beginning[\s\-–—]+of[\s\-–—]+file")
+    (re/ncg "sca"                  #"Source[\s\-–—]+Code[\s\-–—]+Attribution")
+    (re/ncg "freeBSDDoc"           #"Doc(?:umentation)?(?:[\s\-–—]+Licen[cs]e)?")
+    (re/ncg "freeBSD"              #"FreeBSD")
+    (re/ncg "netBSD"               #"NetBSD")
 
     ; Prefixes, but just in case they ever appear in suffix position (as happens in the identifier for BSD-Systemics)
-    #"(?<afterSystemics>Systemics(?<afterW3works>[\s\-–—]+W3Works)?)"))
+    #"(?<afterSystemics>Systemics(?<afterW3works>[\s\-–—]+W3Works)?)"
+    #"(?<afterAMPAS>AMPAS|Academy[\s\-–—]+of[\s\-–—]+Motion[\s\-–—]+Picture[\s\-–—]+Arts[\s\-–—]+(?:and|&)[\s\-–—]+Sciences)"))
 
-(def re (lcir/re-concat #"(?iuUx)(?<!\w)(The[\s\-–—]+)?"  ; Only public for ease of testing
-                        "\n\n#### Prefix ####\n"
-                        "(" (fre-prefix-clauses) lcir/fre-mws ")?"
-                        "\n\n#### Leading clause ####\n"
-                        "(" (re-bsd-any-clause "before") lcir/fre-ows ")?"  ; We use optional ws here to catch values like "0BSD"
-                        "\n\n#### Matching word ####\n"
-                        #"(?<beforeFreeBSD>Free)?(?<beforeNetBSD>Net)?(BSD)([\s\-–—]*(style|like))?"
-                        "\n\n#### Trailing clause ####\n"
-                        "(" lcir/fre-mws (re-bsd-any-clause "after") ")?"
-                        "\n\n#### Suffix ####\n"
-                        "(" lcir/fre-mws (fre-suffix-clauses) ")?"
-                        "\n\n#### Random dingleberries ####\n"
-                        "(" lcir/fre-mws #"(variant|(Pub?lic[\s\-–—]+)?licen[cs]e)" ")*"
-                        "(" lcir/fre-version ")?"
-                        #"(?!\w)"))
+(def re (re/join #"(?iuUx)(?<!\w)(The[\s\-–—]+)?"  ; Only public for ease of testing
+                 "\n\n#### Prefix ####\n"
+                 (re/opt-grp (re-prefix-clauses) lcir/fre-mws)
+                 "\n\n#### Leading clause ####\n"
+                 (re/opt-grp (re-bsd-any-clause "before") lcir/fre-ows)  ; We use optional ws here to catch values like "0BSD"
+                 "\n\n#### Matching word ####\n"
+                 (re/opt (re/alt-grp (re/ncg "beforeFreeBSD" "Free")
+                                     (re/ncg "beforeNetBSD"  "Net")))
+                 "BSD"
+                 (re/opt-grp #"[\s\-–—]*(style|like)")
+                 "\n\n#### Trailing clause ####\n"
+                 (re/opt-grp lcir/fre-mws (re-bsd-any-clause "after"))
+                 "\n\n#### Suffix ####\n"
+                 (re/opt-grp lcir/fre-mws (re-suffix-clauses))
+                 "\n\n#### Random dingleberries ####\n"
+                 (re/zom-grp lcir/fre-mws #"(variant|(Pub?lic[\s\-–—]+)?licen[cs]e)")
+                 (re/opt-grp lcir/fre-version)
+                 "\n\n#### Coda ####\n"
+                 #"(?!\w)"))
 
 (def ^:private pairs-d (delay (concat [
-  [re match->ei]
-  ;####TODO: IMPLEMENT ME!!!!
-  ])))
-;  (lcisu/spdx-match-pairs @ids-d))))  ;####TODO: generic name/id matching is redundant for BSD
+  [re match->ei]])))
+;  (lcisu/spdx-match-pairs @ids-d))))  ;####TODO: confirm generic name/id matching is redundant for BSD
 
 (defn sub
   "Substitutes any BSD licenses found in the strings in `coll` with an
@@ -226,125 +297,3 @@
   @ids-d
   @pairs-d
   nil)
-
-
-
-
-
-
-
-
-(comment
-
-(defn- bsd-id-constructor
-  "Construct an expression-info map from `m`, a map returned from a rencg regex
-  match/find."
-  [m]
-  (let [clause-count1             (let [s (lcipu/get-rencgs m ["clauseCount"])
-                                        n (lciu/digit-name-to-number s)]
-                                    (if n
-                                      n
-                                      s))
-        clause-count2             (let [s (lcipu/get-rencgs m ["clausecount2"])
-                                        n (lciu/digit-name-to-number s)]
-                                    (if n
-                                      n
-                                      s))
-        preferred-clause-count    (case [(number? clause-count1) (number? clause-count2)]
-                                    [true true]   clause-count1
-                                    [true false]  clause-count1
-                                    [false true]  clause-count2
-                                    (if (contains? #{"simplified" "new" "revised" "modified" "aduna"} clause-count1)
-                                      clause-count1
-                                      clause-count2))
-        [clause-count confidence confidence-explanations]
-                                  (case preferred-clause-count
-                                    (2 "simplified")                       ["2" :high]
-                                    (3 "new" "revised" "modified" "aduna") ["3" :high]
-                                    (4 "original")                         ["4" :high]
-                                    [4 :low #{:missing-clause-count}])  ; Note: we default to 4 clause, since it was the original form of the BSD license
-        suffix                    (case (lcipu/get-rencgs m ["suffix" "clausecount2"])  ; Note: when the clause count is missing, the suffix can end up being captured by the clausecount2 capturing group
-                                    "patent"                                              "Patent"
-                                    "views"                                               "Views"
-                                    "attribution"                                         "Attribution"
-                                    "clear"                                               "Clear"
-                                    "lbnl"                                                "LBNL"
-                                    "hp"                                                  "HP"
-                                    "sun"                                                 "Sun"
-                                    "flex"                                                "flex"
-                                    "freebsd"                                             "FreeBSD"
-                                    "netbsd"                                              "NetBSD"
-                                    "modification"                                        "Modification"
-                                    ("no military license" "no military licence")         "No-Military-License"
-                                    ("no nuclear license 2014" "no nuclear licence 2014") "No-Nuclear-License-2014"
-                                    ("no nuclear license" "no nuclear licence")           "No-Nuclear-License"
-                                    "no nuclear warranty"                                 "No-Nuclear-Warranty"
-                                    "open mpi"                                            "Open-MPI"
-                                    "shortened"                                           "Shortened"
-                                    "uc"                                                  "UC"
-                                    "darwin"                                              "Darwin"
-                                    "acpica"                                              "acpica"
-                                    nil)
-        base-id                   (str "BSD-" clause-count "-Clause")
-        id-with-suffix            (str base-id "-" suffix)]
-    (if suffix
-      (if (contains? @lcis/license-ids-d id-with-suffix)  ; Not all suffixes are valid with all BSD clause counts, so check that it's valid before returning it
-        [id-with-suffix confidence confidence-explanations]
-        [(lcipu/assert-listed-id base-id) :low (set/union #{:invalid-suffix} confidence-explanations)])  ; We got a suffix but it wasn't valid, which lowers our confidence
-      [(lcipu/assert-listed-id base-id) confidence confidence-explanations])))                       ; We didn't get a suffix
-
-
-
-
-
-
-(defn- regex-match->ei
-  "Construct an expression-info map from `m`, a map returned from a rencg regex
-  match/find."
-  [m]
-  (let [version-present?   (boolean (lcipu/get-rencgs m ["versionNumber"] false))
-        version            (lcipu/get-rencgs m ["versionNumber"] "2.0")
-        version            (s/replace version #"\p{Punct}+" ".")
-        [confidence confidence-explanations]
-                           (if version-present?
-                             (if (s/includes? version ".")
-                               [:high]
-                               [:medium #{:partial-version}])
-                             [:low #{:missing-version}])
-        version            (if (s/includes? version ".")
-                             version
-                             (str version ".0"))
-        suffix             (when (contains? m "orLater") "+")
-        id                 (str "MPL-" version suffix)]
-    (merge {:id         (lcipu/assert-listed-id id)
-            :type       :concluded
-            :confidence confidence
-            :strategy   :regex-matching
-            :source     (list (:match m))}
-            (when confidence-explanations {:confidence-explanations confidence-explanations}))))
-
-(def ^:private re-sub-pairs (delay (concat
-  (map vector (map lcis/id->name->regex @ids-d) (repeat regex-match->ei))
-  (map vector (map lcis/id->regex       @ids-d) (repeat regex-match->ei))
-  [[#"(MPL|Mozilla[\s\-–—]+([\s\-–—]+Public)?([\s\-–—]+Licen?[cs]e)?)" regex-match->ei]])))  ; Match version-less license name last
-
-(defn sub
-  "Substitutes any BSD licenses found in the strings in `coll` with an
-  expression-info map. Returns other elements unchanged."
-  [coll]
-  (lcipu/sub-res @re-sub-pairs coll))
-
-(defn init!
-  "Initialises this namespace upon first call (and does nothing on subsequent
-  calls), returning nil. Consumers of this namespace are not required to call
-  this fn, as initialisation will occur implicitly anyway; it is provided to
-  allow explicit control of the cost of initialisation to callers who need it.
-
-  Note: this method has a substantial performance cost."
-  []
-  (lcis/init!)
-  (lcipu/init!)
-  @ids-d
-  @re-sub-pairs
-  nil)
-)

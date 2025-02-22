@@ -14,14 +14,16 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string                     :as s]
+            [wreck.api                          :as re]
             [lice-comb.impl.spdx                :as lcis]
+            [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
 (def ids-d (delay (set (map :id (filter #(s/starts-with? (:id %) "MPL-") @lcis/full-license-list-d)))))
 
 (def ^:private pairs-d (delay (concat
-  (lcisu/spdx-match-pairs @ids-d)
-  [[#"(MPL|(Mozilla([\s\-–—]+Public)?([\s\-–—]+Licen?[cs]e)?))(?<orLater>\+)?"
+  (lcisu/spdx-match-pairs @ids-d)                                                                                       ; Generic license regexes handle most cases, except...
+  [[(re/join #"(?:MPL|Mozilla([\s\-–—]+Public)?([\s\-–—]+Licen?[cs]e)?)" (re/opt-grp lcir/fre-ows lcir/fre-only-or-later))  ; ...when no version is provided
    (fn [m]
      {:id                      (str "MPL-2.0" (when (get m "orLater") "+"))
       :type                    :concluded

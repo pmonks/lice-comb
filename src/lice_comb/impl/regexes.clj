@@ -14,135 +14,53 @@
   (:require [clojure.string       :as s]
             [spdx.licenses        :as sl]
             [spdx.exceptions      :as se]
+            [wreck.api            :as re]
             [lice-comb.impl.utils :as lciu]))
 
-(defn re-escape
-  "Escapes `s` (a `String`) for use in a regex. Returns a `String`."
-  [s]
-  (when s
-    (s/escape s {\< "\\<"
-                 \( "\\("
-                 \[ "\\["
-                 \{ "\\{"
-                 \\ "\\\\"
-                 \^ "\\^"
-                 \- "\\-"
-                 \= "\\="
-                 \$ "\\$"
-                 \! "\\!"
-                 \| "\\|"
-                 \] "\\]"
-                 \} "\\}"
-                 \) "\\)"
-                 \? "\\?"
-                 \* "\\*"
-                 \+ "\\+"
-                 \. "\\."
-                 \> "\\>"
-                 })))
-
-(defn re-concat
-  "Concatenate all of the given regexes or strings into a single regex."
-  [& res]
-  (re-pattern (s/join res)))
-
-(defn re-group
-  "As for [re-concat], but also places the given regexes or strings in a single
-  enclosing group."
-  [& res]
-  (apply re-concat (concat ["(?:"] res [")"])))
-
-(defn re-ogroup
-  "As for [re-concat], but also places the given regexes or strings in a single
-  enclosing group that is optional."
-  [& res]
-  (apply re-concat (concat ["(?:"] res [")?"])))
-
-(defn re-zomgroup
-  "As for [re-concat], but also places the given regexes or strings in a single
-  enclosing group that matches zero or more occurrences."
-  [& res]
-  (apply re-concat (concat ["(?:"] res [")*"])))
-
-(defn re-oomgroup
-  "As for [re-concat], but also places the given regexes or strings in a single
-  enclosing group that matches one or more occurrences."
-  [& res]
-  (apply re-concat (concat ["(?:"] res [")+"])))
-
-(defn re-any
-  "Returns a regex that will match any one of the provided regexes.  This is
-  done using alternation."
-  [& res]
-  (apply re-concat (concat ["(?:(?:"] (interpose ")|(?:" res) ["))"])))
-
-(defn re-ncg
-  "Returns `re` in named capturing group `n`."
-  [n re]
-  (if (s/blank? n)
-    re
-    (re-concat "(?<" n ">" re ")")))
-
-(defn re-or
-  "Regex for inclusive or.  This is implemented using the pattern (AB|BA|A|B).
-  Optional `re-separator` regex will be placed between `a` and `b` in the first
-  two alternatives."
-  ([a b] (re-or a b nil))
-  ([a b re-separator]
-   (re-any (re-concat a re-separator b)
-           (re-concat b re-separator a)
-           a
-           b)))
-
 ; Regex fragments - these should all be prefixed with #"(?iuU)" by callers
-(def fre-ws             #"[\s\-–—_,\.\(\)]")
-(def fre-ows            (re-concat fre-ws "*"))
-(def fre-mws            (re-concat fre-ws "+"))
-(def fre-quote          #"[\"“”„‟'‘’‚‛`]")
-(def fre-oquote         (re-concat fre-quote "?"))
-(def fre-version-label  (re-group fre-ows #"v(?:er(?:sions?)?)?"))
-(def fre-version-number (re-ncg "versionNumber" #"\d+(?:[,\._]\d+)*"))
-(def fre-version        (re-concat fre-version-label "?" fre-ows fre-version-number))
-(def fre-ver-only       (re-ncg "only" #"only"))
-(def fre-ver-or-later   (re-ncg "orLater"
-                                (re-any #"\+"
-                                        #"(?:\(?or(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)[\),]*)?(?:[\s\-–—]+a(?:ny)?)?[\s\-–—]+(?:lat[eo]r|newer)(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)\)?)?(?:[\s\-–—]+(?:v(?:er(?:sions?)?)?))?\)?)")))
-(def fre-ver-and-qual   (re-concat (re-ogroup fre-version)
-                                   (re-ogroup fre-ows
-                                              (re-any fre-ver-only fre-ver-or-later))))
-(def fre-date           (re-ncg "date" (re-concat (re-ogroup #"\d\d?" fre-ows #"(?:st|nd|rd|th)?")
-                                       fre-ows
-                                       (re-any #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
-                                       fre-ows #"\d\d(?:\d\d)?" fre-ows)))
+(def fre-ws                       #"[\s\-–—_,\.\(\)]")
+(def fre-ows                      (re/zom fre-ws))
+(def fre-mws                      (re/oom fre-ws))
+(def fre-quote                    #"[\"“”„‟'‘’‚‛`]")
+(def fre-oquote                   (re/opt fre-quote))
+(def ^:private fre-version-label  (re/grp fre-ows #"v(?:er(?:sions?)?)?"))
+(def ^:private fre-version-number (re/ncg "versionNumber" #"\d+(?:[,\._]\d+)*"))
+(def fre-version                  (re/join (re/opt fre-version-label) fre-ows fre-version-number))
+(def ^:private fre-only           (re/ncg "only" #"only"))
+(def ^:private fre-or-later       (re/alt-ncg "orLater"
+                                              #"\+"
+                                              #"(?:\(?or(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)[\),]*)?(?:[\s\-–—]+a(?:ny)?)?[\s\-–—]+(?:lat[eo]r|newer)(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)\)?)?(?:[\s\-–—]+(?:v(?:er(?:sions?)?)?))?\)?)"))
+(def fre-only-or-later            (re/alt-grp fre-only fre-or-later))
+(def fre-date                     (re/ncg "date" (re/join (re/zom-grp #"\d\d?" fre-ows #"(?:st|nd|rd|th)?")
+                                                 fre-ows
+                                                 (re/alt-grp #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
+                                                 fre-ows #"\d\d(?:\d\d)?" fre-ows)))
 
 (defn- re-version-replacement
-  "Emits a suitable regex for matching the version identified in map `m`
-  (a map as returned by rencg)."
+  "Emits a suitable regex for matching the version identified in map `m` (a map
+  as returned by rencg)."
   [m]
-  (let [version-number     (get m "versionNumber")
-        only?              (boolean (get m "only"))
-        version-components (seq (s/split version-number #"\."))
-        dot-zero?          (boolean (re-matches #"0+" (last version-components)))]
-    (re-concat fre-ows
-               fre-version-label "?"
-               fre-ows
-;###TODO: REMOVE
-;               #"(?:(?:v(?:er(?:sions?)?)?)[\s\-–—,\.]*)?"
-               (re-ncg "versionNumber"
-                       (re-concat (if dot-zero?
-                                    (s/join "\\." (map #(str "0*" %) (drop-last version-components)))  ; Version number ends in ".0", so make the last component optional
-                                    (s/join "\\." (map #(str "0*" %) version-components)))             ; Version number ends in a non-zero number, so make the last component mandatory
-                                  #"(?:\.0+)*"))                                                       ; Allow any number of ".0" to appear at the end
-;               "(?<versionNumber>"  ; Open versionNumber NCG
-;               (if dot-zero?
-;                 (s/join "\\." (map #(str "0*" %) (drop-last version-components)))  ; Version number ends in ".0", so make the last component optional
-;                 (s/join "\\." (map #(str "0*" %) version-components)))             ; Version number ends in a non-zero number, so make the last component mandatory
-;               #"(?:\.0+)*"                                                           ; Allow any number of ".0" to appear at the end
-;               ")"  ; Close versionNumber NCG
-               (if only?
-                 (re-concat fre-ows fre-ver-only     "?")
-                 (re-concat fre-ows fre-ver-or-later "?"))
-               fre-ows)))
+  (let [version-number              (get m "versionNumber")
+        only?                       (boolean (get m "only"))
+        or-later?                   (boolean (get m "orLater"))
+        version-components          (seq (s/split version-number #"\."))
+        dot-zero?                   (boolean (re-matches #"0+" (last version-components)))
+        non-zero-version-components (if dot-zero? (drop-last version-components) version-components)]  ; If version number ends in 0, make last component optional
+    (re/join (re/opt-grp fre-version-label)
+             fre-ows
+             (re/ncg "versionNumber"
+                     (s/join "\\." (map #(str "0*" %) non-zero-version-components))
+                     #"(?:\.0+)*")                                                        ; Allow any number of ".0" to appear at the end
+             fre-ows
+             (case [only? or-later?]
+               [true false]  (re/opt fre-only)
+               [false true]  (re/opt fre-or-later)
+               (re/opt fre-only-or-later))
+;####TODO: REMOVE
+;             (if only?
+;               (re/opt-grp fre-only)
+;               (re/opt-grp fre-or-later))
+             )))
 
 ; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
@@ -156,8 +74,8 @@
         ; Special cases for some double and/or weird version components
         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
         ; Version component
-        (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:-(?:(?<only>only)|or-later))?(?=(-|\z))"
-                                  #(re-concat #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
+        (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
+                                  #(re/join #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
         ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)AGPL(?!\w)"                #"(?:GNU[\s\-–—]+)?A[\s\-–—]*GPL")
         (lciu/replace-in-coll #"(?i)(?<!\w)LGPL(?!\w)"                #"(?:GNU[\s\-–—]+)?L[\s\-–—]*GPL")
@@ -166,13 +84,13 @@
         (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-        (lciu/replace-in-coll #"(?i)BSD\-(?<clauseCount>\d+)\-Clause" (fn [m] (re-concat #"BSD[\s\-–—]*0*" (get m "clauseCount") #"[\s\-–—]*Clause")))  ; For BSD
+        (lciu/replace-in-coll #"(?i)BSD\-(?<clauseCount>\d+)\-Clause" (fn [m] (re/join #"BSD[\s\-–—]*0*" (get m "clauseCount") #"[\s\-–—]*Clause")))  ; For BSD
         ; Character equivalents
         (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
         ; Cleanup and combine into a single pattern
         (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
-             (lciu/mapcat-str #(vector (re-escape %)))
-             (apply re-concat)))))
+             (lciu/mapcat-str #(vector (re/esc %)))
+             (apply re/join)))))
 
 (defn name->regex
   "Turns `n`, a license or exception name, into a regex that can be used to
@@ -205,9 +123,9 @@
         (lciu/replace-in-coll #"(?i)\(versions 9.22 and beyond\)"                   #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*22[\s\-–—]*(\+|(?:and|&)[\s\-–—]*beyond)\)?")
         (lciu/replace-in-coll #"(?i)\(or possibly 2.0A and 2.0B\)"                  #"\(?or[\s\-–—]+possibly[\s\-–—]+0*2\.0+A[\s\-–—]+(?:and|&)[\s\-–—]+0*2\.0+B\)?")
         (lciu/replace-in-coll #"(?i)TORQUE v2\.5\+"                                 #"TORQUE[\s\-–—]+v2\.5\+")
-        (lciu/replace-in-coll #"(?i)clause\s+(?<clauseCount>\d+)"                   (fn [m] (re-concat #"clause[\s\-–—]*0*" (get m "clauseCount"))))  ; For BSD
+        (lciu/replace-in-coll #"(?i)clause\s+(?<clauseCount>\d+)"                   (fn [m] (re/join #"clause[\s\-–—]*0*" (get m "clauseCount"))))  ; For BSD
         ; Other numbers, especially dates (so that they don't get misidentified as versions)
-        (lciu/replace-in-coll #"\d{3,4}(\-\d{2}\-\d{2})?"                           (fn [m] (re-pattern (re-escape (:match m)))))
+        (lciu/replace-in-coll #"\d{3,4}(\-\d{2}\-\d{2})?"                           (fn [m] (re-pattern (re/esc (:match m)))))
         ; Version components - 2 & 3 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)?(?<versionNumber>\d+\.\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
                                   re-version-replacement)
@@ -261,8 +179,8 @@
         (lciu/replace-in-coll #"[\)\]\}»›]+"                                        #"[\)\]\}»›]*")
         ; Cleanup, escape, and concat into a single pattern
         (->> (filter #(or (not (string? %)) (not (s/blank? %))))
-             (lciu/mapcat-str #(vector (re-escape %)))
-             (apply re-concat)))))
+             (lciu/mapcat-str #(vector (re/esc %)))
+             (apply re/join)))))
 
 (defn id->name->regex
   "Convenience method for obtaining the name regex from an `id`, which is the

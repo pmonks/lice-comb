@@ -13,7 +13,7 @@
   license names.
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [lice-comb.impl.regexes             :as lcir]
+  (:require [wreck.api                          :as re]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
 ; This is redundant here, but we include it for consistency with other substutition namespaces
@@ -27,7 +27,7 @@
                {:id "Classpath-exception-2.0" :type :concluded :confidence :high :strategy :manual-verification :source ("GPLv2+CE" "CE")})
   })
 
-(def ^:private pairs-d (delay (map #(vector (lcir/re-concat #"(?<!\w)" (lcir/re-escape (key %)) #"(?!\w)")
+(def ^:private pairs-d (delay (map #(vector (re/join #"(?<!\w)" (re/esc (key %)) #"(?!\w)")
                                             (val %))
                                    cursed-names)))
 

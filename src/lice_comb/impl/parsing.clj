@@ -17,6 +17,7 @@
             [spdx.matching                            :as sm]
             [spdx.expressions                         :as sexp]
             [embroidery.api                           :as e]
+            [wreck.api                                :as re]
             [lice-comb.impl.spdx                      :as lcis]
             [lice-comb.impl.expressions-info          :as lciei]
             [lice-comb.impl.http                      :as lcihttp]
@@ -146,7 +147,7 @@
                                                  #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"
 ;                                                 #"(?i)Licen[cs]ed([\s\-–—,]+under)?"
                                                  #"(?i)dual"
-                                                 (lcir/re-concat #"(?i)" lcir/fre-date)
+                                                 (re/join #"(?i)" lcir/fre-date)
 ;                                                 #"(?i)[\s\-–—,]*version[\s\-–—,]+\d+"  ; Some names leave dangling versions (e.g. "Do What The Fuck You Want To Public License, Version 2" - there's only a single version of that license')
                                                  #"(?U)\W+"]))   ; Strip fragments containing no (Unicode) alphabetic characters
 
@@ -166,15 +167,15 @@
                                    coll)]
         (recur r new-coll)))))
 
-(def ^:private operator-re (lcir/re-concat #"(?i)\s*"
-                                           (lcir/re-any #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
-                                                        #"(?<!\w)(?<and>and)(?!\w)"
-                                                        #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
-                                                        #"(?<!\w)(?<with>with(?!\w)|w/)"
-                                                        #"(?<ampersand>&+)"
-                                                        #"(?<forwardSlash>/+)"
-                                                        #"(?<backSlash>\\+)")
-                                           #"\s*"))
+(def ^:private operator-re (re/join #"(?i)\s*"
+                                    (re/alt #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
+                                            #"(?<!\w)(?<and>and)(?!\w)"
+                                            #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
+                                            #"(?<!\w)(?<with>with(?!\w)|w/)"
+                                            #"(?<ampersand>&+)"
+                                            #"(?<forwardSlash>/+)"
+                                            #"(?<backSlash>\\+)")
+                                    #"\s*"))
 
 (defn- sub-operators
   "Substitutes operators in `String` values in `coll`, replacing each one with a

@@ -1,4 +1,4 @@
-6;
+;
 ; Copyright © 2025 Peter Monks
 ;
 ; This Source Code Form is subject to the terms of the Mozilla Public
@@ -15,6 +15,7 @@
   without notice."
   (:require [clojure.string                     :as s]
             [clojure.set                        :as set]
+            [wreck.api                          :as re]
             [lice-comb.impl.spdx                :as lcis]
             [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.substitutions.utils :as lcisu]))
@@ -113,70 +114,73 @@
             :source     (list match)}
             (when confidence-explanations {:confidence-explanations confidence-explanations}))))
 
-; Generic GNU family word regexes - don't use lcir/re-any here since we don't want this grouped (yet)
-(def ^:private fre-gnu-words (lcir/re-concat #"\(?The|GNU|GPL|Genere?al|Pub?lic|Licen[cs]ed?(?:[\s\-–—]+Under)?|Open[\s\-–—]+Source|FOSS|OSS"))
+; Generic GNU family word regexes
+(def ^:private gnu-words [#"\(?The" #"GNU" #"GPL" #"Genere?al" #"Pub?lic" #"Licen[cs]ed?(?:[\s\-–—]+Under)?" #"Open[\s\-–—]+Source" #"FOSS" #"OSS"])
 
 ; AGPL regexes
-(def ^:private fre-agpl-words (lcir/re-group fre-gnu-words "|" #"AGPL|Affero"))
-(def re-agpl                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                              "\n\n#### Leading words ####\n"
-                                              (lcir/re-zomgroup fre-agpl-words lcir/fre-mws)
-                                              "\n\n#### Matching words ####\n"
-                                              (lcir/re-ncg "agpl" #"(?:A\s?GPL|Affero)")
-                                              "\n\n#### Trailing words ####\n"
-                                              (lcir/re-zomgroup lcir/fre-mws fre-agpl-words)
-                                              "\n\n#### Version and version qualifier ####\n"
-                                              (lcir/re-ogroup lcir/fre-ows lcir/fre-ver-and-qual)
-                                              "\n\n#### Date ####\n"
-                                              (lcir/re-ogroup lcir/fre-mws lcir/fre-date)
-                                              "\n\n#### Coda ####\n"
-                                              #"(?!\w)"))
+(def ^:private fre-agpl-words (re/grp (apply re/alt (concat gnu-words ["AGPL" "Affero"]))))
+(def re-agpl                  (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                       "\n\n#### Leading word salad ####\n"
+                                       (re/zom-grp fre-agpl-words lcir/fre-mws)
+                                       "\n\n#### Matching words ####\n"
+                                       (re/ncg "agpl" #"(?:A\s?GPL|Affero)")
+                                       "\n\n#### Trailing word salad ####\n"
+                                       (re/zom-grp lcir/fre-mws fre-agpl-words)
+                                       "\n\n#### Version and version qualifier ####\n"
+                                       (re/opt-grp lcir/fre-ows lcir/fre-version)
+                                       (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                                       "\n\n#### Date ####\n"
+                                       (re/opt-grp lcir/fre-mws lcir/fre-date)
+                                       "\n\n#### Coda ####\n"
+                                       #"(?!\w)"))
 
 ; LGPL regexes
-(def ^:private fre-lesser-or-library  (lcir/re-or #"Lesser" #"Library" (lcir/re-concat lcir/fre-mws #"or" lcir/fre-mws)))
-(def ^:private fre-lgpl-words         (lcir/re-group fre-gnu-words "|" #"LGPL" "|" fre-lesser-or-library))
-(def re-lgpl                          (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                                      "\n\n#### Leading words ####\n"
-                                                      (lcir/re-zomgroup fre-lgpl-words lcir/fre-mws)
-                                                      "\n\n#### Matching words ####\n"
-                                                      (lcir/re-ncg "lgpl"
-                                                                   (lcir/re-any #"L\s*GPL"
-                                                                                (lcir/re-concat #"(?:GNU|GPL)" lcir/fre-mws fre-lesser-or-library)
-                                                                                (lcir/re-concat fre-lesser-or-library lcir/fre-mws #"(?:GNU|GPL|General)")))
-                                                      "\n\n#### Trailing words ####\n"
-                                                      (lcir/re-zomgroup lcir/fre-mws fre-lgpl-words)
-                                                      "\n\n#### Version and version qualifier ####\n"
-                                                      (lcir/re-ogroup lcir/fre-ows lcir/fre-ver-and-qual)
-                                                      "\n\n#### Date ####\n"
-                                                      (lcir/re-ogroup lcir/fre-mws lcir/fre-date)
-                                                      "\n\n#### Coda ####\n"
-                                                      #"(?!\w)"))
+(def ^:private fre-lesser-or-library  (re/or-grp "Lesser" "Library" (re/join lcir/fre-mws "or" lcir/fre-mws)))
+(def ^:private fre-lgpl-words         (re/grp (apply re/alt (concat gnu-words ["LGPL" fre-lesser-or-library]))))
+(def re-lgpl                          (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                               "\n\n#### Leading word salad ####\n"
+                                               (re/zom-grp fre-lgpl-words lcir/fre-mws)
+                                               "\n\n#### Matching words ####\n"
+                                               (re/ncg "lgpl"
+                                                       (re/alt #"L\s*GPL"
+                                                               (re/join #"(?:GNU|GPL)" lcir/fre-mws fre-lesser-or-library)
+                                                               (re/join fre-lesser-or-library lcir/fre-mws #"(?:GNU|GPL|General)")))
+                                               "\n\n#### Trailing word salad ####\n"
+                                               (re/zom-grp lcir/fre-mws fre-lgpl-words)
+                                               "\n\n#### Version and version qualifier ####\n"
+                                               (re/opt-grp lcir/fre-ows lcir/fre-version)
+                                               (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                                               "\n\n#### Date ####\n"
+                                               (re/opt-grp lcir/fre-mws lcir/fre-date)
+                                               "\n\n#### Coda ####\n"
+                                               #"(?!\w)"))
 
 ; GPL regexes
-(def ^:private fre-gpl-words (lcir/re-group fre-gnu-words))  ; GPL has no extra words
-(def re-gpl                  (lcir/re-concat #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
-                                             "\n\n#### Leading words ####\n"
-                                             (lcir/re-zomgroup fre-gpl-words lcir/fre-mws)
-                                             "\n\n#### Matching words ####\n"
-                                             (lcir/re-ncg "gpl" #"(?:GNU|GPL|(Genere?al(?:[\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?))")
-                                             "\n\n#### Trailing words ####\n"
-                                             (lcir/re-zomgroup lcir/fre-mws fre-gpl-words)
-                                             "\n\n#### Version and version qualifier ####\n"
-                                             (lcir/re-ogroup lcir/fre-ows lcir/fre-ver-and-qual)
-                                             "\n\n#### Date ####\n"
-                                             (lcir/re-ogroup lcir/fre-mws lcir/fre-date)
-                                             "\n\n#### Coda ####\n"
-                                             #"(?!\w)"))
+(def ^:private fre-gpl-words (re/grp (apply re/alt gnu-words)))  ; GPL has no extra words
+(def re-gpl                  (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
+                                      "\n\n#### Leading word salad ####\n"
+                                      (re/zom-grp fre-gpl-words lcir/fre-mws)
+                                      "\n\n#### Matching words ####\n"
+                                      (re/ncg "gpl" #"(?:GNU|GPL|(Genere?al(?:[\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?))")
+                                      "\n\n#### Trailing word salad ####\n"
+                                      (re/zom-grp lcir/fre-mws fre-gpl-words)
+                                      "\n\n#### Version and version qualifier ####\n"
+                                      (re/opt-grp lcir/fre-ows lcir/fre-version)
+                                      (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                                      "\n\n#### Date ####\n"
+                                      (re/opt-grp lcir/fre-mws lcir/fre-date)
+                                      "\n\n#### Coda ####\n"
+                                      #"(?!\w)"))
 
 (def ^:private pairs-d (delay (concat ; AGPL matching pairs
                                       [[re-agpl (partial match->ei "AGPL")]]
-                                      (lcisu/spdx-match-pairs @agpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
+;                                      (lcisu/spdx-match-pairs @agpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       ; LGPL matching pairs
                                       [[re-lgpl (partial match->ei "LGPL")]]
-                                      (lcisu/spdx-match-pairs @lgpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
+;                                      (lcisu/spdx-match-pairs @lgpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       ; GPL matching pairs (these must go after AGPL and LGPL)
                                       [[re-gpl (partial match->ei "GPL")]]
-                                      (lcisu/spdx-match-pairs @gpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
+;                                      (lcisu/spdx-match-pairs @gpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       )))
 
 (defn sub
