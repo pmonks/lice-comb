@@ -30,6 +30,8 @@
 
 (def bsd-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
 
+(def cddl-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cddl.edn")))
+
 (def cpe-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cpe.edn")))
 
 (def agpl-names-d        (delay (load-edn-resource "lice_comb/data/name_lists/agpl.edn")))
@@ -48,6 +50,13 @@
     (is (nil? (bsd/sub []))))
   (testing "BSD substitutions"
     (run! #(is (done-parsing? (bsd/sub [%])) (str "Failed to substitute \"" % "\"")) @bsd-names-d)))
+
+(deftest cddl-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (cddl/sub nil)))
+    (is (nil? (cddl/sub []))))
+  (testing "CDDL substitutions"
+    (run! #(is (done-parsing? (cddl/sub [%])) (str "Failed to substitute \"" % "\"")) @cddl-names-d)))
 
 (deftest cpe-sub-tests
   (testing "Nil, empty"

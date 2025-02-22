@@ -70,7 +70,7 @@
         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
         ; Version component
         (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
-                                  #(re/join #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
+                              #(re/join #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
         ; Special cases for certain licenses
 ;####TODO: TEST WHETHER THIS IS EVEN NEEDED
 ;        (lciu/replace-in-coll #"(?i)(?<!\w)AGPL(?!\w)"                #"(?:GNU[\s\-–—]+)?A[\s\-–—]*GPL")
