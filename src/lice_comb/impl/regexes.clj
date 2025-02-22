@@ -50,17 +50,12 @@
              fre-ows
              (re/ncg "versionNumber"
                      (s/join "\\." (map #(str "0*" %) non-zero-version-components))
-                     #"(?:\.0+)*")                                                        ; Allow any number of ".0" to appear at the end
+                     #"(?:\.0+)*")  ; Allow any number of ".0" to appear at the end
              fre-ows
              (case [only? or-later?]
-               [true false]  (re/opt fre-only)
-               [false true]  (re/opt fre-or-later)
-               (re/opt fre-only-or-later))
-;####TODO: REMOVE
-;             (if only?
-;               (re/opt-grp fre-only)
-;               (re/opt-grp fre-or-later))
-             )))
+               [true false]  (re/opt fre-only)      ; only only
+               [false true]  (re/opt fre-or-later)  ; or-later only
+               (re/opt fre-only-or-later)))))       ; Undefined, so accept either
 
 ; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
@@ -77,14 +72,16 @@
         (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
                                   #(re/join #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
         ; Special cases for certain licenses
-        (lciu/replace-in-coll #"(?i)(?<!\w)AGPL(?!\w)"                #"(?:GNU[\s\-–—]+)?A[\s\-–—]*GPL")
-        (lciu/replace-in-coll #"(?i)(?<!\w)LGPL(?!\w)"                #"(?:GNU[\s\-–—]+)?L[\s\-–—]*GPL")
-        (lciu/replace-in-coll #"(?i)(?<!\w)GPL(?!\w)"                 #"(?:GNU[\s\-–—]+)?[\s\-–—]*GPL")
+;####TODO: TEST WHETHER THIS IS EVEN NEEDED
+;        (lciu/replace-in-coll #"(?i)(?<!\w)AGPL(?!\w)"                #"(?:GNU[\s\-–—]+)?A[\s\-–—]*GPL")
+;        (lciu/replace-in-coll #"(?i)(?<!\w)LGPL(?!\w)"                #"(?:GNU[\s\-–—]+)?L[\s\-–—]*GPL")
+;        (lciu/replace-in-coll #"(?i)(?<!\w)GPL(?!\w)"                 #"(?:GNU[\s\-–—]+)?[\s\-–—]*GPL")
         (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                 #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
         (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-        (lciu/replace-in-coll #"(?i)BSD\-(?<clauseCount>\d+)\-Clause" (fn [m] (re/join #"BSD[\s\-–—]*0*" (get m "clauseCount") #"[\s\-–—]*Clause")))  ; For BSD
+;####TODO: TEST WHETHER THIS IS EVEN NEEDED
+;        (lciu/replace-in-coll #"(?i)BSD\-(?<clauseCount>\d+)\-Clause" (fn [m] (re/join #"BSD[\s\-–—]*0*" (get m "clauseCount") #"[\s\-–—]*Clause")))  ; For BSD
         ; Character equivalents
         (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
         ; Cleanup and combine into a single pattern
@@ -100,12 +97,12 @@
     (-> [#"(?iuU)(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
 ;####TODO: TEST WHETHER THESE ARE EVEN NEEDED
         ; Special case GNU family first, as they're such a massive pita
-        (lciu/replace-in-coll #"(?i)(?<!\w)GNU\s+"                                  #"(?:GNU[\s\-–—]+)?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)Affero General Public License"           #"Affero[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?A[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)Library General Public License"          #"(?:Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?L[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)Lesser General Public License"           #"(?:Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?L[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)General Public License"                  #"Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)\"Original\" or \"Old\" License"         #"(\"?Original\"?(?:[\s\-–—]+or[\s\-–—]+\"?Old\"?)?(?:[\s\-–—]+Licen[cs]e)?)?")  ; BSD-4-Clause
+;        (lciu/replace-in-coll #"(?i)(?<!\w)GNU\s+"                                  #"(?:GNU[\s\-–—]+)?")
+;        (lciu/replace-in-coll #"(?i)(?<!\w)Affero General Public License"           #"Affero[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?A[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
+;        (lciu/replace-in-coll #"(?i)(?<!\w)Library General Public License"          #"(?:Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?L[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
+;        (lciu/replace-in-coll #"(?i)(?<!\w)Lesser General Public License"           #"(?:Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?L[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
+;        (lciu/replace-in-coll #"(?i)(?<!\w)General Public License"                  #"Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
+;        (lciu/replace-in-coll #"(?i)(?<!\w)\"Original\" or \"Old\" License"         #"(\"?Original\"?(?:[\s\-–—]+or[\s\-–—]+\"?Old\"?)?(?:[\s\-–—]+Licen[cs]e)?)?")  ; BSD-4-Clause
          ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)Apache(?!\w)"                            #"Apache(?:[\s\-–—]*Software)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Creative Commons(?!\w)"                  #"(?:Creative[\s\-–—]*Commons|CC)")
@@ -147,9 +144,6 @@
         (lciu/replace-in-coll #"(?i)hardware(?!\w)"                                 #"(?:Hardware)?")
         (lciu/replace-in-coll #"(?i)\s+generic(?!\w)"                               #"(?:[\s\-–—]+Generic)?")
         (lciu/replace-in-coll #"(?i)generic(?!\w)"                                  #"(?:Generic)?")
-; Note: can't do this due to 'Linux man-pages Copyleft Variant' and 'Linux man-pages Copyleft'
-;        (lciu/replace-in-coll #"(?i)\s+variant(?!\w)"                               #"(?:[\s\-–—]+Variant)?")
-;        (lciu/replace-in-coll #"(?i)variant(?!\w)"                                  #"(?:Variant)?")
         (lciu/replace-in-coll #"(?i)\s+international(?!\w)"                         #"(?:[\s\-–—]+International)?")
         (lciu/replace-in-coll #"(?i)international(?!\w)"                            #"(?:International)?")
         ; Alternative spellings
@@ -172,7 +166,7 @@
         (lciu/replace-in-coll #"(?i)(?<!\w)(and|&)(?!\w)"                           #"(?:and|&)")
         ; Character equivalents
         (lciu/replace-in-coll #"(?i)é"                                              #"[ée]")  ; As of License List v3.26.0 'é' is the only accented character present
-        (lciu/replace-in-coll #"\""                                                 #"[\"“”„‟'‘’‚‛`]")
+        (lciu/replace-in-coll #"\""                                                 fre-quote)
         (lciu/replace-in-coll #"\s*/\s*"                                            #"\s*[\\/\-–—]\s*")  ; hyphen, en-dash, em-dash
         (lciu/replace-in-coll #"[\s\-–]+"                                           #"[\s\-–—]+")        ; hyphen, en-dash, em-dash.  en-dash is in e.g. the name of LiLiQ-R-1.1
         (lciu/replace-in-coll #"[\(\[\{«‹]+"                                        #"[\(\[\{«‹]*")      ; Make parens optional
