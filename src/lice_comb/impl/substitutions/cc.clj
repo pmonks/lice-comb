@@ -15,9 +15,12 @@
   without notice."
   (:require [clojure.string                     :as s]
             [clojure.set                        :as set]
+            [wreck.api                          :as re]
+            [spdx.licenses                      :as sl]
+            [spdx.expressions                   :as sexp]
             [lice-comb.impl.spdx                :as lcis]
+            [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.utils               :as lciu]
-            [lice-comb.impl.parsing-utils       :as lcipu]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
 ;####TODO: IMPLEMENT ME!!!!

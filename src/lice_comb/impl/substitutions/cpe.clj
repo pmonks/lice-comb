@@ -22,7 +22,7 @@
 
 (def ^:private pairs-d (delay (concat
   (lcisu/spdx-match-pairs @ids-d)                         ; Generic license regexes handle most cases, except...
-  [[(re/join #"(?iuU)(GNU[\s\-–—]*)?(?:CPE|Classpath[\s\-–—]+exception)")  ; ...when no version is provided (and note that exceptions can't have "only", "+", "or later", etc.)
+  [[(re/join #"(?iuU)(?:GNU[\s\-–—]*)?(?:CPE|Classpath[\s\-–—]+exception)")  ; ...when no version is provided (and note that exceptions can't have "only", "+", "or later", etc.)
    (fn [m]
      {:id                      "Classpath-exception-2.0"
       :type                    :concluded

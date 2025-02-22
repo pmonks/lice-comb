@@ -21,7 +21,7 @@
 
 (def ^:private pairs-d (delay [
   ; Proprietary / commercial
-  [#"(?i)(?<!\w)(Propriet[aoe]ry|Commercial|(Copyright\s+.{0,20})?All[\s\-–—]+Rights[\s\-–—]+Reserved|Private)([\s\-–—]+Licen?[cs]e)?[\s\-–—\.]*(?!\w)"  ; We consume - and . so that replacement doesn't leave them in and cause problems later on
+  [#"(?i)(?<!\w)(?:Propriet[aoe]ry|Commercial|(?:Copyright\s+.{0,20})?All[\s\-–—]+Rights[\s\-–—]+Reserved|Private)(?:[\s\-–—]+Licen?[cs]e)?[\s\-–—\.]*(?!\w)"  ; We consume - and . so that replacement doesn't leave them in and cause problems later on
    (fn [m]
      {:id         (lcis/proprietary-commercial)
       :type       :concluded

@@ -106,7 +106,7 @@
                              [id confidence confidence-explanations]
                              [(str variant "-" default-version "-or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version not valid
                               :low
-                              (set/union #{:invalid-version-for-variant} confidence-explanations)])]
+                              (set/union #{:invalid-version} confidence-explanations)])]
     (merge {:id         (lcisu/assert-listed-id id)
             :type       :concluded
             :confidence confidence
@@ -161,7 +161,7 @@
                                       "\n\n#### Leading word salad ####\n"
                                       (re/zom-grp fre-gpl-words lcir/fre-mws)
                                       "\n\n#### Matching words ####\n"
-                                      (re/ncg "gpl" #"(?:GNU|GPL|(Genere?al(?:[\s\-–—]+Pub?lic)?([\s\-–—]+Licen[cs]e)?))")
+                                      (re/ncg "gpl" #"(?:GNU|GPL|(?:Genere?al(?:[\s\-–—]+Pub?lic)?(?:[\s\-–—]+Licen[cs]e)?))")
                                       "\n\n#### Trailing word salad ####\n"
                                       (re/zom-grp lcir/fre-mws fre-gpl-words)
                                       "\n\n#### Version and version qualifier ####\n"
