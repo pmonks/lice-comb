@@ -28,17 +28,19 @@
 
 (use-fixtures :once fixture)
 
-(def bsd-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
+(def bsd-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
 
-(def cpe-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/cpe.edn")))
+(def cpe-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cpe.edn")))
 
-(def agpl-names-d (delay (load-edn-resource "lice_comb/data/name_lists/agpl.edn")))
-(def lgpl-names-d (delay (load-edn-resource "lice_comb/data/name_lists/lgpl.edn")))
-(def gpl-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/gpl.edn")))
+(def agpl-names-d        (delay (load-edn-resource "lice_comb/data/name_lists/agpl.edn")))
+(def lgpl-names-d        (delay (load-edn-resource "lice_comb/data/name_lists/lgpl.edn")))
+(def gpl-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/gpl.edn")))
 
 (def hippocratic-names-d (delay (load-edn-resource "lice_comb/data/name_lists/hippocratic.edn")))
 
-(def mpl-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/mpl.edn")))
+(def mpl-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/mpl.edn")))
+
+(def wtf-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/wtf.edn")))
 
 (deftest bsd-sub-tests
   (testing "Nil, empty"
@@ -78,4 +80,11 @@
     (is (nil? (mpl/sub []))))
   (testing "MPL substitutions"
     (run! #(is (done-parsing? (mpl/sub [%])) (str "Failed to substitute \"" % "\"")) @mpl-names-d)))
+
+(deftest wtf-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (wtf/sub nil)))
+    (is (nil? (wtf/sub []))))
+  (testing "WTFPL substitutions"
+    (run! #(is (done-parsing? (wtf/sub [%])) (str "Failed to substitute \"" % "\"")) @wtf-names-d)))
 
