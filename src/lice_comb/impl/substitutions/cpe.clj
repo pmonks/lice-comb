@@ -14,19 +14,38 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string                     :as s]
-            [clojure.set                        :as set]
+            [wreck.api                          :as re]
             [lice-comb.impl.spdx                :as lcis]
-            [lice-comb.impl.utils               :as lciu]
-            [lice-comb.impl.parsing-utils       :as lcipu]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
-;####TODO: IMPLEMENT ME!!!!
-(def ids-d (delay (set '())))
+(def ids-d (delay (set (map :id (filter #(s/starts-with? (:id %) "Classpath-exception-") @lcis/full-exception-list-d)))))
+
+(def ^:private pairs-d (delay (concat
+  (lcisu/spdx-match-pairs @ids-d)                         ; Generic license regexes handle most cases, except...
+  [[(re/join #"(?i)(GNU[\s\-–—]*)?(?:CPE|Classpath[\s\-–—]+exception)")  ; ...when no version is provided (and note that exceptions can't have "only", "+", "or later", etc.)
+   (fn [m]
+     {:id                      "Classpath-exception-2.0"
+      :type                    :concluded
+      :confidence              :high   ; We opt for :high here because there's only one listed version of the Classpath exception
+      :confidence-explanations #{:missing-version}
+      :strategy                :regex-matching
+      :source                  (list (:match m))})]])))
 
 (defn sub
-  "Substitutes any Classpath Exceptions found in the strings in `coll` with an
+  "Substitutes any Classpath exceptions found in the strings in `coll` with an
   expression-info map. Returns other elements unchanged."
   [coll]
-  ;####TODO: IMPLEMENT ME!!!!
-  coll)
+  (lcisu/sub-res @pairs-d  coll))
 
+(defn init!
+  "Initialises this namespace upon first call (and does nothing on subsequent
+  calls), returning nil. Consumers of this namespace are not required to call
+  this fn, as initialisation will occur implicitly anyway; it is provided to
+  allow explicit control of the cost of initialisation to callers who need it.
+
+  Note: this method has a substantial performance cost."
+  []
+  (lcis/init!)
+  @ids-d
+  @pairs-d
+  nil)

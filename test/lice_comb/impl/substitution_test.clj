@@ -28,15 +28,31 @@
 
 (use-fixtures :once fixture)
 
+(def bsd-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
+
+(def cpe-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/cpe.edn")))
+
 (def agpl-names-d (delay (load-edn-resource "lice_comb/data/name_lists/agpl.edn")))
 (def lgpl-names-d (delay (load-edn-resource "lice_comb/data/name_lists/lgpl.edn")))
 (def gpl-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/gpl.edn")))
 
-(def bsd-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
-
 (def hippocratic-names-d (delay (load-edn-resource "lice_comb/data/name_lists/hippocratic.edn")))
 
 (def mpl-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/mpl.edn")))
+
+(deftest bsd-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (bsd/sub nil)))
+    (is (nil? (bsd/sub []))))
+  (testing "BSD substitutions"
+    (run! #(is (done-parsing? (bsd/sub [%])) (str "Failed to substitute \"" % "\"")) @bsd-names-d)))
+
+(deftest cpe-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (cpe/sub nil)))
+    (is (nil? (cpe/sub []))))
+  (testing "Classpath-exception substitutions"
+    (run! #(is (done-parsing? (cpe/sub [%])) (str "Failed to substitute \"" % "\"")) @cpe-names-d)))
 
 (deftest gnu-sub-tests
   (testing "Nil, empty"
@@ -49,12 +65,12 @@
   (testing "GPL substitutions"
     (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @gpl-names-d)))
 
-(deftest bsd-sub-tests
+(deftest hippocratic-sub-tests
   (testing "Nil, empty"
-    (is (nil? (bsd/sub nil)))
-    (is (nil? (bsd/sub []))))
-  (testing "BSD substitutions"
-    (run! #(is (done-parsing? (bsd/sub [%])) (str "Failed to substitute \"" % "\"")) @bsd-names-d)))
+    (is (nil? (hippocratic/sub nil)))
+    (is (nil? (hippocratic/sub []))))
+  (testing "Hippocratic substitutions"
+    (run! #(is (done-parsing? (hippocratic/sub [%])) (str "Failed to substitute \"" % "\"")) @hippocratic-names-d)))
 
 (deftest mpl-sub-tests
   (testing "Nil, empty"
@@ -63,9 +79,3 @@
   (testing "MPL substitutions"
     (run! #(is (done-parsing? (mpl/sub [%])) (str "Failed to substitute \"" % "\"")) @mpl-names-d)))
 
-(deftest hippocratic-sub-tests
-  (testing "Nil, empty"
-    (is (nil? (hippocratic/sub nil)))
-    (is (nil? (hippocratic/sub []))))
-  (testing "Hippocratic substitutions"
-    (run! #(is (done-parsing? (hippocratic/sub [%])) (str "Failed to substitute \"" % "\"")) @hippocratic-names-d)))
