@@ -34,6 +34,8 @@
 
 (def bsd-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
 
+(def hippocratic-names-d (delay (load-edn-resource "lice_comb/data/name_lists/hippocratic.edn")))
+
 (def mpl-names-d  (delay (load-edn-resource "lice_comb/data/name_lists/mpl.edn")))
 
 (deftest gnu-sub-tests
@@ -60,3 +62,10 @@
     (is (nil? (mpl/sub []))))
   (testing "MPL substitutions"
     (run! #(is (done-parsing? (mpl/sub [%])) (str "Failed to substitute \"" % "\"")) @mpl-names-d)))
+
+(deftest hippocratic-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (hippocratic/sub nil)))
+    (is (nil? (hippocratic/sub []))))
+  (testing "Hippocratic substitutions"
+    (run! #(is (done-parsing? (hippocratic/sub [%])) (str "Failed to substitute \"" % "\"")) @hippocratic-names-d)))
