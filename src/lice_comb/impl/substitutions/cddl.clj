@@ -14,7 +14,6 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string                     :as s]
-            [clojure.set                        :as set]
             [wreck.api                          :as re]
             [lice-comb.impl.spdx                :as lcis]
             [lice-comb.impl.regexes             :as lcir]
@@ -30,23 +29,7 @@
                                   (re/opt-grp lcir/fre-ows #"\(?CDDL\)?")))
              (re/opt-grp lcir/fre-ows lcir/fre-version)
              (re/opt-grp lcir/fre-ows lcir/fre-only-or-later))
-   (fn [m]
-     (let [has-version-number?     (boolean (get m "versionNumber"))
-           version-number          (s/trim (get m "versionNumber" "1.1"))  ; Default to latest version
-           valid-version-number?   (or (= version-number "1.0") (= version-number "1.1"))
-           id                      (str "CDDL-"
-                                        (if valid-version-number? version-number "1.1")
-                                        (when (get m "orLater") "+"))
-           confidence              (if (and has-version-number? valid-version-number?) :high :medium)
-           confidence-explanations (when-not (and has-version-number? valid-version-number?)
-                                     (set/union (when (not has-version-number?)   #{:missing-version})
-                                                (when (not valid-version-number?) #{:invalid-version})))]
-     (merge {:id                      id
-             :type                    :concluded
-             :confidence              confidence
-             :strategy                :regex-matching
-             :source                  (list (:match m))}
-            (when confidence-explanations {:confidence-explanations confidence-explanations}))))]])))
+   (lcisu/version-handling-regex-match-ei-fn "CDDL-" "1.1" ["1.0" "1.1"])]])))
 
 (defn sub
   "Substitutes any CDDL licenses found in the strings in `coll` with an

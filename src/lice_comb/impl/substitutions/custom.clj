@@ -10,7 +10,7 @@
 
 (ns lice-comb.impl.substitutions.custom
   "Helper functionality related to substituting matches for custom lice-comb
-  licenses.
+  licenserefs.
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [lice-comb.impl.spdx                :as lcis]
@@ -38,7 +38,7 @@
       :source     (list (:match m))})]]))
 
 (defn sub
-  "Substitutes any custom (lice-comb specific) licenses found in the `String`s
+  "Substitutes any custom (lice-comb specific) 'licenses' found in the `String`s
   in `coll` with an expression-info map. Returns other elements unchanged."
   [coll]
   (lcisu/sub-res @pairs-d coll))

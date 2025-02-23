@@ -30,7 +30,7 @@
             (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
             (re/opt-grp lcir/fre-ows #"(?:v|ver|version)" lcir/fre-ows #"[\d\.]+")   ; We don't care about capturing the version number for WTFPL, as there are no official versions
             #"(?!\w)")
-   (lcisu/regex-match-ei-fn wtf-id)]])))
+   (lcisu/simple-regex-match-ei-fn wtf-id)]])))
 
 (defn sub
   "Substitutes any WTFPL licenses found in the strings in `coll` with an

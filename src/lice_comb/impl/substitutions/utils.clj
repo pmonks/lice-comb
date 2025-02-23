@@ -13,6 +13,7 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string               :as s]
+            [clojure.set                  :as set]
             [spdx.licenses                :as slic]
             [spdx.exceptions              :as sexc]
             [spdx.expressions             :as sexp]
@@ -146,17 +147,41 @@
     (sort (by #(count (str (first %))) descending)
           (map #(vector (lcir/id->regex %) (name-id-match-ei-fn %)) ids))))
 
-(defn regex-match-ei-fn
+(defn simple-regex-match-ei-fn
   "Returns a simple expression-info construction function for `id`, when matched
   with a custom regex.  The returned function takes a single argument; a rencg
   find/match match map."
   [id]
   (fn [m]
     (let [id (str id (when (get m "orLater") "+"))
-          id (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: naked exception identifiers won't normalise
+          id (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: naked exception identifiers won't normalise, so this has to be conditional
           match      (s/trim (:match m))]
       {:id         id
        :type       :concluded
        :confidence :high
        :strategy   :regex-matching
        :source     (list match)})))
+
+(defn version-handling-regex-match-ei-fn
+  "Returns a expression-info construction function that takes a single argument;
+  a rencg find/match match map.  `id-prefix` is the prefix of the SPDX
+  identifier to use in constructing the id.  `default-version` is the default
+  version to use if none is provided.  `all-versions` is a sequence of all
+  versions of the give license."
+  [id-prefix default-version all-versions]
+  (fn [m]
+    (let [has-version-number?     (boolean (get m "versionNumber"))
+          version-number          (s/trim (get m "versionNumber" default-version))
+          valid-version-number?   (some #{version-number} all-versions)
+          id                      (str id-prefix (if valid-version-number? version-number default-version) (when (get m "orLater") "+"))
+          id                      (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: naked exception identifiers won't normalise, so this has to be conditional
+          confidence              (if (and has-version-number? valid-version-number?) :high :medium)
+          confidence-explanations (when-not (and has-version-number? valid-version-number?)
+                                    (set/union (when (not has-version-number?)   #{:missing-version})
+                                               (when (not valid-version-number?) #{:invalid-version})))]
+    (merge {:id                      (assert-listed-id id)
+            :type                    :concluded
+            :confidence              confidence
+            :strategy                :regex-matching
+            :source                  (list (:match m))}
+           (when confidence-explanations {:confidence-explanations confidence-explanations})))))
