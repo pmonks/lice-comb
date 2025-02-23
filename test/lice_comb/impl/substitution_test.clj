@@ -34,6 +34,8 @@
 
 (def cpe-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cpe.edn")))
 
+(def epl-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/epl.edn")))
+
 (def agpl-names-d        (delay (load-edn-resource "lice_comb/data/name_lists/agpl.edn")))
 (def lgpl-names-d        (delay (load-edn-resource "lice_comb/data/name_lists/lgpl.edn")))
 (def gpl-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/gpl.edn")))
@@ -64,6 +66,13 @@
     (is (nil? (cpe/sub []))))
   (testing "Classpath-exception substitutions"
     (run! #(is (done-parsing? (cpe/sub [%])) (str "Failed to substitute \"" % "\"")) @cpe-names-d)))
+
+(deftest epl-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (epl/sub nil)))
+    (is (nil? (epl/sub []))))
+  (testing "EPL substitutions"
+    (run! #(is (done-parsing? (epl/sub [%])) (str "Failed to substitute \"" % "\"")) @epl-names-d)))
 
 (deftest gnu-sub-tests
   (testing "Nil, empty"
