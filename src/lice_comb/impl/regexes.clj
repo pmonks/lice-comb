@@ -149,13 +149,13 @@
         ; Alternative spellings
         (lciu/replace-in-coll #"(?i)\s+Australia(?!\w)"                             #"[\s\-–—]+(?:Australia|AU)")
         (lciu/replace-in-coll #"(?i)\s+Austria(?!\w)"                               #"[\s\-–—]+(?:Austria|AT)")
-        (lciu/replace-in-coll #"(?i)\s+England and Wales(?!\w)"                     #"[\s\-–—]+(?:England[\s\-–—]*(?:and|&)[\s\-–—]*Wales|UK)")
+        (lciu/replace-in-coll #"(?i)\s+England and Wales(?!\w)"                     #"[\s\-–—]+(?:England[\s\-–—]*(?:and|&)[\s\-–—]*Wales|GB|UK)")
         (lciu/replace-in-coll #"(?i)\s+France(?!\w)"                                #"[\s\-–—]+(?:France|FR)")
         (lciu/replace-in-coll #"(?i)\s+(Germany|Deutsche)(?!\w)"                    #"[\s\-–—]+(?:Germany?|DE|Deutsche)")
         (lciu/replace-in-coll #"(?i)\s+Japan(?!\w)"                                 #"[\s\-–—]+(?:Japan|JP)")
         (lciu/replace-in-coll #"(?i)\s+Netherlands(?!\w)"                           #"[\s\-–—]+(?:Netherlands|NL)")
-        (lciu/replace-in-coll #"(?i)(?<!\w)(United Kingdom|UK)(?!\w)"               #"(?:United[\s\-–—]+Kingdom|UK)")
-        (lciu/replace-in-coll #"(?i)\s+(USA?|United States)(?!\w)"                  #"[\s\-–—]+(?:United[\s\-–—]+States|USA?)")
+        (lciu/replace-in-coll #"(?i)(?<!\w)(United Kingdom|UK)(?!\w)"               #"(?:United[\s\-–—]+Kingdom|GB|UK)")
+        (lciu/replace-in-coll #"(?i)\s+(USA?|United States)(?!\w)"                  #"[\s\-–—]+(?:United[\s\-–—]+States(?:[\s\-–—]+of[\s\-–—]+America)?|USA?)")
         (lciu/replace-in-coll #"(?i)\s+University of California(?!\w)"              #"[\s\-–—]+(?:University[\s\-–—]+of[\s\-–—]+(?:California|CA)|UC|Cal)")
         (lciu/replace-in-coll #"(?i)(?<!\w)acknowledge?ment(?!\w)"                  #"Acknowledge?ment")  ; No trailing \b, to handle plurals etc.
         (lciu/replace-in-coll #"(?i)(?<!\w)merchant[ai]bility(?!\w)"                #"Merchant[ai]bility")
