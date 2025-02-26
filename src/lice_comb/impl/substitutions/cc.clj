@@ -231,24 +231,26 @@
                                         "PDM"))))))
 
 (defn- re-suffix
-  "Possible CC suffix - there can be only one of these"
+  "Possible CC suffixes (normally only 1, but can be more)"
   []
-  (re/opt
-    (re/alt-grp
-      (re/ncg "generic"           "Generic")
-      (re/ncg "unported"          "Unported")
-      (re/ncg "igo"               "IGO")
-      (re/ncg "international"     "International")
-      (re/ncg "publicDomainAfter" (re/or-grp #"\(?CC0(?:[\s\-–—]*1\.0)?\)?" #"Public[\s\-–—]+Domain(?:[\s\-–—]+Dedication)?"))
-      (re/ncg "universal"         "Universal")
-      (re/ncg "australia"         (re/alt "Australia" "AU"))
-      (re/ncg "austria"           (re/alt "Austria" "AT"))
-      (re/ncg "englandWales"      (re/alt #"Eng(?:land)?[\s\-–—]+(?:and|&)?[\s\-–—]+Wales" "GB" "UK"))
-      (re/ncg "france"            (re/alt "France" "FR"))
-      (re/ncg "germany"           (re/alt "Germany" "DE" "Deutsche"))
-      (re/ncg "japan"             (re/alt "Japan" "JP"))
-      (re/ncg "netherlands"       (re/alt "Netherlands" "NL"))
-      (re/ncg "usa"               (re/alt #"United[\s\-–—]+States(?:[\s\-–—]+of[\s\-–—]+America)?" #"USA?")))))
+  (re/zom-grp
+    (re/join
+      lcir/fre-ows
+        (re/alt-grp
+          (re/ncg "generic"           "Generic")
+          (re/ncg "unported"          "Unported")
+          (re/ncg "igo"               "IGO")
+          (re/ncg "international"     "International")
+          (re/ncg "publicDomainAfter" (re/or-grp #"\(?CC0(?:[\s\-–—]*1\.0)?\)?" #"Public[\s\-–—]+Domain(?:[\s\-–—]+Dedication)?"))
+          (re/ncg "universal"         "Universal")
+          (re/ncg "australia"         (re/alt "Australia" "AU"))
+          (re/ncg "austria"           (re/alt "Austria" "AT"))
+          (re/ncg "englandWales"      (re/alt #"Eng(?:land)?[\s\-–—]+(?:and|&)?[\s\-–—]+Wales" "GB" "UK"))
+          (re/ncg "france"            (re/alt "France" "FR"))
+          (re/ncg "germany"           (re/alt "Germany" "DE" "Deutsche"))
+          (re/ncg "japan"             (re/alt "Japan" "JP"))
+          (re/ncg "netherlands"       (re/alt "Netherlands" "NL"))
+          (re/ncg "usa"               (re/alt #"United[\s\-–—]+States(?:[\s\-–—]+of[\s\-–—]+America)?" #"USA?"))))))
 
 (def re (re/join #"(?iuUx)(?<!\w)(?:The[\s\-–—]+)?"  ; Only public for ease of testing
                  "\n\n#### Prefix ####\n"
@@ -260,8 +262,9 @@
                  "\n\n#### Version ####\n"
                  (re/opt-grp lcir/fre-version)
                  "\n\n#### Suffix ####\n"
-                 (re/opt-grp lcir/fre-mws (re-suffix))
+                 (re-suffix)
                  "\n\n#### Random dingleberries ####\n"
+                 (re/opt-grp lcir/fre-ows #"\(?CC.{0,13}\)?")
                  (re/opt-grp lcir/fre-mws #"licen[cs]e")
                  "\n\n#### Coda ####\n"
                  #"(?!\w)"))
