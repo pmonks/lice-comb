@@ -11,7 +11,6 @@
 (ns lice-comb.impl.substitution-test
   (:require [clojure.test                             :refer [deftest testing is use-fixtures]]
             [lice-comb.test-boilerplate               :refer [fixture load-edn-resource]]
-            [lice-comb.impl.parsing-utils             :refer [done-parsing?]]
             [lice-comb.impl.substitutions.bsd         :as bsd]
             [lice-comb.impl.substitutions.cc          :as cc]
             [lice-comb.impl.substitutions.cddl        :as cddl]
@@ -45,70 +44,80 @@
 
 (def wtf-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/wtf.edn")))
 
+
+
+(defn fully-consumed?
+  "Is `parse` a fully consumed input, ignoring extraneous fragments?"
+  [parse]
+  (let [parse-without-fragments (filter #(or (not (string? %))
+                                             (not (re-matches #"\W*" %)))  ; Drop fragments (short strings that don't contain alphanumerics)
+                                        parse)]
+    (and (= 1 (count parse-without-fragments))
+         (map? (first parse-without-fragments)))))
+
 (deftest bsd-sub-tests
   (testing "Nil, empty"
     (is (nil? (bsd/sub nil)))
     (is (nil? (bsd/sub []))))
   (testing "BSD substitutions"
-    (run! #(is (done-parsing? (bsd/sub [%])) (str "Failed to substitute \"" % "\"")) @bsd-names-d)))
+    (run! #(is (fully-consumed? (bsd/sub [%])) (str "Failed to substitute \"" % "\"")) @bsd-names-d)))
 
 (deftest cc-sub-tests
   (testing "Nil, empty"
     (is (nil? (cc/sub nil)))
     (is (nil? (cc/sub []))))
   (testing "CC substitutions"
-    (run! #(is (done-parsing? (cc/sub [%])) (str "Failed to substitute \"" % "\"")) @cc-names-d)))
+    (run! #(is (fully-consumed? (cc/sub [%])) (str "Failed to substitute \"" % "\"")) @cc-names-d)))
 
 (deftest cddl-sub-tests
   (testing "Nil, empty"
     (is (nil? (cddl/sub nil)))
     (is (nil? (cddl/sub []))))
   (testing "CDDL substitutions"
-    (run! #(is (done-parsing? (cddl/sub [%])) (str "Failed to substitute \"" % "\"")) @cddl-names-d)))
+    (run! #(is (fully-consumed? (cddl/sub [%])) (str "Failed to substitute \"" % "\"")) @cddl-names-d)))
 
 (deftest cpe-sub-tests
   (testing "Nil, empty"
     (is (nil? (cpe/sub nil)))
     (is (nil? (cpe/sub []))))
   (testing "Classpath-exception substitutions"
-    (run! #(is (done-parsing? (cpe/sub [%])) (str "Failed to substitute \"" % "\"")) @cpe-names-d)))
+    (run! #(is (fully-consumed? (cpe/sub [%])) (str "Failed to substitute \"" % "\"")) @cpe-names-d)))
 
 (deftest epl-sub-tests
   (testing "Nil, empty"
     (is (nil? (epl/sub nil)))
     (is (nil? (epl/sub []))))
   (testing "EPL substitutions"
-    (run! #(is (done-parsing? (epl/sub [%])) (str "Failed to substitute \"" % "\"")) @epl-names-d)))
+    (run! #(is (fully-consumed? (epl/sub [%])) (str "Failed to substitute \"" % "\"")) @epl-names-d)))
 
 (deftest gnu-sub-tests
   (testing "Nil, empty"
     (is (nil? (gnu/sub nil)))
     (is (nil? (gnu/sub []))))
   (testing "AGPL substitutions"
-    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @agpl-names-d))
+    (run! #(is (fully-consumed? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @agpl-names-d))
   (testing "LGPL substitutions"
-    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @lgpl-names-d))
+    (run! #(is (fully-consumed? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @lgpl-names-d))
   (testing "GPL substitutions"
-    (run! #(is (done-parsing? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @gpl-names-d)))
+    (run! #(is (fully-consumed? (gnu/sub [%])) (str "Failed to substitute \"" % "\"")) @gpl-names-d)))
 
 (deftest hippocratic-sub-tests
   (testing "Nil, empty"
     (is (nil? (hippocratic/sub nil)))
     (is (nil? (hippocratic/sub []))))
   (testing "Hippocratic substitutions"
-    (run! #(is (done-parsing? (hippocratic/sub [%])) (str "Failed to substitute \"" % "\"")) @hippocratic-names-d)))
+    (run! #(is (fully-consumed? (hippocratic/sub [%])) (str "Failed to substitute \"" % "\"")) @hippocratic-names-d)))
 
 (deftest mpl-sub-tests
   (testing "Nil, empty"
     (is (nil? (mpl/sub nil)))
     (is (nil? (mpl/sub []))))
   (testing "MPL substitutions"
-    (run! #(is (done-parsing? (mpl/sub [%])) (str "Failed to substitute \"" % "\"")) @mpl-names-d)))
+    (run! #(is (fully-consumed? (mpl/sub [%])) (str "Failed to substitute \"" % "\"")) @mpl-names-d)))
 
 (deftest wtf-sub-tests
   (testing "Nil, empty"
     (is (nil? (wtf/sub nil)))
     (is (nil? (wtf/sub []))))
   (testing "WTFPL substitutions"
-    (run! #(is (done-parsing? (wtf/sub [%])) (str "Failed to substitute \"" % "\"")) @wtf-names-d)))
-
+    (run! #(is (fully-consumed? (wtf/sub [%])) (str "Failed to substitute \"" % "\"")) @wtf-names-d)))
