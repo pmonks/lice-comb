@@ -21,19 +21,20 @@
 
 (def ids-d (delay (set (map :id (filter #(s/starts-with? (:id %) "EPL-") @lcis/full-license-list-d)))))
 
-(def ^:private pairs-d (delay (concat
-  (lcisu/spdx-match-pairs @ids-d)  ; Generic license regexes handle most cases, except...
-  [[(re/join #"(?iuU)"             ; ...when no version is provided
-             (re/alt-grp "EPL"
-                         (re/join (re/opt-grp "Some" lcir/fre-mws)
-                                  #"Eclipse"
-                                  (re/opt-grp lcir/fre-mws #"Pub?lic")
-                                  (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
-                                  (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]+\)?")
-                                  (re/opt-grp lcir/fre-mws (re/opt-grp "the") lcir/fre-mws "same" lcir/fre-mws "as" lcir/fre-mws "Clojure")))
-             (re/opt-grp lcir/fre-ows lcir/fre-version)
-             (re/opt-grp lcir/fre-ows lcir/fre-only-or-later))
-    (lcisu/version-handling-regex-match-ei-fn "EPL-" "2.0" ["1.0" "2.0"])]])))
+(def re (re/join #"(?iuU)"  ; Only public for ease of testing
+                 (re/alt-grp "EPL"
+                             (re/join (re/opt-grp "Some" lcir/fre-mws)
+                                      #"Eclipse"
+                                      (re/opt-grp lcir/fre-mws #"Pub?lic")
+                                      (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
+                                      (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")))
+                 (re/opt-grp lcir/fre-ows lcir/fre-version)
+                 (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                 (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")
+                 (re/opt-grp lcir/fre-mws (re/opt-grp "the") lcir/fre-mws "same" lcir/fre-mws "as" lcir/fre-mws "Clojure")
+                 ))
+
+(def ^:private pairs-d (delay [re (lcisu/version-handling-regex-match-ei-fn "EPL-" "2.0" ["1.0" "2.0"])]))
 
 (defn sub
   "Substitutes any EPL licenses found in the strings in `coll` with an
