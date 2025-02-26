@@ -10,9 +10,6 @@
 
 (ns lice-comb.impl.substitution-test
   (:require [clojure.test                             :refer [deftest testing is use-fixtures]]
-            [clojure.set                              :as set]
-            [rencg.api                                :as rencg]
-            [lice-comb.impl.utils                     :as lcu]
             [lice-comb.test-boilerplate               :refer [fixture load-edn-resource]]
             [lice-comb.impl.parsing-utils             :refer [done-parsing?]]
             [lice-comb.impl.substitutions.bsd         :as bsd]
@@ -29,6 +26,8 @@
 (use-fixtures :once fixture)
 
 (def bsd-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
+
+(def cc-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cc.edn")))
 
 (def cddl-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cddl.edn")))
 
@@ -52,6 +51,13 @@
     (is (nil? (bsd/sub []))))
   (testing "BSD substitutions"
     (run! #(is (done-parsing? (bsd/sub [%])) (str "Failed to substitute \"" % "\"")) @bsd-names-d)))
+
+(deftest cc-sub-tests
+  (testing "Nil, empty"
+    (is (nil? (cc/sub nil)))
+    (is (nil? (cc/sub []))))
+  (testing "CC substitutions"
+    (run! #(is (done-parsing? (cc/sub [%])) (str "Failed to substitute \"" % "\"")) @cc-names-d)))
 
 (deftest cddl-sub-tests
   (testing "Nil, empty"
