@@ -31,16 +31,15 @@
                  (re/opt-grp lcir/fre-ows lcir/fre-version)
                  (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
                  (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")
-                 (re/opt-grp lcir/fre-mws (re/opt-grp "the") lcir/fre-mws "same" lcir/fre-mws "as" lcir/fre-mws "Clojure")
-                 ))
+                 (re/opt-grp lcir/fre-mws (re/opt-grp "the") lcir/fre-mws "same" lcir/fre-mws "as" lcir/fre-mws "Clojure")))
 
-(def ^:private pairs-d (delay [re (lcisu/version-handling-regex-match-ei-fn "EPL-" "2.0" ["1.0" "2.0"])]))
+(def ^:private pairs-d (delay [[re (lcisu/version-handling-regex-match-ei-fn "EPL-" "2.0" ["1.0" "2.0"])]]))
 
 (defn sub
   "Substitutes any EPL licenses found in the strings in `coll` with an
   expression-info map. Returns other elements unchanged."
   [coll]
-  (lcisu/sub-res @pairs-d  coll))
+  (lcisu/sub-res @pairs-d coll))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent
