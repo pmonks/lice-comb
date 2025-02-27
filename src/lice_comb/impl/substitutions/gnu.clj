@@ -51,6 +51,8 @@
       (s/ends-with? id "-only")                                :only
       (or (s/ends-with? id "+") (s/ends-with? id "-or-later")) :or-later)))
 
+;####TODO: REMOVE THIS IF STANDARD REGEX MATCHING ISN'T NEEDED
+(comment
 (defn- gnu-id-comparator
   "Compares GNU family ids, by putting the `-only` variants first.  This order
   is important as there are certain license name values that both the -only and
@@ -68,14 +70,16 @@
         [:or-later :only]     1
         [:or-later :or-later] 0)  ; This can occur due to +/-or-later being equivalent
       (compare id1 id2))))
+)
 
 ; All GNU family license ids, including deprecated ones - we report that we match all GPL ids so that they're removed from lice-comb.impl.substitutions.others matching
 (def ids-d (delay (set (filter #(or (lcisu/agpl-license? %) (lcisu/lgpl-license? %) (lcisu/gpl-license? %)) (map :id @lcis/full-license-list-d)))))
 
+;####TODO: REMOVE THIS IF STANDARD REGEX MATCHING ISN'T NEEDED
 ; Undeprecated GNU family license ids (these ones are used for matching)
-(def ^:private agpl-license-ids-d (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/agpl-license? (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
-(def ^:private lgpl-license-ids-d (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/lgpl-license? (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
-(def ^:private gpl-license-ids-d  (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/gpl-license?  (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
+;(def ^:private agpl-license-ids-d (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/agpl-license? (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
+;(def ^:private lgpl-license-ids-d (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/lgpl-license? (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
+;(def ^:private gpl-license-ids-d  (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/gpl-license?  (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
 
 (defn- match->ei
   "Construct an expression-info map from `m`, a map returned from a rencg regex
@@ -118,17 +122,19 @@
 (def ^:private gnu-words [#"\(?The" #"GNU" #"GPL" #"Genere?al" #"Pub?lic" #"Licen[cs]ed?(?:[\s\-–—]+Under)?" #"Open[\s\-–—]+Source" #"FOSS" #"OSS"])
 
 ; AGPL regexes
-(def ^:private fre-agpl-words (re/grp (apply re/alt (concat gnu-words ["AGPL" "Affero"]))))
+(def ^:private fre-agpl-words (re/grp (apply re/alt (concat gnu-words [#"\(?AGPL[\s\-–—v\d\.]*\)?" "Affero"]))))
 (def re-agpl                  (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
                                        "\n\n#### Leading word salad ####\n"
                                        (re/zom-grp fre-agpl-words lcir/fre-mws)
                                        "\n\n#### Matching words ####\n"
                                        (re/ncg "agpl" #"(?:A\s?GPL|Affero)")
-                                       "\n\n#### Trailing word salad ####\n"
+                                       "\n\n#### Pre-version word salad ####\n"
                                        (re/zom-grp lcir/fre-mws fre-agpl-words)
                                        "\n\n#### Version and version qualifier ####\n"
                                        (re/opt-grp lcir/fre-ows lcir/fre-version)
                                        (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                                       "\n\n#### Post-version word salad ####\n"
+                                       (re/zom-grp lcir/fre-mws fre-agpl-words)
                                        "\n\n#### Date ####\n"
                                        (re/opt-grp lcir/fre-mws lcir/fre-date)
                                        "\n\n#### Coda ####\n"
@@ -136,7 +142,7 @@
 
 ; LGPL regexes
 (def ^:private fre-lesser-or-library  (re/or-grp "Lesser" "Library" (re/join lcir/fre-mws "or" lcir/fre-mws)))
-(def ^:private fre-lgpl-words         (re/grp (apply re/alt (concat gnu-words ["LGPL" fre-lesser-or-library]))))
+(def ^:private fre-lgpl-words         (re/grp (apply re/alt (concat gnu-words [#"\(?LGPL[\s\-–—v\d\.]*\)?" fre-lesser-or-library]))))
 (def re-lgpl                          (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
                                                "\n\n#### Leading word salad ####\n"
                                                (re/zom-grp fre-lgpl-words lcir/fre-mws)
@@ -145,28 +151,32 @@
                                                        (re/alt #"L\s*GPL"
                                                                (re/join #"(?:GNU|GPL)" lcir/fre-mws fre-lesser-or-library)
                                                                (re/join fre-lesser-or-library lcir/fre-mws #"(?:GNU|GPL|General)")))
-                                               "\n\n#### Trailing word salad ####\n"
+                                               "\n\n#### Pre-version word salad ####\n"
                                                (re/zom-grp lcir/fre-mws fre-lgpl-words)
                                                "\n\n#### Version and version qualifier ####\n"
                                                (re/opt-grp lcir/fre-ows lcir/fre-version)
                                                (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                                               "\n\n#### Post-version word salad ####\n"
+                                               (re/zom-grp lcir/fre-mws fre-lgpl-words)
                                                "\n\n#### Date ####\n"
                                                (re/opt-grp lcir/fre-mws lcir/fre-date)
                                                "\n\n#### Coda ####\n"
                                                #"(?!\w)"))
 
 ; GPL regexes
-(def ^:private fre-gpl-words (re/grp (apply re/alt gnu-words)))  ; GPL has no extra words
+(def ^:private fre-gpl-words (re/grp (apply re/alt (concat gnu-words [#"\(?GPL[\s\-–—v\d\.]*\)?"]))))
 (def re-gpl                  (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
                                       "\n\n#### Leading word salad ####\n"
                                       (re/zom-grp fre-gpl-words lcir/fre-mws)
                                       "\n\n#### Matching words ####\n"
                                       (re/ncg "gpl" #"(?:GNU|GPL|(?:Genere?al(?:[\s\-–—]+Pub?lic)?(?:[\s\-–—]+Licen[cs]e)?))")
-                                      "\n\n#### Trailing word salad ####\n"
+                                      "\n\n#### Pre-version word salad ####\n"
                                       (re/zom-grp lcir/fre-mws fre-gpl-words)
                                       "\n\n#### Version and version qualifier ####\n"
                                       (re/opt-grp lcir/fre-ows lcir/fre-version)
                                       (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                                      "\n\n#### Post-version word salad ####\n"
+                                      (re/zom-grp lcir/fre-mws fre-gpl-words)
                                       "\n\n#### Date ####\n"
                                       (re/opt-grp lcir/fre-mws lcir/fre-date)
                                       "\n\n#### Coda ####\n"
