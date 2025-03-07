@@ -56,7 +56,7 @@
   (some-> (seq (concat []
                        (when (get m "nonCommercial")      ["NC"])
                        (when (get m "noDerivatives")      ["ND"])
-                       (when (get m "shareAlive")         ["SA"])
+                       (when (get m "shareAlike")         ["SA"])
                        (when (get m "publicDomainBefore") ["ZERO"])  ; Treat "public domain" in the prefix as if it were CC0 (since that's the only combo that makes sense)
                        (when (get m "publicDomainAfter")  ["ZERO"])  ; Treat "public domain" in the suffix as if it were CC0 (since that's the only combo that makes sense)
                        (when (get m "zero")               ["ZERO"])
