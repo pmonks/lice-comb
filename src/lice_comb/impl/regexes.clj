@@ -65,7 +65,9 @@
   near-match it.  Returns `nil` if `id` is blank."
   [id]
   (when-not (s/blank? id)
-    (-> [#"(?iuU)(?<=(\A|\s))" (s/trim id) #"(?=(\s|\z))"]
+;####TEST!!!!
+;    (-> [#"(?iuU)(?<=(\A|\s))" (s/trim id) #"(?=(\s|\z))"]
+    (-> [#"(?iuU)(?<!\w)" (s/trim id) #"(?!\w)"]
         ; Special cases for some double and/or weird version components
         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
         ; Version component

@@ -21,15 +21,16 @@
 
 (def ids-d (delay (set (map :id (filter #(s/starts-with? (:id %) "CDDL-") @lcis/full-license-list-d)))))
 
+(def re (re/join #"(?iuU)"  ; Only public for ease of testing
+                 (re/alt-grp "CDDL"
+                             (re/join #"Common[\s\-–—]+Development[\s\-–—]+(?:and|&)[\s\-–—]+Distribution(?:[\s\-–—]+Licen?[cs]e)?"
+                                      (re/opt-grp lcir/fre-ows #"\(?CDDL\)?")))
+                 (re/opt-grp lcir/fre-ows lcir/fre-version)
+                 (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)))
+
 (def ^:private pairs-d (delay (concat
-  (lcisu/spdx-match-pairs @ids-d)  ; Generic license regexes handle most cases, except...
-  [[(re/join #"(?iuU)"             ; ...when no version is provided
-             (re/alt-grp "CDDL"
-                         (re/join #"Common[\s\-–—]+Development[\s\-–—]+(?:and|&)[\s\-–—]+Distribution(?:[\s\-–—]+Licen?[cs]e)?"
-                                  (re/opt-grp lcir/fre-ows #"\(?CDDL\)?")))
-             (re/opt-grp lcir/fre-ows lcir/fre-version)
-             (re/opt-grp lcir/fre-ows lcir/fre-only-or-later))
-   (lcisu/version-handling-regex-match-ei-fn "CDDL-" "1.1" ["1.0" "1.1"])]])))
+  [[re (lcisu/version-handling-regex-match-ei-fn "CDDL-" "1.1" ["1.0" "1.1"])]]  ; Match custom regex first, so default ones don't partially consume
+  (lcisu/spdx-match-pairs @ids-d))))
 
 (defn sub
   "Substitutes any CDDL licenses found in the strings in `coll` with an
