@@ -117,8 +117,8 @@
   [id]
   (let [n (:name (or (slic/id->info id) (sexc/id->info id)))]
     (fn [m]
-      (let [id                  (str id (when (get m "orLater") "+"))            ; This can end up with things like GPL-2.0-or-later+, but those get normalised in the next step
-            id                  (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: exception ids won't normalise
+      (let [id                  (str id (when (get m "orLater") "+"))               ; This can end up with things like GPL-2.0-or-later+, but those get canonicalised in the next step
+            id                  (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: exception ids won't canonicalise by themselves
             gnu-suffix-missing? (and (gnu-family? id) (not (get m "orLater")) (not (get m "only")))  ; Special case GNU family licenses missing version suffixes
             match               (s/trim (:match m))
             strategy            (cond
@@ -151,30 +151,32 @@
   "Returns a simple expression-info construction function for `id`, when matched
   with a custom regex.  The returned function takes a single argument; a rencg
   find/match match map."
-  [id]
-  (fn [m]
-    (let [id (str id (when (get m "orLater") "+"))
-          id (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: naked exception identifiers won't normalise, so this has to be conditional
-          match      (s/trim (:match m))]
-      {:id         id
-       :type       :concluded
-       :confidence :high
-       :strategy   :regex-matching
-       :source     (list match)})))
+  ([id] (simple-regex-match-ei-fn id nil nil))
+  ([id confidence confidence-explanations]
+   (fn [m]
+     (let [id (str id (when (get m "orLater") "+"))
+           id (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: naked exception identifiers won't canonicalise, so this has to be conditional
+           match      (s/trim (:match m))]
+       (merge {:id         id
+               :type       :concluded
+               :confidence (or confidence :high)
+               :strategy   :regex-matching
+               :source     (list match)}
+              (when confidence-explanations {:confidence-explanations confidence-explanations}))))))
 
 (defn version-handling-regex-match-ei-fn
   "Returns a expression-info construction function that takes a single argument;
   a rencg find/match match map.  `id-prefix` is the prefix of the SPDX
   identifier to use in constructing the id.  `default-version` is the default
   version to use if none is provided.  `all-versions` is a sequence of all
-  versions of the give license."
+  versions of the given license."
   [id-prefix default-version all-versions]
   (fn [m]
     (let [has-version-number?     (boolean (get m "versionNumber"))
           version-number          (s/trim (get m "versionNumber" default-version))
           valid-version-number?   (some #{version-number} all-versions)
           id                      (str id-prefix (if valid-version-number? version-number default-version) (when (get m "orLater") "+"))
-          id                      (if-let [new-id (sexp/normalise id)] new-id id)  ; Note: naked exception identifiers won't normalise, so this has to be conditional
+          id                      (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: naked exception identifiers won't canonicalise, so this has to be conditional
           confidence              (if (and has-version-number? valid-version-number?) :high :medium)
           confidence-explanations (when-not (and has-version-number? valid-version-number?)
                                     (set/union (when (not has-version-number?)   #{:missing-version})

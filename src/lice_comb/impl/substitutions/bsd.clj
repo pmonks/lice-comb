@@ -74,7 +74,7 @@
                               [(apply min valid-clause-counts) :low #{:conflicting-clause-counts}]
                               [4                               :low #{:conflicting-clause-counts :invalid-clause-count}]))))
         id            (str "BSD-" clause-count "-Clause")]
-    [id confidence confidence-explanations]))  ; We don't assert or normalise the identifier here, as that has to happen after we've appended any suffix
+    [id confidence confidence-explanations]))  ; We don't assert or canonicalise the identifier here, as that has to happen after we've appended any suffix
 
 (defn- suffix
   "Returns the suffix for the given match (including a leading hyphen) or `nil`
@@ -121,7 +121,7 @@
                   (lcisu/get-rencgs m ["beforeAMPAS"     "afterAMPAS"])     "AMPAS"
                   (lcisu/get-rencgs m ["beforeFreeBSD"   "freeBSD"])        "BSD-2-Clause-FreeBSD"
                   (lcisu/get-rencgs m ["beforeNetBSD"    "netBSD"])         "BSD-2-Clause-NetBSD")]
-    (concat [(sexp/normalise id)]
+    (concat [(sexp/canonicalise id)]
             (if (or (clause-counts m) (suffix m))
               [:medium #{:invalid-bsd-combination}]
               [:high nil]))))

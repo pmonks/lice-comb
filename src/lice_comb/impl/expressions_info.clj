@@ -51,7 +51,7 @@
   (when (and op eim)
     (if (<= (count eim) 1)
       eim
-      (let [new-expr (sexp/normalise (s/join (str " " (s/upper-case (name op)) " ") (keys eim)))
+      (let [new-expr (sexp/canonicalise (s/join (str " " (s/upper-case (name op)) " ") (keys eim)))
             new-ei   (apply concat (vals eim))]
         {new-expr new-ei}))))
 

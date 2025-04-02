@@ -69,7 +69,7 @@
                                #{(str (first license-ids-found) " WITH " (first exception-ids-found))}
                                (set/union license-ids-found exception-ids-found))]
     (when expressions-found
-      ; Note: we don't need to sexp/normalise the keys here, as the only expressions that can be returned are already correctly constructed
+      ; Note: we don't need to sexp/canonicalise the keys here, as the only expressions that can be returned are already correctly constructed
       (lcic/correct (into {} (map #(hash-map % (list {:id % :type :concluded :confidence :high :strategy :spdx-matching-guidelines :source (list "<content>")})) expressions-found))))))
 
 (defmethod match-text java.io.Reader
@@ -101,7 +101,7 @@
                         ; 2. attempt to retrieve the text/plain contents of the uri and perform license text matching on it
                         (when-let [license-text (lcihttp/get-text uri)]
                           (match-text license-text)))]
-      ; We don't need to sexp/normalise the keys here, as we never detect an expression from a URI
+      ; We don't need to sexp/canonicalise the keys here, as we never detect an expression from a URI
       (lciei/prepend-source uri (lcic/correct result)))))
 
 (defn- make-unidentified-ei
@@ -227,6 +227,21 @@
 ;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
           )))))
 
+(defn- fix-addition-refs
+  "Fixes LicenseRefs in `coll` that appear after a `:with`, by turning them
+  into an AdditionRef."
+  [coll]
+  (loop [[f s & r] coll
+         result    []]
+    (if-not f
+      result
+      (if (and (= f :with)
+               (lcis/lice-comb-license-ref? s))
+        (recur (concat [(lcis/license-ref->addition-ref s)] r)
+               (conj result f))
+        (recur (concat [s] r)
+               (conj result f))))))
+
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the `coll`ection containing eis
   and operator keywords.  Returns an expressions-info map."
@@ -239,15 +254,15 @@
           nil  ; Detected nothing but unidentifieds, so fall through so the entire thing is marked as a single unidentified
           (if (= 1 (count coll))
             {(:id (first coll)) coll}  ; Single id detected, so return it
-            (let [; ####TODO: WHEN THE KEYWORD IS :with ENSURE THE FOLLOWING ELEMENT IS AN EXCEPTION, OR (IF LICENSEREF), CONVERT IT TO AN ADDITIONREF
+            (let [coll                (fix-addition-refs coll)
                   grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
-                 result               (into {}
+                  result              (into {}
                                             (map #(let [raw-expression (s/join " " (map (fn [elem]
                                                                                           (if (keyword? elem)
                                                                                             (s/upper-case (name elem))
                                                                                             (:id elem)))
                                                                                         %))
-                                                        expression     (sexp/normalise raw-expression)
+                                                        expression     (sexp/canonicalise raw-expression)
                                                         eis            (filter map? %)]
                                                     [expression eis])
                                                  grouped-expressions))]
@@ -293,14 +308,14 @@
   [n]
   (when-not (s/blank? n)
     (let [n (s/trim n)]
-      ; 1. If it's a valid SPDX expression, return the normalised rendition of it
+      ; 1. If it's a valid SPDX expression, return the canonicalised rendition of it
       (if-let [parse-tree (sexp/parse n)]
-        (let [normalised-expression (sexp/unparse parse-tree)]
-          {normalised-expression (list {:type     :declared
-                                        :strategy (case (count (sexp/extract-ids parse-tree))
-                                                    1 :spdx-listed-identifier
-                                                    :spdx-expression)
-                                        :source (list n)})})
+        (let [canonicalised-expression (sexp/unparse parse-tree)]
+          {canonicalised-expression (list {:type     :declared
+                                           :strategy (case (count (sexp/extract-ids parse-tree))
+                                                       1 :spdx-listed-identifier
+                                                       :spdx-expression)
+                                           :source (list n)})})
         ; 2. If it's URI, attempt to parse that
         (if (lciu/valid-http-uri? n)
           (if-let [ids (parse-uri n)]

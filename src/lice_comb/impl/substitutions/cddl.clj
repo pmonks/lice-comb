@@ -36,7 +36,7 @@
   "Substitutes any CDDL licenses found in the strings in `coll` with an
   expression-info map. Returns other elements unchanged."
   [coll]
-  (lcisu/sub-res @pairs-d  coll))
+  (lcisu/sub-res @pairs-d coll))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

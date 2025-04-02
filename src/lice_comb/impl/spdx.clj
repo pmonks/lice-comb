@@ -68,6 +68,13 @@
 (def ^:private lice-comb-addition-ref-prefix      "AdditionRef-lice-comb")
 (def ^:private unidentified-addition-ref-prefix   (str lice-comb-addition-ref-prefix "-UNIDENTIFIED"))
 
+(defn id->info
+  "Returns the associated SPDX list info for `id`, which can be either a license
+  identifier or an exception identifier."
+  [id]
+  (if-let [license-entry (sl/id->info id)]
+    license-entry
+    (se/id->info id)))
 
 ; Map of lower case SPDX id to correctly cased SPDX id
 (def ^:private spdx-ids-d (delay (merge (into {} (map #(vec [(s/lower-case %) %]) @license-ids-d))
@@ -82,7 +89,7 @@
 (defn- best-identifier
   "Finds the 'best' identifier in `ids`, a `set` of license or exceptions
   identifiers, `nil` if `ids` is empty. 'Best' is defined as the shortest
-  non-deprecated id (if any), or (worst case) the shortest deprecated id."
+  non-deprecated id (if any), or (if not) the shortest deprecated id."
   [ids]
   (if (<= (count ids) 1)
     (first ids)
@@ -90,21 +97,21 @@
       (first (sort-by count non-deprecated-ids))
       (first (sort-by count ids)))))
 
-(defn- urls-to-id-tuples
+(defn- urls->id-tuples
   "Extracts all urls for a given list (license or exception) entry."
   [list-entry]
   (let [id              (:id list-entry)
         simplified-uris (map lciu/simplify-uri (filter (complement s/blank?) (concat (:see-also list-entry) (get-in list-entry [:cross-refs :url]))))]
     (map #(vec [% id]) simplified-uris)))
 
-(def ^:private index-uri-to-id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls-to-id-tuples @full-license-list-d)))
-                                               (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls-to-id-tuples @full-exception-list-d))))))
+(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @full-license-list-d)))
+                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @full-exception-list-d))))))
 
 (defn near-match-uri
   "Returns the id(s) (a set) for the given listed `uri`, or `nil` if no ids were
   found. The result may include deprecated ids."
   [uri]
-  (get @index-uri-to-id-d (lciu/simplify-uri uri)))
+  (get @index-uri->id-d (lciu/simplify-uri uri)))
 
 ; This is needed for pathological cases like "http://gnu.org/license/fdl-1.3" (which has 7 (!) ids associated with it)
 (defn best-near-match-uri
@@ -250,6 +257,13 @@
     (unidentified-license-ref?  id) (unidentified-license-ref->human-readable-name id)
     (unidentified-addition-ref? id) (unidentified-addition-ref->human-readable-name id)))
 
+(defn license-ref->addition-ref
+  "Returns the equivalent AdditionRef for `license-ref`, or `nil` if it isn't a
+  LicenseRef."
+  [license-ref]
+  (when (sl/license-ref? license-ref)
+    (s/replace license-ref "LicenseRef" "AdditionRef")))
+
 (defn find-ids
   "Returns a sequence of the distinct listed SPDX license ids, exceptions ids,
   LicenseRefs and AdditionRefs found in `s` (a `String`), in the order they were
@@ -284,5 +298,5 @@
   @license-list-d
   @exception-list-d
   @spdx-ids-d
-  @index-uri-to-id-d
+  @index-uri->id-d
   nil)

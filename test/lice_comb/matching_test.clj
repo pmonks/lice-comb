@@ -180,10 +180,10 @@
   (testing "Listed names"
     ; We use the full license lists here, rather than the ones lice-comb uses for detection, since the real world may contain anything
     (let [license-list   (map slic/id->info (slic/ids))
-          exception-list (map sexc/id->info (sexc/ids))]    
+          exception-list (map sexc/id->info (sexc/ids))]
       ; We use `some` here, because some license names resolve to multiple licenses ids
-      (run! #(is (some #{(:id %)} (name->expressions (:name %)))) license-list)
-      (run! #(is (some #{(:id %)} (name->expressions (:name %)))) exception-list)))
+      (run! #(is (some #{(:id %)} (name->expressions (:name %))) (str "Failed to match own name for id \"" (:id %) "\"")) license-list)
+      (run! #(is (some #{(:id %)} (name->expressions (:name %))) (str "Failed to match own name for id \"" (:id %) "\"")) exception-list)))
   (testing "Names seen in handpicked POMs on Maven Central"
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License (AGPL) version 3.0")))
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License v3.0 only")))
@@ -424,7 +424,7 @@
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://opensource.org/licenses/BSD-3-Clause")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "new BSD License")))
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD License")))  ; Missing clause info - we assume original (4 clause)
-    (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD Standard License")))  ; Missing clause info - we assume original (4 clause)
+    (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD Standard License")))  ; Missing clause info - we assume original (4 clause), though the URL implies BSD-3-Clause - see https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD license")))  ; Missing clause info - we assume original (4 clause)
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD")))  ; Missing clause info - we assume original (4 clause)
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD-style")))  ; Missing clause info - we assume original (4 clause)
@@ -450,8 +450,8 @@
     (is (valid= #{"CC0-1.0"}                            (name->expressions "CC0 1.0 Universal")))
     (is (valid= #{"CC0-1.0"}                            (name->expressions "CC0")))
     (is (valid= #{"CC0-1.0"}                            (name->expressions "Public domain (CC0)")))
-    (is (valid= #{"CDDL-1.1"}                           (name->expressions "Common Development and Distribution License (CDDL)")))  ; Missing clause info
-    (is (valid= #{"CDDL-1.1"}                           (name->expressions "Common Development and Distribution License")))  ; Missing clause info
+    (is (valid= #{"CDDL-1.1"}                           (name->expressions "Common Development and Distribution License (CDDL)")))  ; Missing version info
+    (is (valid= #{"CDDL-1.1"}                           (name->expressions "Common Development and Distribution License")))  ; Missing version info
     (is (valid= #{"CECILL-2.1"}                         (name->expressions "CeCILL License")))  ; Missing version - we assume the latest
     (is (valid= #{"CPL-1.0"}                            (name->expressions "Common Public License - v 1.0")))
     (is (valid= #{"CPL-1.0"}                            (name->expressions "Common Public License Version 1.0")))
@@ -506,7 +506,7 @@
     (is (valid= #{"EUPL-1.1"}                           (name->expressions "European Union Public Licence (EUPL v.1.1)")))
     (is (valid= #{"EUPL-1.1"}                           (name->expressions "The European Union Public License, Version 1.1")))
     (is (valid= #{"EUPL-1.2"}                           (name->expressions "European Union Public Licence v. 1.2")))
-    (is (valid= #{"EUPL-1.2"}                           (name->expressions "European Union Public License 1.2 or later")))
+    (is (valid= #{"EUPL-1.2+"}                          (name->expressions "European Union Public License 1.2 or later")))
     (is (valid= #{"EUPL-1.2"}                           (name->expressions "European Union Public License")))  ; Missing version - we assume the latest
     (is (valid= #{"GPL-1.0-or-later"}                   (name->expressions "GNU GENERAL PUBLIC LICENSE")))  ; Missing version - we assume 1.0-or-later
     (is (valid= #{"GPL-1.0-or-later"}                   (name->expressions "GNU GPL")))  ; Missing version - we assume 1.0-or-later
@@ -592,6 +592,7 @@
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser General Public License (LGPL)")))  ; Missing version - we assume 2.0-or-later
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser General Public License")))  ; Missing version - we assume 2.0-or-later
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser GPL")))  ; Missing version - we assume 2.0-or-later
+    (is (valid= #{"LGPL-2.0-or-later OR MIT"}           (name->expressions "GNU Lesser or (Library or MIT)")))  ; Cursed parentheses
     (is (valid= #{"LGPL-2.1-only"}                      (name->expressions "GNU LESSER GENERAL PUBLIC LICENSE - Version 2.1")))
     (is (valid= #{"LGPL-2.1-only"}                      (name->expressions "GNU LESSER GENERAL PUBLIC LICENSE Version 2.1, February 1999")))
     (is (valid= #{"LGPL-2.1-only"}                      (name->expressions "GNU LGPL v2.1")))

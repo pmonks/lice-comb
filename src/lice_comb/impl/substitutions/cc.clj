@@ -29,10 +29,71 @@
 ;;
 
 
-(defn- suffix
-  "Returns the (single) suffix that was found in match `m`, or `nil` if there
-  wasn't one or if the suffix is valid but doesn't result in a distinct suffix
-  in the SPDX identifier (e.g. `Generic`)."
+(defn- valid-clauses
+  "Determines a set of valid clauses from match m, returning a tuple of
+  `[clauses valid-clauses?]`."
+  [m]
+  (let [zero?          (or (get m "zero")
+                           (get m "publicDomainBefore")  ; Treat "public domain" in the prefix as if it were CC0 (since that's the only combo that makes sense)
+                           (get m "publicDomainAfter"))  ; Treat "public domain" in the suffix as if it were CC0 (since that's the only combo that makes sense)
+        pddc?          (get m "pddc")
+        pdm?           (get m "pdm")
+        nc?            (get m "nonCommercial")
+        nd?            (get m "noDerivatives")
+        sa?            (get m "shareAlike")
+        valid-clauses? (not ; Checking for _in_valid clauses is easier than the inverse
+                         (or
+                           (and nd? sa?)
+                           (and zero? (or pddc? pdm? nc? nd? sa?))
+                           (and pddc? (or zero? pdm? nc? nd? sa?))
+                           (and pdm?  (or zero? pddc? nc? nd? sa?))))
+        clauses        (cond
+                         zero? ["ZERO"]
+                         pddc? ["PDDC"]
+                         pdm?  ["PDM"]
+                         :else (concat [] (when nc? ["NC"]) (when nd? ["ND"]) (when sa? ["SA"])))]
+    [clauses valid-clauses?]))
+
+(def ^:private cc-versions #{"1.0" "2.0" "2.5" "3.0" "4.0"})
+
+(defn- version-number-elements
+  "Returns a version number as a tuple of [major minor] found in match `m`,
+  stripping any leading zeroes.  One or both elements in the tuple may be `nil`."
+  [m]
+  (let [raw-version-number (get m "versionNumber")]
+    (when-not (s/blank? raw-version-number)
+      (let [[_ major minor] (re-matches #"0*(\d+)(?:\.0*(\d+))?(?:\.0+)*" raw-version-number)]
+        (when-not (and (s/blank? major) (s/blank? minor))
+          [(when-not (s/blank? major) major) (when-not (s/blank? minor) minor)])))))
+
+(defn- valid-version-number
+  "Determines a valid version number from match m, based on the clauses,
+  returning a tuple of `[version-number version-present? valid-version-number?]`."
+  [m clauses]
+  (let [[major minor]    (version-number-elements m)
+        version-present? (or (not (nil? major)) (not (nil? minor)))
+        clauses-set      (set clauses)]
+    (if (contains? clauses-set "PDDC")
+      ; CC-PDDC doesn't have a version
+      [nil true (not version-present?)]  ; This looks wrong, but isn't...
+      (if (or (contains? clauses-set "ZERO")
+              (contains? clauses-set "PDM"))
+        ; Hardcode version 1.0 for CC0, and CC-PDM, as that's their only version
+        ["1.0" version-present? (and (= major "1") (= minor "0"))]
+        ; For everything else, use the version in the regex match, or 4.0 if there isn't one
+        (let [version-number (str (or major "4") "." (or minor "0"))
+              version-number (if (contains? cc-versions version-number)
+                               version-number
+                               (let [version-number (str (or major "4") ".0")]  ; Check if we got something nonsensical like "1.5" and correct to "1.0"
+                                 (if (contains? cc-versions version-number)
+                                   version-number
+                                   "4.0")))]
+          [version-number version-present? true])))))
+
+(defn- valid-suffix
+  "Returns the (single) valid suffix that was found in match `m`, or `nil` if
+  there wasn't one or if the suffix is valid but doesn't result in a distinct
+  suffix in the SPDX identifier (e.g. `Generic`)."
   [m]
   (cond
     (get m "generic")       nil   ; Technically redundant, but we call it out just for clarity with the regexes
@@ -49,150 +110,68 @@
     (get m "netherlands")   "NL"
     (get m "usa")           "US"))
 
-(defn- clauses
-  "Returns a set of the pre-version clauses that were found in match `m`, or
-  `nil` if there weren't any."
-  [m]
-  (some-> (seq (concat []
-                       (when (get m "nonCommercial")      ["NC"])
-                       (when (get m "noDerivatives")      ["ND"])
-                       (when (get m "shareAlike")         ["SA"])
-                       (when (get m "publicDomainBefore") ["ZERO"])  ; Treat "public domain" in the prefix as if it were CC0 (since that's the only combo that makes sense)
-                       (when (get m "publicDomainAfter")  ["ZERO"])  ; Treat "public domain" in the suffix as if it were CC0 (since that's the only combo that makes sense)
-                       (when (get m "zero")               ["ZERO"])
-                       (when (get m "pddc")               ["PDDC"])
-                       (when (get m "pdm")                ["PDM"])))
-          set))
+(defn- build-id
+  "Builds an id from the given clauses, version-number, and suffix.  Note that
+  the resulting id may *NOT* be valid - this is simply a construction function."
+  [clauses version-number suffix]
+  (str (cond
+         (= "ZERO" (first clauses)) "CC0"
+         (= "PDDC" (first clauses)) "CC"
+         (= "PDM"  (first clauses)) "CC"
+         :else                      "CC-BY")
+       (when (seq (filter #(not= "ZERO" %) clauses)) (str "-" (s/join "-" clauses)))  ; Remove "ZERO" if present, since it's not actually a valid CC clause component - it's just a marker we use internally
+       (when version-number                          (str "-" version-number))
+       (when suffix                                  (str "-" suffix))))
 
-(defn- valid-clauses?
-  "Is the given set of `clauses` valid in a CC license?"
-  [clauses]
-  (not
-    ; Checking for _in_valid clauses is easier than the inverse
-    (or (and (contains? clauses "ND")   (contains? clauses "SA"))  ; ND and SA are incompatible
-        (and (contains? clauses "ZERO") (> (count clauses) 1))     ; Zero cannot have any other clauses
-        (and (contains? clauses "PDDC") (> (count clauses) 1))     ; PDDC cannot have any other clauses
-        (and (contains? clauses "PDM")  (> (count clauses) 1)))))  ; PDM cannot have any other clauses
-
-(defn- valid-clauses
-  "Determines valid clauses, taking `version-number` into account."
-  [clauses version-number]
-  (when (seq clauses)
-    (case version-number
-      "1.0" (disj clauses "PDDC")
-      (disj clauses "ZERO" "PDDC" "PDM"))))
-
-(defn- version-number-elements
-  "Returns a version number as a tuple of [major minor] found in match `m`,
-  stripping all leading zeroes.  One or both elements in the tuple may be `nil`."
-  [m]
-  (let [raw-version-number (get m "versionNumber")]
-    (if-not (s/blank? raw-version-number)
-      (let [[_ major minor]    (re-matches #"0*([123456789])(?:\.0*(\d*))?" raw-version-number)]
-        [(when-not (s/blank? major) major) (when-not (s/blank? minor) minor)])
-      [nil nil])))
-
-(defn- valid-version?
-  "Is `s` (a `String`) a valid CC-BY version number?  Note: only checks overall
-  validity - doesn't check for valid version/clause/suffix combinations."
-  [s]
-  (or (= s "1.0")
-      (= s "2.0")
-      (= s "2.5")
-      (= s "3.0")
-      (= s "4.0")))
+(defn- valid-id
+  "Builds a valid CC id from a valid set of clauses, a valid version number, and
+  a valid suffix (optional).  Returns a tuple of
+  `[id valid-clauses? valid-suffix?]`."
+  [clauses version-number suffix valid-clauses?]
+  (loop [clauses           clauses
+         valid-clauses?    valid-clauses?]
+    (let [id (build-id clauses version-number suffix)]
+      (if (sl/listed-id? id)
+        ; id with clauses and suffix was valid, so return it
+        [id valid-clauses? true]
+        (let [id (build-id clauses version-number nil)]
+          (if (sl/listed-id? id)
+            ; id with clauses but not suffix was valid, so return it
+            [id valid-clauses? false]
+            (if (seq clauses)
+              ; We still have clauses left, so drop the last one and try again
+              (recur (drop-last clauses) false)
+              ; No clauses left to drop, so something's wrong...
+              ;####TODO: DO BETTER IN THIS CASE!!!!
+              (throw (ex-info "UNABLE TO FIND VALID CC ID!!" {})))))))))
 
 (defn- determine-confidence-and-explanations
-  [valid-version? valid-clauses? valid-suffix?]
-  (case [valid-version? valid-clauses? valid-suffix?]
-    [true  true  true]  [:high   nil]
-    [true  true  false] [:medium #{:invalid-cc-suffix}]
-    [true  false true]  [:medium #{:invalid-cc-clauses}]
-    [true  false false] [:medium #{:invalid-cc-clauses :invalid-cc-suffix}]
-    [false true  true]  [:low    #{:invalid-version}]
-    [false true  false] [:low    #{:invalid-version :invalid-cc-suffix}]
-    [false false true]  [:low    #{:invalid-version :invalid-cc-clauses}]
-    [false false false] [:low    #{:invalid-version :invalid-cc-clauses :invalid-cc-suffix}]))
-
-(defn- build-id
-  [clauses version-number suffix]
-  (str "CC-BY"
-       (when (seq clauses)
-         (str "-" (s/join "-" clauses)))
-       "-" version-number
-       (when suffix (str "-" suffix))))
-
-(defn- build-valid-id
-  [clauses version-number suffix]
-  (loop [clauses           clauses
-         id-with-suffix    (build-id clauses version-number suffix)
-         id-without-suffix (build-id clauses version-number nil)
-         valid-clauses?    true]
-    (if (or (nil? clauses)
-            (sl/listed-id? id-with-suffix)
-            (sl/listed-id? id-without-suffix))
-      ; We found a valid id, so return it
-      (if (sl/listed-id? id-with-suffix)
-        [id-with-suffix valid-clauses? true]
-        (when (sl/listed-id? id-without-suffix)
-          [id-without-suffix valid-clauses? false]))
-      ; No valid ids, so drop a clause and try again
-      (let [new-clauses (seq (drop-last clauses))]
-        (recur new-clauses (build-id clauses version-number suffix) (build-id clauses version-number nil) false)))))
+  [version-present? valid-version? valid-clauses? valid-suffix?]
+  (let [version-explanation (case [version-present? valid-version?]
+                              [true true]   nil
+                              [true false]  :invalid-verson
+                              [false true]  :missing-version
+                              [false false] :missing-version)]
+    (case [(and version-present? valid-version?) valid-clauses? valid-suffix?]
+      [true  true  true]  [:high   nil]
+      [true  true  false] [:medium #{:invalid-cc-suffix}]
+      [true  false true]  [:medium #{:invalid-cc-clauses}]
+      [true  false false] [:low    #{:invalid-cc-clauses :invalid-cc-suffix}]
+      [false true  true]  [:medium #{version-explanation}]
+      [false true  false] [:low    #{version-explanation :invalid-cc-suffix}]
+      [false false true]  [:low    #{version-explanation :invalid-cc-clauses}]
+      [false false false] [:low    #{version-explanation :invalid-cc-clauses :invalid-cc-suffix}])))
 
 (defn- match->ei
   [m]
-  (let [match                   (:match m)
-        ; Version number
-        [major minor]           (version-number-elements m)
-        version-number          (str (or major "4") "." (or minor "0"))
-        version-number-present? (boolean (get m "versionNumber"))
-        valid-version-number?   (valid-version? version-number)
-        version-number          (if valid-version-number?
-                                  version-number
-                                  (if (valid-version? (str major ".0"))  ; Check if we got something nonsensical like "1.5" and correct to "1.0"
-                                    (str major ".0")
-                                    "4.0"))
-        ; Clauses (NC, ND, SA, etc.)
-        clauses                 (clauses m)
-        valid-clauses?          (valid-clauses? clauses)
-        valid-clauses           (valid-clauses clauses version-number)
-        ; Suffix (Generic, International, IGO, Australia, Austria, etc.)
-        suffix                  (suffix m)
-        suffix-present?         (not (s/blank? suffix))
-
-        ; Id construction and overall validity checking
-        [id confidence confidence-explanations]
-                                (cond
-                                  ; Special case CC0-1.0
-                                  (contains? valid-clauses "ZERO")
-                                    (let [valid-CC0-version-number? (= "1.0" version-number)]
-                                      (concat ["CC0-1.0"]
-                                              (determine-confidence-and-explanations valid-CC0-version-number? valid-clauses? (not suffix-present?))))
-
-                                  ; Special case CC-PDDC
-                                  (contains? valid-clauses "PDDC")
-                                    (concat ["CC-PDDC"]
-                                            (determine-confidence-and-explanations version-number-present? valid-clauses? (not suffix-present?)))
-
-                                  ; Special case CC-PDM-1.0
-                                  (contains? valid-clauses "PDM")
-                                    (let [valid-CC-PDM-version-number? (= "1.0" version-number)]
-                                       (concat ["CC-PDM-1.0"]
-                                               (determine-confidence-and-explanations valid-CC-PDM-version-number? valid-clauses? (not suffix-present?))))
-
-                                  ; Special case CC-SA-1.0
-                                  (and (= "1.0" version-number) (contains? valid-clauses "SA"))
-                                    (concat ["CC-SA-1.0"]
-                                            (determine-confidence-and-explanations valid-version-number? (= 1 (count valid-clauses)) (not suffix-present?)))
-
-                                  ; Generic case
-                                  :else
-                                    (let [[id build-time-valid-clauses? valid-suffix?] (build-valid-id valid-clauses version-number suffix)]
-                                      (concat [id] (determine-confidence-and-explanations valid-version-number?
-                                                                                          (and valid-clauses? build-time-valid-clauses?)
-                                                                                          valid-suffix?))))]
-    (merge {:id         (lcisu/assert-listed-id (sexp/normalise id))
+  (let [match                                (:match m)
+        [clauses valid-clauses?]             (valid-clauses m)
+        [version-number version-present? valid-version-number?]
+                                             (valid-version-number m clauses)
+        suffix                               (valid-suffix m)
+        [id valid-clauses? valid-suffix?]    (valid-id clauses version-number suffix valid-clauses?)
+        [confidence confidence-explanations] (determine-confidence-and-explanations version-present? valid-version-number? valid-clauses? valid-suffix?)]
+    (merge {:id         (lcisu/assert-listed-id (sexp/canonicalise id))
             :type       :concluded
             :confidence confidence
             :strategy   :regex-matching
