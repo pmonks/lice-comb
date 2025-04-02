@@ -385,7 +385,7 @@
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "3-clause BSD licence (Revised BSD licence), also included in the jar file")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "3-clause BSD license")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "3-clause license (New BSD License or Modified BSD License)")))
-    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "Aduna BSD license")))
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "Aduna BSD license")))  ; See https://www.d3web.de/Wiki.jsp?page=Aduna-BSD (original links in Maven POMs no longer resolve)
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "BSD 3 Clause")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "BSD 3-Clause 'New' or 'Revised' License")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "BSD 3-Clause License")))
