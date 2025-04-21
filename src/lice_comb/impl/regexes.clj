@@ -98,18 +98,19 @@
   (when-not (s/blank? n)
     (-> [#"(?iuU)(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
          ; Special cases for certain licenses
-        (lciu/replace-in-coll #"(?i)(?<!\w)Apache(?!\w)"                            #"Apache(?:[\s\-–—]*Software)?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)Apache(?!\w)"                            #"(?:Apache(?:[\s\-–—]*Software)?|ASL)")
         (lciu/replace-in-coll #"(?i)(?<!\w)Beerware(?!\w)"                          #"Beer[\s\-–—]*Ware")
         (lciu/replace-in-coll #"(?i)(?<!\w)Creative Commons(?!\w)"                  #"(?:Creative[\s\-–—]*Commons|CC)")
-        (lciu/replace-in-coll #"(?i)(?<!\w)No Derivatives(?!\w)"                    #"No[\s\-–—]*Deriv(s|atives)?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)No Derivatives(?!\w)"                    #"No[\s\-–—]*Deriv(?:s|atives)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Share Alike(?!\w)"                       #"Share[\s\-–—]*Alike")
-        (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                               #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
+        (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                               #"(?:(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))|Bouncy[\s\-–—]+Castle([\s\-–—]+Licen[cs]e)?)")
         (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                               #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                               #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)zlib(/libpng)?(?!\w)"                    #"(?:libpng[\\/\-\s]{1,4})?zlib([\\/\-\s]{1,4}libpng)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"                  #"(?<!zlib[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
         (lciu/replace-in-coll #"(?i)(?<!\w)Hewlett[\s\-]+Packard(?!\w)"             #"(?:Hewlett[\s\-–—]*Packard|HP)")
         (lciu/replace-in-coll #"(?i)\s+(End[\s\-]user licen[cs]e agreement|EULA)\b" #"[\s\-–—]+(?:End[\s\-–—]+User[\s\-–—]+Licen?[cs]e[\s\-–—]+Agreement|EULA)")
+        (lciu/replace-in-coll #"(?i)(?<!\w)Plexus\s+Classworlds\s+Licen[cs]e(?!\w)" #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))")
         ; Special case for some double and/or weird version components
         (lciu/replace-in-coll #"(?i)\(versions 9.11 to 9.20\)"                      #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20\)?")
         (lciu/replace-in-coll #"(?i)\(versions 9.22 and beyond\)"                   #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*22[\s\-–—]*(\+|(?:and|&)[\s\-–—]*beyond)\)?")
