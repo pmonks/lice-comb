@@ -236,37 +236,36 @@
     (if-not f
       result
       (if (and (= f :with)
-               (lcis/lice-comb-license-ref? s))
-        (recur (concat [(lcis/license-ref->addition-ref s)] r)
+               (map? s)
+               (lcis/lice-comb-license-ref? (:id s)))
+        (recur (concat [(assoc s :id (lcis/license-ref->addition-ref (:id s)))] r)
                (conj result f))
         (recur (concat [s] r)
                (conj result f))))))
+
+
+;(some #(and (map? %) (lcis/id->info (:id %))) coll)
 
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the `coll`ection containing eis
   and operator keywords.  Returns an expressions-info map."
   [coll]
-  (when (seq coll)
-    (if (every? string? coll)
-      nil  ; Didn't detect anything, so fall through so the entire thing is marked as a single unidentified
-      (let [eis (filter map? coll)]
-        (if (every? lcis/unidentified? (map :id eis))
-          nil  ; Detected nothing but unidentifieds, so fall through so the entire thing is marked as a single unidentified
-          (if (= 1 (count coll))
-            {(:id (first coll)) coll}  ; Single id detected, so return it
-            (let [coll                (fix-addition-refs coll)
-                  grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
-                  result              (into {}
-                                            (map #(let [raw-expression (s/join " " (map (fn [elem]
-                                                                                          (if (keyword? elem)
-                                                                                            (s/upper-case (name elem))
-                                                                                            (:id elem)))
-                                                                                        %))
-                                                        expression     (sexp/canonicalise raw-expression)
-                                                        eis            (filter map? %)]
-                                                    [expression eis])
-                                                 grouped-expressions))]
-              result)))))))
+  ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
+  (when-not (every? lcis/unidentified? (map :id (filter map? coll)))
+    (if (= 1 (count coll))
+      {(:id (first coll)) coll}  ; Single id detected, so return it
+      (let [grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
+            result              (into {}
+                                      (map #(let [raw-expression (s/join " " (map (fn [elem]
+                                                                                    (if (keyword? elem)
+                                                                                      (s/upper-case (name elem))
+                                                                                      (:id elem)))
+                                                                                  %))
+                                                  expression     (sexp/canonicalise raw-expression)
+                                                  eis            (filter map? %)]
+                                              [expression eis])
+                                           grouped-expressions))]
+        result))))
 
 ;####TODO: CAN PROBABLY MOVE THIS INTO parse-name ONCE ITS WORKING!!!!
 (defn- parse-internal
@@ -294,6 +293,7 @@
                         remove-extraneous-fragments
                         remove-invalid-operator-combos
                         sub-unidentifieds
+                        fix-addition-refs
 ;####TEST!!!!
 ;(debug-print "after parse, before rebuild")
                         ; Rebuild the final expression(s)

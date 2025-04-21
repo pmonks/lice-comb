@@ -97,16 +97,9 @@
   [n]
   (when-not (s/blank? n)
     (-> [#"(?iuU)(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
-;####TODO: TEST WHETHER THESE ARE EVEN NEEDED
-        ; Special case GNU family first, as they're such a massive pita
-;        (lciu/replace-in-coll #"(?i)(?<!\w)GNU\s+"                                  #"(?:GNU[\s\-–—]+)?")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)Affero General Public License"           #"Affero[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?A[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)Library General Public License"          #"(?:Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?L[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)Lesser General Public License"           #"(?:Library|Less[eo]r|Library[\s\-–—]+or[\s\-–—]+Less[eo]r|Less[eo]r[\s\-–—]+or[\s\-–—]+Library)[\s\-–—]+Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e(?:[\s\-–—]+\(?L[\s\-–—]*GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)General Public License"                  #"Genere?al[\s\-–—]+Pub?lic[\s\-–—]+Licen[cs]e([\s\-–—]+\(?GPL(?:[\s\-–—]*v)?[\s\d\._]*\))?")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)\"Original\" or \"Old\" License"         #"(\"?Original\"?(?:[\s\-–—]+or[\s\-–—]+\"?Old\"?)?(?:[\s\-–—]+Licen[cs]e)?)?")  ; BSD-4-Clause
          ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)Apache(?!\w)"                            #"Apache(?:[\s\-–—]*Software)?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)Beerware(?!\w)"                          #"Beer[\s\-–—]*Ware")
         (lciu/replace-in-coll #"(?i)(?<!\w)Creative Commons(?!\w)"                  #"(?:Creative[\s\-–—]*Commons|CC)")
         (lciu/replace-in-coll #"(?i)(?<!\w)No Derivatives(?!\w)"                    #"No[\s\-–—]*Deriv(s|atives)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Share Alike(?!\w)"                       #"Share[\s\-–—]*Alike")

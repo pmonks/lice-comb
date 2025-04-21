@@ -378,7 +378,7 @@
     (is (valid= #{"BSD-2-Clause"}                       (name->expressions "Simplified BSD license")))
     (is (valid= #{"BSD-2-Clause"}                       (name->expressions "The BSD 2-Clause License")))
     (is (valid= #{"BSD-2-Clause"}                       (name->expressions "Two clause BSD license")))
-    (is (valid= #{"BSD-2-Clause-FreeBSD"}               (name->expressions "FreeBSD License")))
+    (is (valid= #{"BSD-2-Clause-Views"}                 (name->expressions "FreeBSD License")))  ; BSD-2-Clause-FreeBSD is deprecated and superceded by BSD-2-Clause-Views - see https://spdx.org/licenses/BSD-2-Clause-FreeBSD.html
     (is (valid= #{"BSD-3-Clause" "MIT"}                 (name->expressions "New-BSD / MIT")))  ; Missing conjunction, so return 2 (singleton) expressions
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "3-Clause BSD License")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "3-Clause BSD")))
@@ -424,7 +424,7 @@
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://opensource.org/licenses/BSD-3-Clause")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "new BSD License")))
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD License")))  ; Missing clause info - we assume original (4 clause)
-    (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD Standard License")))  ; Missing clause info - we assume original (4 clause), though the URL implies BSD-3-Clause - see https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "BSD Standard License")))  ; Not an official clause, but the URL in the POM implies BSD-3-Clause - see https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD license")))  ; Missing clause info - we assume original (4 clause)
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD")))  ; Missing clause info - we assume original (4 clause)
     (is (valid= #{"BSD-4-Clause"}                       (name->expressions "BSD-style")))  ; Missing clause info - we assume original (4 clause)
