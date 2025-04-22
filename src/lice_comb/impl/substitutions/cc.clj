@@ -54,7 +54,7 @@
                          :else (concat [] (when nc? ["NC"]) (when nd? ["ND"]) (when sa? ["SA"])))]
     [clauses valid-clauses?]))
 
-(def ^:private cc-versions #{"1.0" "2.0" "2.5" "3.0" "4.0"})
+(def ^:private cc-versions #{"1.0" "2.0" "2.1" "2.5" "3.0" "4.0"})
 
 (defn- version-number-elements
   "Returns a version number as a tuple of [major minor] found in match `m`,

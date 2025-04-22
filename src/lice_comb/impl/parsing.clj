@@ -274,6 +274,7 @@
   [n]
   (when-let [result (-> [n]
                         ; Parsing, with short circuiting of steps if we're done early
+                        ; These generally proceed from longest to shortest (to avoid premature matches), with some exceptions
                         (lciu/until-> lcipu/done-parsing?
                                       cursed/sub
                                       bsd/sub
