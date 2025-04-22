@@ -282,10 +282,10 @@
                                       cpe/sub
                                       epl/sub
                                       hippocratic/sub
-                                      mpl/sub
                                       wtf/sub
-                                      custom/sub
                                       others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
+                                      custom/sub       ; This has to go after the generics, since it matches things like "NCBI Public Domain Notice"
+                                      mpl/sub          ; This has to go after the generics, since it matches things like "SimPL-2.0"
                                       gnu/sub          ; This needs to go last, as the "word salad" matching approach it uses is overly greedy
                                       )
                         sub-operators

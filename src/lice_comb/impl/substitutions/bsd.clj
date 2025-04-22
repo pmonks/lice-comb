@@ -41,7 +41,7 @@
   `nil` if no matches were found.  Duplicates will be removed, but invalid
   clause counts will not be removed."
   [m]
-  (let [version-number     (when-let [version-number-dbl (lciu/parse-dbl (get m "versionNumber"))] (int version-number-dbl))]
+  (let [version-number (when-let [version-number-dbl (lciu/parse-dbl (get m "versionNumber"))] (int version-number-dbl))]
     (seq
       (distinct
         (filter identity
@@ -116,8 +116,10 @@
                   (get m "scaBOF")                                          "BSD-Source-beginning-file"
                   (get m "sca")                                             "BSD-Source-Code"
                   (get m "freeBSDDoc")                                      "FreeBSD-DOC"
+                  (get m "beforeHP")                                        "BSD-3-Clause-HP"
+                  (get m "beforeLBNL")                                      "BSD-3-Clause-LBNL"
+                  (lcisu/get-rencgs m ["beforeW3works"   "afterW3works"])   "BSD-Systemics-W3Works"  ; This must go before systemics, since it will always match both
                   (lcisu/get-rencgs m ["beforeSystemics" "afterSystemics"]) "BSD-Systemics"
-                  (lcisu/get-rencgs m ["beforeW3works"   "afterW3works"])   "BSD-Systemics-W3Works"
                   (lcisu/get-rencgs m ["beforeAMPAS"     "afterAMPAS"])     "AMPAS"
                   (get m "beforeAduna")                                     "BSD-3-Clause"  ; See https://www.d3web.de/Wiki.jsp?page=Aduna-BSD
                   (lcisu/get-rencgs m ["beforeFreeBSD"   "freeBSD"])        "BSD-2-Clause-FreeBSD"
@@ -211,9 +213,11 @@
 (defn- re-prefix-clauses
   []
   (re/alt-grp
-    #"(?<beforeSystemics>Systemics(?<beforeW3works>[\s\-–—]+W3Works)?)"
-    #"(?<beforeAMPAS>AMPAS|Academy[\s\-–—]+of[\s\-–—]+Motion[\s\-–—]+Picture[\s\-–—]+Arts[\s\-–—]+(?:and|&)[\s\-–—]+Sciences)"
-    #"(?<beforeAduna>Aduna)"))  ; Not an official prefix, but it appears in some license names and indicates BSD-3-Clause e.g. https://repo.clojars.org/art/uniroma2/it/org/openrdf/sesame/sesame-onejar/2.7.10/sesame-onejar-2.7.10.pom
+    (re/ncg "beforeHP"        #"HP|Hewlett[\s\-–—]+Packard")
+    (re/ncg "beforeLBNL"      #"LBNL|Lawrence[\s\-–—]+Berkeley[\s\-–—]+National[\s\-–—]+Labs")
+    (re/ncg "beforeSystemics" #"Systemics(?<beforeW3works>[\s\-–—]+W3Works)?")
+    (re/ncg "beforeAMPAS"     #"AMPAS|Academy[\s\-–—]+of[\s\-–—]+Motion[\s\-–—]+Picture[\s\-–—]+Arts[\s\-–—]+(?:and|&)[\s\-–—]+Sciences")
+    (re/ncg "beforeAduna"     #"Aduna")))  ; Not an official prefix, but it appears in some license names and indicates BSD-3-Clause e.g. https://repo.clojars.org/art/uniroma2/it/org/openrdf/sesame/sesame-onejar/2.7.10/sesame-onejar-2.7.10.pom
 
 ; Possible suffixes for BSD licenses
 (defn- re-suffix-clauses
@@ -241,7 +245,6 @@
     (re/ncg "uc"                   #"\(?(?:University[\s\-–—]+of[\s\-–—]+California|UC|Cal)(?:[\s\-–—]+Specific)?\)?")
 
     ; Suffixes with distinct identifiers, unrelated to 1-4 clause licenses
-    (re/ncg "ampas"                #"")
     (re/ncg "reno43"               #"4\.3[\s\-–—]+RENO")
     (re/ncg "tahoe43"              #"4\.3[\s\-–—]+TAHOE")
     (re/ncg "advertising"          #"Advertising[\s\-–—]+Acknowledge?ment")
