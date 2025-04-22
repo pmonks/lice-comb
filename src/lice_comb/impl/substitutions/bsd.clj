@@ -41,7 +41,7 @@
   `nil` if no matches were found.  Duplicates will be removed, but invalid
   clause counts will not be removed."
   [m]
-  (let [version-number (when-let [version-number-dbl (lciu/parse-dbl (lcisu/get-rencgs m "versionNumber"))] (int version-number-dbl))]
+  (let [version-number     (when-let [version-number-dbl (lciu/parse-dbl (get m "versionNumber"))] (int version-number-dbl))]
     (seq
       (distinct
         (filter identity

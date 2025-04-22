@@ -235,7 +235,12 @@
                  "\n\n#### Prefix ####\n"
                  (re/opt-grp (re-prefixes) lcir/fre-mws)
                  "\n\n#### Matching word ####\n"
-                 (re/or-grp #"\(?CC(?:[\s\-–—]+BY)?\)?" (re/or-grp "Attribution" (re/join "Creative" lcir/fre-ows "Commons") lcir/fre-ows) lcir/fre-ows)  ; We use "Attribution" as a matching word because of https://repo.clojars.org/spectrum/spectrum/0.2.5/spectrum-0.2.5.pom
+                 (re/or-grp #"\(?CC(?:[\s\-–—]+BY)?\)?"
+                            (re/or-grp "Attribution"
+                                       (re/join "Creative" lcir/fre-ows "Commons"
+                                                (re/opt-grp lcir/fre-ows "Legal" lcir/fre-ows "Code"))
+                                       lcir/fre-ows)  ; We use "Attribution" as a matching word because of https://repo.clojars.org/spectrum/spectrum/0.2.5/spectrum-0.2.5.pom
+                            lcir/fre-ows)
                  "\n\n#### Clauses ####\n"
                  (re-clauses)
                  "\n\n#### Version ####\n"

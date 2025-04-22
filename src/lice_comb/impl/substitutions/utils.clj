@@ -172,15 +172,28 @@
   versions of the given license."
   [id-prefix default-version all-versions]
   (fn [m]
-    (let [has-version-number?     (boolean (get m "versionNumber"))
-          version-number          (s/trim (get m "versionNumber" default-version))
-          valid-version-number?   (some #{version-number} all-versions)
-          id                      (str id-prefix (if valid-version-number? version-number default-version) (when (get m "orLater") "+"))
+    (let [has-version-number?     (not (s/blank? (get m "versionNumber")))
+          [version-number valid-version? missing-minor-version?]
+                                  (if (not has-version-number?)
+                                    ; No version number - fall back on the default
+                                    [default-version true false]
+                                    ; We found a version number - validate it
+                                    (let [raw-version-number (s/trim (get m "versionNumber"))]
+                                      ; Is it valid?
+                                      (if (some #{raw-version-number} all-versions)
+                                        [raw-version-number true false]
+                                        ; Not valid so try with .0 tacked on the end (e.g. "1" -> "1.0")
+                                        (let [raw-version-number (str raw-version-number ".0")]
+                                          (if (some #{raw-version-number} all-versions)
+                                            [raw-version-number true true]
+                                            ; Fall back to the default
+                                            [default-version false true])))))
+          id                      (str id-prefix version-number (when (get m "orLater") "+"))
           id                      (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: naked exception identifiers won't canonicalise, so this has to be conditional
-          confidence              (if (and has-version-number? valid-version-number?) :high :medium)
-          confidence-explanations (when-not (and has-version-number? valid-version-number?)
-                                    (set/union (when (not has-version-number?)   #{:missing-version})
-                                               (when (not valid-version-number?) #{:invalid-version})))]
+          confidence              (if (and has-version-number? valid-version? (not missing-minor-version?)) :high :medium)
+          confidence-explanations (set/union (when (not has-version-number?) #{:missing-version})
+                                             (when (not valid-version?)      #{:invalid-version})
+                                             (when missing-minor-version?    #{:missing-minor-version}))]
     (merge {:id                      (assert-listed-id id)
             :type                    :concluded
             :confidence              confidence
