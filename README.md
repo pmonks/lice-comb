@@ -1,13 +1,10 @@
-| | | |
-|---:|:---:|:---:|
-| [**release**](https://github.com/pmonks/lice-comb/tree/release) | [![CI](https://github.com/pmonks/lice-comb/actions/workflows/ci.yml/badge.svg?branch=release)](https://github.com/pmonks/lice-comb/actions?query=workflow%3ACI+branch%3Arelease) | [![Dependencies](https://github.com/pmonks/lice-comb/actions/workflows/dependencies.yml/badge.svg?branch=release)](https://github.com/pmonks/lice-comb/actions?query=workflow%3Adependencies+branch%3Arelease) |
-| [**dev**](https://github.com/pmonks/lice-comb/tree/dev) | [![CI](https://github.com/pmonks/lice-comb/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/pmonks/lice-comb/actions?query=workflow%3ACI+branch%3Adev) | [![Dependencies](https://github.com/pmonks/lice-comb/actions/workflows/dependencies.yml/badge.svg?branch=dev)](https://github.com/pmonks/lice-comb/actions?query=workflow%3Adependencies+branch%3Adev) |
-
-[![Latest Version](https://img.shields.io/clojars/v/com.github.pmonks/lice-comb)](https://clojars.org/com.github.pmonks/lice-comb/) [![License](https://img.shields.io/github/license/pmonks/lice-comb.svg)](https://github.com/pmonks/lice-comb/blob/release/LICENSE) [![Open Issues](https://img.shields.io/github/issues/pmonks/lice-comb.svg)](https://github.com/pmonks/lice-comb/issues) [![Vulnerabilities](https://github.com/pmonks/lice-comb/actions/workflows/vulnerabilities.yml/badge.svg)](https://pmonks.github.io/lice-comb/nvd/dependency-check-report.html)
-
 <img alt="lice-comb logo: a fine-toothed metal comb for removing headlice emblazoned with the OSI keyhole logo" align="right" width="25%" src="https://raw.githubusercontent.com/pmonks/lice-comb/release/lice-comb-logo.png">
 
 # lice-comb
+
+[![CI](https://github.com/pmonks/lice-comb/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/pmonks/lice-comb/actions?query=workflow%3ACI+branch%3Adev) [![Dependencies](https://github.com/pmonks/lice-comb/actions/workflows/dependencies.yml/badge.svg?branch=dev)](https://github.com/pmonks/lice-comb/actions?query=workflow%3Adependencies+branch%3Adev) [![Vulnerabilities](https://github.com/pmonks/lice-comb/actions/workflows/vulnerabilities.yml/badge.svg)](https://pmonks.github.io/lice-comb/nvd/dependency-check-report.html)
+<br/>
+[![Latest Version](https://img.shields.io/clojars/v/com.github.pmonks/lice-comb)](https://clojars.org/com.github.pmonks/lice-comb/) [![Open Issues](https://img.shields.io/github/issues/pmonks/lice-comb.svg)](https://github.com/pmonks/lice-comb/issues) [![License](https://img.shields.io/github/license/pmonks/lice-comb.svg)](https://github.com/pmonks/lice-comb/blob/release/LICENSE)
 
 A Clojure library for software *lice*nse detection.  It does this by *comb*ing through tools.deps and Leiningen dependencies (i.e. artifacts hosted on Maven repositories), directory structures, and JAR & ZIP files, attempting to detect what license(s) they reference and/or contain, and then normalising them into [SPDX license expressions](https://spdx.github.io/spdx-spec/v2.3/SPDX-license-expressions/).
 
