@@ -1,4 +1,7 @@
 #{
+  "0BSD"
+  "0 BSD"
+  "0-BSD"
   "2-Clause BSD License"
   "2-Clause BSD"
   "3-Clause BSD License"
@@ -7,6 +10,8 @@
   "3-clause BSD license"
 ;  "3-clause license (New BSD License or Modified BSD License)"  ; Expression
   "Aduna BSD license"
+  "BSD-0"
+  "BSD 0"
   "BSD (2 Clause)"
   "BSD (2-Clause)"
   "BSD (Type 2) Public License"
@@ -40,6 +45,8 @@
   "BSD New, Version 3.0"
   "BSD Standard License"
   "BSD license"
+  "BSD Zero"
+  "BSD Zero Clause License"
   "BSD"
   "BSD-2-Clause"
   "BSD-3"
