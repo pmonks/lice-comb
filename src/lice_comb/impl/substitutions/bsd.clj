@@ -73,7 +73,9 @@
                             (if-let [valid-clause-counts (seq (filter valid-clause-count? clause-counts))]
                               [(apply min valid-clause-counts) :low #{:conflicting-clause-counts}]
                               [4                               :low #{:conflicting-clause-counts :invalid-clause-count}]))))
-        id            (str "BSD-" clause-count "-Clause")]
+        id            (if (= 0  clause-count)
+                        "0BSD"
+                        (str "BSD-" clause-count "-Clause"))]
     [id confidence confidence-explanations]))  ; We don't assert or canonicalise the identifier here, as that has to happen after we've appended any suffix
 
 (defn- suffix
@@ -135,8 +137,7 @@
         [id confidence confidence-explanations]
               (if-let [sbi (suffix-based-identifier m)]  ; First check if it's a suffix-based identifier
                 sbi
-                (let [cbi              (clause-based-identifier m)
-                      [id con con-exp] cbi
+                (let [[id con con-exp] (clause-based-identifier m)
                       suffix           (suffix m)
                       id-and-suffix    (str id suffix)]
                   (if (sl/listed-id? id-and-suffix)
