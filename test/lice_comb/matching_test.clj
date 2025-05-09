@@ -78,11 +78,11 @@
     (is (nil?                                           (name->expressions "\n")))
     (is (nil?                                           (name->expressions "\t"))))
   (testing "Simple unidentified names"
-    (is (valid= #{(lcis/name->unidentified-addition-ref "AND")}    (name->expressions "AND")))
-    (is (valid= #{(lcis/name->unidentified-addition-ref "or")}     (name->expressions "or")))
-    (is (valid= #{(lcis/name->unidentified-addition-ref "with")}   (name->expressions "with")))
-    (is (valid= #{(lcis/name->unidentified-addition-ref "foo")}    (name->expressions "foo")))
-    (is (valid= #{(lcis/name->unidentified-addition-ref "@$%^*)")} (name->expressions "@$%^*)"))))
+    (is (valid= #{(lcis/name->unidentified-license-ref "AND")}    (name->expressions "AND")))
+    (is (valid= #{(lcis/name->unidentified-license-ref "or")}     (name->expressions "or")))
+    (is (valid= #{(lcis/name->unidentified-license-ref "with")}   (name->expressions "with")))
+    (is (valid= #{(lcis/name->unidentified-license-ref "foo")}    (name->expressions "foo")))
+    (is (valid= #{(lcis/name->unidentified-license-ref "@$%^*)")} (name->expressions "@$%^*)"))))
   (testing "SPDX license ids"
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "AGPL-3.0")))
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "AGPL-3.0-only")))
