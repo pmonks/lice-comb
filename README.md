@@ -26,21 +26,36 @@ This library leverages, and is inspired by, the *excellent* [SPDX project](https
 
 `lice-comb` is available as a Maven artifact from [Clojars](https://clojars.org/com.github.pmonks/lice-comb).
 
-### Trying it Out
+### API Documentation
 
-#### Clojure CLI
+[API documentation is available here](https://pmonks.github.io/lice-comb/), or [here on cljdoc](https://cljdoc.org/d/com.github.pmonks/lice-comb/).
+
+[An FAQ is available here](https://github.com/pmonks/lice-comb/wiki/FAQ).
+
+## Upgrading
+
+### 1.x -> 2.x
+
+The implementation of [issue #3](https://github.com/pmonks/lice-comb/issues/3) resulted in a number of unavoidable breaking changes, including:
+
+* A wholesale change from returning sets of SPDX identifiers to returning sets of SPDX expressions
+* The creation of [a dedicated SPDX-specific library (`clj-spdx`)](https://github.com/pmonks/clj-spdx) that leverages [the official SPDX Java library](https://github.com/spdx/Spdx-Java-Library)
+
+## Trying it Out
+
+### Clojure CLI
 
 ```shell
 $ clj -Sdeps '{:deps {com.github.pmonks/lice-comb {:mvn/version "RELEASE"}}}'
 ```
 
-#### Leiningen
+### Leiningen
 
 ```shell
 $ lein try com.github.pmonks/lice-comb
 ```
 
-#### deps-try
+### deps-try
 
 ```shell
 $ deps-try com.github.pmonks/lice-comb
@@ -149,21 +164,6 @@ $ deps-try com.github.pmonks/lice-comb
 ;       > <licenses><license><name>
 ;       > Apache License, Version 2.0
 ```
-
-### API Documentation
-
-[API documentation is available here](https://pmonks.github.io/lice-comb/), or [here on cljdoc](https://cljdoc.org/d/com.github.pmonks/lice-comb/).
-
-[An FAQ is available here](https://github.com/pmonks/lice-comb/wiki/FAQ).
-
-## Upgrading
-
-### 1.x -> 2.x
-
-The implementation of [issue #3](https://github.com/pmonks/lice-comb/issues/3) resulted in a number of unavoidable breaking changes, including:
-
-* A wholesale change from returning sets of SPDX identifiers to returning sets of SPDX expressions
-* The creation of [a dedicated SPDX-specific library (`clj-spdx`)](https://github.com/pmonks/clj-spdx) that leverages [the official SPDX Java library](https://github.com/spdx/Spdx-Java-Library)
 
 ## Contributor Information
 
