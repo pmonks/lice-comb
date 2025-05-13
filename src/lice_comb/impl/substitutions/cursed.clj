@@ -35,7 +35,7 @@
   "Substitutes any cursed licenses found in the strings in `coll` with an
   expression-info map. Returns other elements unchanged."
   [coll]
-  (lcisu/sub-res @pairs-d coll))
+  (flatten (lcisu/sub-res @pairs-d coll)))  ; We use flatten here, as cursed names may result in multiple elements in coll
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

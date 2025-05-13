@@ -51,35 +51,8 @@
       (s/ends-with? id "-only")                                :only
       (or (s/ends-with? id "+") (s/ends-with? id "-or-later")) :or-later)))
 
-;####TODO: REMOVE THIS IF STANDARD REGEX MATCHING ISN'T NEEDED
-(comment
-(defn- gnu-id-comparator
-  "Compares GNU family ids, by putting the `-only` variants first.  This order
-  is important as there are certain license name values that both the -only and
-  -or-later regex will match, but the -only id is the more correct choice."
-  [id1 id2]
-  (if (= id1 id2)
-    0
-    (if (= (base-id id1) (base-id id2))
-      (case [(suffix id1) (suffix id2)]  ; Note: don't need all possibilities as the if statement takes care of some of them
-        [nil       :only]     1
-        [nil       :or-later] 1
-        [:only     nil]       -1
-        [:or-later nil]       -1
-        [:only     :or-later] -1
-        [:or-later :only]     1
-        [:or-later :or-later] 0)  ; This can occur due to +/-or-later being equivalent
-      (compare id1 id2))))
-)
-
 ; All GNU family license ids, including deprecated ones - we report that we match all GPL ids so that they're removed from lice-comb.impl.substitutions.others matching
 (def ids-d (delay (set (filter #(or (lcisu/agpl-license? %) (lcisu/lgpl-license? %) (lcisu/gpl-license? %)) (map :id @lcis/full-license-list-d)))))
-
-;####TODO: REMOVE THIS IF STANDARD REGEX MATCHING ISN'T NEEDED
-; Undeprecated GNU family license ids (these ones are used for matching)
-;(def ^:private agpl-license-ids-d (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/agpl-license? (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
-;(def ^:private lgpl-license-ids-d (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/lgpl-license? (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
-;(def ^:private gpl-license-ids-d  (delay (sort gnu-id-comparator (map :id (filter #(and (lcisu/gpl-license?  (:id %)) (not (:deprecated? %))) @lcis/full-license-list-d)))))
 
 (defn- match->ei
   "Construct an expression-info map from `m`, a map returned from a rencg regex
@@ -87,7 +60,7 @@
   [variant m]
   (let [match              (s/trim (:match m))
         version-present?   (boolean (lcisu/get-rencgs m ["versionNumber"] false))
-        default-version    (if (= variant "LGPL") "2.0" "1.0")  ; Note: on the advice of the SPDX technical team, default to earliest version when version not present
+        default-version    (if (= variant "LGPL") "2.0" "1.0")  ; Note: on the advice of the SPDX technical team, default to earliest GPL version when version not present (unlike most other license families!)
         version            (lcisu/get-rencgs m ["versionNumber"] default-version)
         version            (s/replace version #"[\s\p{Punct}]+" ".")   ; Turn other version number point separators into . (undercore appears in at least one license name, for example)
         [confidence confidence-explanations]
@@ -102,7 +75,7 @@
         [suffix confidence-explanations]
                            (cond (contains? m "orLater") ["or-later" confidence-explanations]
                                  (contains? m "only")    ["only"     confidence-explanations]
-                                 :else                   [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version or suffix not present
+                                 :else                   [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version or suffix not present (unlike most other license families!)
                                                           (set/union #{:missing-version-suffix} confidence-explanations)])
         id                 (str variant "-" version  "-" suffix)
         [id confidence confidence-explanations]
@@ -122,8 +95,6 @@
 (def ^:private gnu-words [#"The" #"GNU" #"GPL" #"Genere?al" #"Pub?lic" #"Licen[cs]ed?(?:[\s\-–—]+Under)?" #"Open[\s\-–—]+Source" #"FOSS" #"OSS"])
 
 ; AGPL regexes
-;####TEST!!!!
-;(def ^:private fre-agpl-words (re/grp (apply re/alt (concat gnu-words [#"\(?AGPL[\s\-–—v\d\.]*\)?" "Affero"]))))
 (def ^:private fre-agpl-words-before (re/grp (apply re/alt (concat gnu-words [#"\(?AGPL[\s\-–—]*\)?" "Affero"]))))
 (def ^:private fre-agpl-words-after  (re/grp (apply re/alt (concat gnu-words [#"\(?AGPL[\s\-–—v\d\.]*\)?" "Affero"]))))  ; Only include version variants *after* the actual version
 (def re-agpl                  (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
@@ -145,8 +116,6 @@
 
 ; LGPL regexes
 (def ^:private fre-lesser-or-library  (re/or-grp "Lesser" "Library" (re/join lcir/fre-mws "or" lcir/fre-mws)))
-;####TEST!!!!
-;(def ^:private fre-lgpl-words         (re/grp (apply re/alt (concat gnu-words [#"\(?LGPL[\s\-–—v\d\.]*\)?" fre-lesser-or-library]))))
 (def ^:private fre-lgpl-words-before  (re/grp (apply re/alt (concat gnu-words [#"\(?LGPL[\s\-–—]*\)?" fre-lesser-or-library]))))
 (def ^:private fre-lgpl-words-after   (re/grp (apply re/alt (concat gnu-words [#"\(?LGPL[\s\-–—v\d\.]*\)?" fre-lesser-or-library]))))  ; Only include version variants *after* the actual version
 (def re-lgpl                          (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
@@ -170,8 +139,6 @@
                                                #"(?!\w)"))
 
 ; GPL regexes
-;####TEST!!!!
-;(def ^:private fre-gpl-words (re/grp (apply re/alt (concat gnu-words [#"\(?GPL[\s\-–—v\d\.]*\)?"]))))
 (def ^:private fre-gpl-words-before (re/grp (apply re/alt (concat gnu-words [#"\(?GPL[\s\-–—]*\)?"]))))
 (def ^:private fre-gpl-words-after  (re/grp (apply re/alt (concat gnu-words [#"\(?GPL[\s\-–—v\d\.]*\)?"]))))  ; Only include version variants *after* the actual version
 (def re-gpl                  (re/join #"(?iuUx)(?<!\w)"  ; Only public for ease of testing
@@ -193,14 +160,10 @@
 
 (def ^:private pairs-d (delay (concat ; AGPL matching pairs
                                       [[re-agpl (partial match->ei "AGPL")]]
-;                                      (lcisu/spdx-match-pairs @agpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       ; LGPL matching pairs
                                       [[re-lgpl (partial match->ei "LGPL")]]
-;                                      (lcisu/spdx-match-pairs @lgpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
                                       ; GPL matching pairs (these must go after AGPL and LGPL)
-                                      [[re-gpl (partial match->ei "GPL")]]
-;                                      (lcisu/spdx-match-pairs @gpl-license-ids-d)  ;####TODO: IS THIS EVEN NEEDED?
-                                      )))
+                                      [[re-gpl (partial match->ei "GPL")]])))
 
 (defn sub
   "Substitutes any GNU family licenses found in the `String`s in `coll` with an

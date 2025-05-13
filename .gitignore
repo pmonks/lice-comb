@@ -20,3 +20,4 @@ uberjar/
 attic
 resources/logback-test.xml
 .clj-kondo/.cache
+test.clj

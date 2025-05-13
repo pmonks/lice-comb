@@ -218,7 +218,7 @@
   digit."
   [^String s]
   (when s
-    (case s
+    (case (s/lower-case (s/trim s))
       "zero"  0
       "one"   1
       "two"   2
