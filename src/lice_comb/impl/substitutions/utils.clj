@@ -83,19 +83,19 @@
         (recur r new-coll)))))
 
 ; These are here because the GNU family are SUCH A HUGE PAIN IN THE ARSE!!!!!
-(defn agpl-license?
+(defn agpl-identifier?
   "Is `id` an AGPL SPDX identifier?"
   [id]
   (when id
     (s/starts-with? id "AGPL-")))
 
-(defn lgpl-license?
+(defn lgpl-identifier?
   "Is `id` an LGPL SPDX identifier?"
   [id]
   (when id
     (s/starts-with? id "LGPL-")))
 
-(defn gpl-license?
+(defn gpl-identifier?
   "Is `id` a GPL SPDX identifier?"
   [id]
   (when id
@@ -106,9 +106,9 @@
   [id]
   (boolean
     (when id
-      (or (agpl-license? id)
-          (lgpl-license? id)
-          (gpl-license?  id)))))
+      (or (agpl-identifier? id)
+          (lgpl-identifier? id)
+          (gpl-identifier?  id)))))
 
 (defn- name-id-match-ei-fn
   "Returns a simple expression-info construction function for `id`, when matched
@@ -117,7 +117,7 @@
   [id]
   (let [n (:name (or (slic/id->info id) (sexc/id->info id)))]
     (fn [m]
-      (let [id                  (str id (when (get m "orLater") "+"))               ; This can end up with things like GPL-2.0-or-later+, but those get canonicalised in the next step
+      (let [id                  (str id (when (get m "orLater") "+"))               ; This can end up with things like GPL-2.0-or-later+, but those get canonicalised by clj-spdx in the next step
             id                  (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: exception ids won't canonicalise by themselves
             gnu-suffix-missing? (and (gnu-family? id) (not (get m "orLater")) (not (get m "only")))  ; Special case GNU family licenses missing version suffixes
             match               (s/trim (:match m))
@@ -137,15 +137,24 @@
 
 (defn spdx-match-pairs
   "Constructs a sequence of regex/fn pairs for the given SPDX identifiers,
-  matching first by name regexes, then by id regexes."
+  matching first by name regexes, then by id regexes. Sorts the ids as per
+  lice-comb.impl.spdx/sort-ids."
   [ids]
-  (concat
-    ; Names match pairs first
-    (sort (by #(count (str (first %))) descending)
-          (map #(vector (lcir/id->name->regex %) (name-id-match-ei-fn %)) ids))
-    ; Then id match pairs
-    (sort (by #(count (str (first %))) descending)
-          (map #(vector (lcir/id->regex %) (name-id-match-ei-fn %)) ids))))
+  (let [ids (lcis/sort-ids ids)]
+    (concat
+      ; Names match pairs first
+      (map #(vector (lcir/id->name->regex %) (name-id-match-ei-fn %)) ids)
+      ; Then id match pairs
+      (map #(vector (lcir/id->regex %)       (name-id-match-ei-fn %)) ids))))
+
+(comment
+      ; Names match pairs first
+      (sort (by #(count (str (first %))) descending)
+            (map #(vector (lcir/id->name->regex %) (name-id-match-ei-fn %)) ids))
+      ; Then id match pairs
+      (sort (by #(count (str (first %))) descending)
+            (map #(vector (lcir/id->regex %) (name-id-match-ei-fn %)) ids))
+)
 
 (defn simple-regex-match-ei-fn
   "Returns a simple expression-info construction function for `id`, when matched

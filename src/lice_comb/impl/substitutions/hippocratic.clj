@@ -19,7 +19,7 @@
             [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
-(def ids-d (delay (set (map :id (filter #(s/starts-with? (:id %) "Hippocratic-") @lcis/full-license-list-d)))))
+(def ids-d (delay (lcis/sort-ids (filter #(s/starts-with? % "Hippocratic-") @lcis/license-ids-d))))
 
 (def ^:private pairs-d (delay (concat
   (lcisu/spdx-match-pairs @ids-d)                                                                     ; Generic license regexes handle most cases, except...

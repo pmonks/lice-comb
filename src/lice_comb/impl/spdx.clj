@@ -18,45 +18,86 @@
             [spdx.exceptions          :as se]
             [spdx.expressions         :as sexp]
             [spdx.regexes             :as sre]
+            [lice-comb.impl.families  :as lcif]
             [lice-comb.impl.3rd-party :refer [by ascending descending] :as lc3]
             [lice-comb.impl.utils     :as lciu]))
 
-;####TODO: REMOVE ME!!!!
-(require '[clojure.pprint :as pp])
-(defn debug-print
-  ([x] (debug-print x nil))
-  ([x msg]
-   (println "⭐️⭐️⭐️ ➡️" msg)
-   (pp/pprint x)
-   (println "⬅️ ⭐️⭐️⭐️")
-   (flush)
-   x))
-
 ; The subset of SPDX license identifiers that we use, as an unordered set
-(def license-ids-d
-  (delay
-    (disj (set (filter #(not (s/ends-with? % "+")) (sl/ids)))
-          "AGPL-1.0" "AGPL-3.0" "GPL-1.0" "GPL-2.0" "GPL-3.0" "LGPL-2.0" "LGPL-2.1" "LGPL-3.0"
-          "GPL-2.0-with-autoconf-exception" "GPL-2.0-with-bison-exception" "GPL-2.0-with-classpath-exception"
-          "GPL-2.0-with-font-exception" "GPL-2.0-with-GCC-exception" "GPL-3.0-with-autoconf-exception"
-          "GPL-3.0-with-GCC-exception" "BSD-2-Clause-FreeBSD" "BSD-2-Clause-NetBSD" "bzip2-1.0.5"
-          "eCos-2.0" "Net-SNMP" "StandardML-NJ" "wxWindows")))
+(def license-ids-d (delay (sl/ids)))
 
 ; The subset of SPDX exception identifiers that we use, as an unordered set
-(def exception-ids-d
-  (delay
-    (disj (se/ids)
-          "Nokia-Qt-exception-1.1")))
+(def exception-ids-d (delay (se/ids)))
 
-; The license and exception lists (both the full things, and the subsets we use)
-; NOTES:
-; * large elements (license texts and their variants) are removed, to reduce memory consumption
-; * deprecated licenses are sorted last so that they're processed last in any kind of serial processing (e.g. in replace-near-match-ids-with-id & replace-near-match-names-with-id)
-; * non-deprecated licenses are sorted longest to shortest so that the least likely match is attempted first in the event of a double match
-(def full-license-list-d   (delay (sort (by :deprecated? ascending #(count (:name %)) descending :id ascending) (map #(sl/id->info % {:include-large-text-values? false}) (sl/ids)))))
-(def full-exception-list-d (delay (sort (by :deprecated? ascending #(count (:name %)) descending :id ascending) (map #(se/id->info % {:include-large-text-values? false}) (se/ids)))))
-(def license-list-d        (delay (sort (by :deprecated? ascending #(count (:name %)) descending :id ascending) (map #(sl/id->info % {:include-large-text-values? false}) @license-ids-d))))
-(def exception-list-d      (delay (sort (by :deprecated? ascending #(count (:name %)) descending :id ascending) (map #(se/id->info % {:include-large-text-values? false}) @exception-ids-d))))
+(defn id->info
+  "Returns the associated SPDX list info for `id`, which can be either a license
+  identifier or an exception identifier, or `nil` if `id` is not a valid SPDX
+  listed identifier.
+
+  Notes:
+
+  * does _not_ include large text values in the result
+  * assocs a `:type` element with either the value `:license` or the value
+    `:exception`"
+  [^String id]
+  (if-let [license-entry (sl/id->info id {:include-large-text-values? false})]
+    (assoc license-entry :type :license)
+    (when-let [exception-entry (se/id->info id {:include-large-text-values? false})]
+      (assoc exception-entry :type :exception))))
+
+;####TEST!!!!
+(defn sort-id-infos
+;(defn- sort-id-infos
+  "Sorts the given id info maps according to lice-comb's preferred sort order:
+
+  1. non-deprecated before deprecated
+  2. licenses before exceptions
+  3. 'families' of identifiers grouped together
+  4. longer names before shorter names, based on the newest identifier in each
+     family
+  5. by id (newest version first)"
+  [id-infos]
+  (let [; Split non-deprecated and deprecated, then identify families in each
+        non-deprecated-families (lcif/id-infos->families false (filter (complement :deprecated?) id-infos))
+        deprecated-families     (lcif/id-infos->families false (filter :deprecated? id-infos))
+        ; Sorter function
+        sorter                  (by #(:type (last (val %)))         descending  ; licenses first, exceptions second
+                                    #(count (:name (last (val %)))) descending
+                                    #(:id (last (val %)))           ascending)]
+    (concat
+      (mapcat #(reverse (second %)) (sort sorter non-deprecated-families))
+      (mapcat #(reverse (second %)) (sort sorter deprecated-families)))))
+
+;####TEST!!!!
+(defn sort-ids->id-infos
+;(defn- sort-ids->id-infos
+  "Sorts the given SPDX listed ids according to lice-comb's preferred sort
+  order, returning a sequence of id info maps for each one. The sort order is:
+
+  1. non-deprecated before deprecated
+  2. licenses before exceptions
+  3. 'families' of identifiers grouped together
+  4. longer names before shorter names, based on the newest identifier in each
+     family
+  5. by id (newest version first)"
+  [ids]
+  (sort-id-infos (map id->info ids)))
+
+(defn sort-ids
+  "Sorts the given SPDX listed ids according to lice-comb's preferred sort
+  order:
+
+  1. non-deprecated before deprecated
+  2. licenses before exceptions
+  3. 'families' of identifiers grouped together
+  4. longer names before shorter names, based on the newest identifier in each
+     family
+  5. by id (newest version first)"
+  [ids]
+  (map :id (sort-ids->id-infos ids)))
+
+; The license and exception lists, in the order they should be processed
+(def license-list-d   (delay (sort-ids->id-infos @license-ids-d)))
+(def exception-list-d (delay (sort-ids->id-infos @exception-ids-d)))
 
 ; The license refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
 (def ^:private lice-comb-license-ref-prefix       "LicenseRef-lice-comb")
@@ -67,14 +108,6 @@
 ; The addition refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
 (def ^:private lice-comb-addition-ref-prefix      "AdditionRef-lice-comb")
 (def ^:private unidentified-addition-ref-prefix   (str lice-comb-addition-ref-prefix "-UNIDENTIFIED"))
-
-(defn id->info
-  "Returns the associated SPDX list info for `id`, which can be either a license
-  identifier or an exception identifier."
-  [id]
-  (if-let [license-entry (sl/id->info id)]
-    license-entry
-    (se/id->info id)))
 
 ; Map of lower case SPDX id to correctly cased SPDX id
 (def ^:private spdx-ids-d (delay (merge (into {} (map #(vec [(s/lower-case %) %]) @license-ids-d))
@@ -104,8 +137,8 @@
         simplified-uris (map lciu/simplify-uri (filter (complement s/blank?) (concat (:see-also list-entry) (get-in list-entry [:cross-refs :url]))))]
     (map #(vec [% id]) simplified-uris)))
 
-(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @full-license-list-d)))
-                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @full-exception-list-d))))))
+(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @license-list-d)))
+                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @exception-list-d))))))
 
 (defn near-match-uri
   "Returns the id(s) (a set) for the given listed `uri`, or `nil` if no ids were
@@ -293,8 +326,6 @@
   ; Serially initialise this namespace's dependent state - they're all pretty fast (< 1s)
   @license-ids-d
   @exception-ids-d
-  @full-license-list-d
-  @full-exception-list-d
   @license-list-d
   @exception-list-d
   @spdx-ids-d

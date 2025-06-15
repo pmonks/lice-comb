@@ -19,7 +19,7 @@
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
 (def ^:private wtf-id "WTFPL")
-(def ids-d (delay #{wtf-id}))
+(def ids-d (delay (lcis/sort-ids #{wtf-id})))
 
 (def ^:private pairs-d (delay (concat [
   [(re/join #"(?iuU)"

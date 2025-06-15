@@ -19,7 +19,7 @@
             [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
-(def ids-d (delay (set (map :id (filter #(s/starts-with? (:id %) "EPL-") @lcis/full-license-list-d)))))
+(def ids-d (delay (lcis/sort-ids (filter #(s/starts-with? % "EPL-") @lcis/license-ids-d))))
 
 (def re (re/join #"(?iuU)"  ; Only public for ease of testing
                  (re/alt-grp "EPL"

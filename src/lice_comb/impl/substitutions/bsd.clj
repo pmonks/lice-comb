@@ -23,8 +23,7 @@
             [lice-comb.impl.utils               :as lciu]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
-(def ids-d (delay (set (concat ["0BSD" "AMPAS" "FreeBSD-DOC"] (map :id (filter #(s/starts-with? (:id %) "BSD-") @lcis/full-license-list-d))))))
-
+(def ids-d (delay (lcis/sort-ids (concat ["0BSD" "AMPAS" "FreeBSD-DOC"] (filter #(s/starts-with? % "BSD-") @lcis/license-ids-d)))))
 
 ;;
 ;; EXPRESSION-INFO CONSTRUCTION FROM A MATCH

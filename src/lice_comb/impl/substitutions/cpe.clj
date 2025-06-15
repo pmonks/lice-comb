@@ -18,7 +18,7 @@
             [lice-comb.impl.spdx                :as lcis]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
-(def ids-d (delay (set (map :id (filter #(s/starts-with? (:id %) "Classpath-exception-") @lcis/full-exception-list-d)))))
+(def ids-d (delay (lcis/sort-ids (filter #(s/starts-with? % "Classpath-exception-") @lcis/exception-ids-d))))
 
 (def ^:private pairs-d (delay (concat
   (lcisu/spdx-match-pairs @ids-d)                         ; Generic license regexes handle most cases, except...

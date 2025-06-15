@@ -18,6 +18,7 @@
             [embroidery.api  :as e]
             [rencg.api       :as rencg]))
 
+; Note: replace if/when this gets addressed: https://github.com/Reefersleep/thread-until/issues/2
 (defmacro until*->
   "Recursive portion of until-> - not intended for direct use."
   [expr pred? & forms]

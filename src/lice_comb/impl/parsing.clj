@@ -11,33 +11,34 @@
 (ns lice-comb.impl.parsing
   "License name, URI, and text parsing functionality. Note: this namespace is
   not part of the public API of lice-comb and may change without notice."
-  (:require [clojure.string                           :as s]
-            [clojure.set                              :as set]
-            [clojure.java.io                          :as io]
-            [spdx.matching                            :as sm]
-            [spdx.expressions                         :as sexp]
-            [embroidery.api                           :as e]
-            [wreck.api                                :as re]
-            [lice-comb.impl.spdx                      :as lcis]
-            [lice-comb.impl.expressions-info          :as lciei]
-            [lice-comb.impl.http                      :as lcihttp]
-            [lice-comb.impl.correction                :as lcic]
-            [lice-comb.impl.utils                     :as lciu]
-            [lice-comb.impl.parsing-utils             :as lcipu]
-            [lice-comb.impl.regexes                   :as lcir]
-            [lice-comb.impl.3rd-party                 :as lci3]
-            [lice-comb.impl.substitutions.cursed      :as cursed]
-            [lice-comb.impl.substitutions.bsd         :as bsd]
-            [lice-comb.impl.substitutions.cc          :as cc]
-            [lice-comb.impl.substitutions.cddl        :as cddl]
-            [lice-comb.impl.substitutions.cpe         :as cpe]
-            [lice-comb.impl.substitutions.epl         :as epl]
-            [lice-comb.impl.substitutions.gnu         :as gnu]
-            [lice-comb.impl.substitutions.hippocratic :as hippocratic]
-            [lice-comb.impl.substitutions.mpl         :as mpl]
-            [lice-comb.impl.substitutions.wtf         :as wtf]
-            [lice-comb.impl.substitutions.custom      :as custom]
-            [lice-comb.impl.substitutions.others      :as others]))
+  (:require [clojure.string                              :as s]
+            [clojure.set                                 :as set]
+            [clojure.java.io                             :as io]
+            [spdx.matching                               :as sm]
+            [spdx.expressions                            :as sexp]
+            [embroidery.api                              :as e]
+            [wreck.api                                   :as re]
+            [lice-comb.impl.spdx                         :as lcis]
+            [lice-comb.impl.expressions-info             :as lciei]
+            [lice-comb.impl.http                         :as lcihttp]
+            [lice-comb.impl.correction                   :as lcic]
+            [lice-comb.impl.utils                        :as lciu]
+            [lice-comb.impl.parsing-utils                :as lcipu]
+            [lice-comb.impl.regexes                      :as lcir]
+            [lice-comb.impl.3rd-party                    :as lci3]
+            [lice-comb.impl.substitutions.cursed         :as cursed]
+            [lice-comb.impl.substitutions.bsd            :as bsd]
+            [lice-comb.impl.substitutions.cc             :as cc]
+            [lice-comb.impl.substitutions.cddl           :as cddl]
+            [lice-comb.impl.substitutions.cpe            :as cpe]
+            [lice-comb.impl.substitutions.epl            :as epl]
+            [lice-comb.impl.substitutions.gnu            :as gnu]
+            [lice-comb.impl.substitutions.gnu-exceptions :as gnuexc]
+            [lice-comb.impl.substitutions.hippocratic    :as hippocratic]
+            [lice-comb.impl.substitutions.mpl            :as mpl]
+            [lice-comb.impl.substitutions.wtf            :as wtf]
+            [lice-comb.impl.substitutions.custom         :as custom]
+            [lice-comb.impl.substitutions.others         :as others]))
 
 ;####TODO: REMOVE ME!!!!
 (require '[clojure.pprint :as pp])
@@ -143,13 +144,11 @@
              seq)))
 
 ;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
-(def ^:private extraneous-fragment-res-d (delay [#"(?i)copyright([\s\-–—,]+\(c\))?([\s\-–—,]*©️)?([\s\-–—,]*©)?"
-                                                 #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"
-;                                                 #"(?i)Licen[cs]ed([\s\-–—,]+under)?"
-                                                 #"(?i)dual"
-                                                 (re/join #"(?i)" lcir/fre-date)
-;                                                 #"(?i)[\s\-–—,]*version[\s\-–—,]+\d+"  ; Some names leave dangling versions (e.g. "Do What The Fuck You Want To Public License, Version 2" - there's only a single version of that license')
-                                                 #"(?U)\W+"]))   ; Strip fragments containing no (Unicode) alphabetic characters
+(def ^:private extraneous-fragment-res-d (delay [#"(?i)copyright([\s\-–—,]+\(c\))?([\s\-–—,]*©️)?([\s\-–—,]*©)?"  ; Copyright fragments
+                                                 #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"                         ; Uncaptured "public license" suffixes
+                                                 #"(?i)dual"                                                      ; Uncaptured "dual" prefix
+                                                 (re/join #"(?i)" lcir/fre-date)                                  ; Uncaptured dates
+                                                 #"(?U)\W+"]))                                                    ; Fragments containing no (Unicode) alphabetic characters i.e. punctuation only
 
 ;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
 (defn- remove-extraneous-fragments
@@ -160,9 +159,9 @@
     (if (or (not re)
             (lcipu/done-parsing? coll))
       (filter lciu/not-blank-string? coll)
-      (let [new-coll (lciu/map-str #(let [s (s/trim (s/replace % #"\W+" ""))]  ; Remove all non-alphanumeric ("word") characters and trim the result
-                                      (when (and (>= (count s) 4)              ; Strip anything with fewer than 4 characters left
-                                               (not (re-matches re (s/trim %))))        ; or that matches one of the extraneous fragment regexes
+      (let [new-coll (lciu/map-str #(let [s (s/trim (s/replace % #"(?U)\W+" ""))]  ; Remove all non-alphanumeric ("word") characters and trim the result
+                                      (when (and (>= (count s) 4)                  ; Strip anything with fewer than 4 word characters
+                                               (not (re-matches re (s/trim %))))   ; or that matches one of the extraneous fragment regexes
                                         %))
                                    coll)]
         (recur r new-coll)))))
@@ -243,9 +242,6 @@
         (recur (concat [s] r)
                (conj result f))))))
 
-
-;(some #(and (map? %) (lcis/id->info (:id %))) coll)
-
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the `coll`ection containing eis
   and operator keywords.  Returns an expressions-info map."
@@ -281,13 +277,14 @@
                                       cc/sub
                                       cddl/sub
                                       cpe/sub
+                                      gnuexc/sub
                                       epl/sub
                                       hippocratic/sub
                                       wtf/sub
                                       others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
                                       custom/sub       ; This has to go after the generics, since it matches things like "NCBI Public Domain Notice"
                                       mpl/sub          ; This has to go after the generics, since it matches things like "SimPL-2.0"
-                                      gnu/sub          ; This needs to go last, as the "word salad" matching approach it uses is overly greedy
+                                      gnu/sub          ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
                                       )
                         sub-operators
                         ; Cleanup

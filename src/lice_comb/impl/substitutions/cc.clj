@@ -21,7 +21,7 @@
             [lice-comb.impl.regexes             :as lcir]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
-(def ids-d (delay (set (concat ["CC0-1.0"] (map :id (filter #(s/starts-with? (:id %) "CC-") @lcis/full-license-list-d))))))
+(def ids-d (delay (lcis/sort-ids (concat ["CC0-1.0"] (filter #(s/starts-with? % "CC-") @lcis/license-ids-d)))))
 
 
 ;;
@@ -236,7 +236,7 @@
                  (re/opt-grp (re-prefixes) lcir/fre-mws)
                  "\n\n#### Matching word ####\n"
                  (re/or-grp #"\(?CC(?:[\s\-–—]+BY)?\)?"
-                            (re/or-grp "Attribution"
+                            (re/or-grp (re/join "(?<!" (re/alt-grp "No" "With" #"\s*\-\s*" "Public" #"Data\s+Commons") ")\\s*Attribution")
                                        (re/join "Creative" lcir/fre-ows "Commons"
                                                 (re/opt-grp lcir/fre-ows "Legal" lcir/fre-ows "Code"))
                                        lcir/fre-ows)  ; We use "Attribution" as a matching word because of https://repo.clojars.org/spectrum/spectrum/0.2.5/spectrum-0.2.5.pom
