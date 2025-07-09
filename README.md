@@ -9,6 +9,7 @@
 [![Latest Version](https://img.shields.io/clojars/v/com.github.pmonks/lice-comb)](https://clojars.org/com.github.pmonks/lice-comb/)
 [![Open Issues](https://img.shields.io/github/issues/pmonks/lice-comb.svg)](https://github.com/pmonks/lice-comb/issues)
 [![License](https://img.shields.io/github/license/pmonks/lice-comb.svg)](https://github.com/pmonks/lice-comb/blob/release/LICENSE)
+![Maintained](https://badges.ws/badge/?label=maintained&value=yes,+at+author's+discretion)
 
 A Clojure library for software *lice*nse detection.  It does this by *comb*ing through tools.deps and Leiningen dependencies (i.e. artifacts hosted on Maven repositories), directory structures, and JAR & ZIP files, attempting to detect what license(s) they reference and/or contain, and then normalising them into [SPDX license expressions](https://spdx.github.io/spdx-spec/v2.3/SPDX-license-expressions/).
 
