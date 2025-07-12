@@ -119,7 +119,7 @@
     (is (nil? (ids->families nil)))
     (is (nil? (ids->families []))))
   (testing "Short lists of ids"
-    (is (= ["Apache" "GPL" :none] (keys (ids->families ["Apache-1.0" "GPL-2.0" "Apache-2.0" "CECILL-B" "GPL-3.0-or-later"])))))
+    (is (= ["Apache" "GPL" nil] (keys (ids->families ["Apache-1.0" "GPL-2.0" "Apache-2.0" "CECILL-B" "GPL-3.0-or-later"])))))
   (testing "Long lists of ids"
     ; We just cherrypick a few families here (checking all of them would be difficult as the SPDX license list grows)
     (let [license-families (set (keys (ids->families @lic-ids-d)))]

@@ -14,6 +14,7 @@
   (:require [clojure.string                              :as s]
             [clojure.set                                 :as set]
             [clojure.java.io                             :as io]
+            [thread-until.core                           :as tu]
             [spdx.matching                               :as sm]
             [spdx.expressions                            :as sexp]
             [embroidery.api                              :as e]
@@ -36,6 +37,7 @@
             [lice-comb.impl.substitutions.gnu-exceptions :as gnuexc]
             [lice-comb.impl.substitutions.hippocratic    :as hippocratic]
             [lice-comb.impl.substitutions.mpl            :as mpl]
+            [lice-comb.impl.substitutions.refs           :as refs]
             [lice-comb.impl.substitutions.wtf            :as wtf]
             [lice-comb.impl.substitutions.custom         :as custom]
             [lice-comb.impl.substitutions.others         :as others]))
@@ -44,7 +46,7 @@
 (require '[clojure.pprint :as pp])
 (defn debug-print
   ([x] (debug-print x nil))
-  ([x msg]
+  ([x msg & _]
    (println "⭐️⭐️⭐️ ➡️" msg)
    (pp/pprint x)
    (println "⬅️ ⭐️⭐️⭐️")
@@ -119,28 +121,58 @@
   (let [unidentified-id (lcis/name->unidentified-license-ref n)]
     {unidentified-id (list (make-unidentified-ei n unidentified-id))}))
 
-(defn- collapse-duplicate-operator-keywords
-  "Collapses sequential runs of keywords in `coll`, either to 1 keyword if
-  the run is identical, or to no keywords if they're heterogeneous. Non-keyword
-  values in `coll` are passed through unchanged."
-  [coll]
-  (filter #(not= ::sentinel %)
-    (reduce #(if (and (keyword? (last %1)) (keyword? %2))
-               (if (= (last %1) %2)
-                 %1
-                 (conj (vec (drop-last %1)) ::sentinel))
-               (conj %1 %2))
-            []
-            coll)))
+(defn- collapse-multiple-operator-keywords
+  "Collapses sequential runs of keywords in `coll`, to either a single keyword
+  identifying the most appropriate operator, or eliding it if there isn't one.
+  Non-keyword values are passed through unchanged.
 
-(defn- remove-invalid-operator-combos
-  "Strip invalid operator combinations from `coll`."
+  The collapsing rules are:
+  * exact duplicates: deduped
+  * :and :or (any order): replaced with :or (least restrictive interpretation)
+  * :and :with (any order): replaced with :and-with (further processing needed)
+  * :or :with (any order): replaced with :or-with (further processing needed)
+  : :and :or :with (any order): replaced with :or with (further processing
+    needed)"
+  [coll]
+  (when (seq coll)
+    (mapcat #(if (keyword? (first %))
+               (case (set %)
+                 #{:and :or :with} [:or-with]
+                 #{:or :with}      [:or-with]
+                 #{:and :with}     [:and-with]
+                 #{:and :or}       [:or]
+                 [(first %)])
+               %)
+            (partition-by keyword? coll))))
+
+(defn- process-invalid-with-operators
+  "Processes invalid :with operators in `coll`, which involves either:
+  1. when surrounded by two licenses, turns the :with into an :and
+  2. when not preceded by a license and not followed by license exception,
+     removing it.
+  Other values are passed through unchanged."
+  [coll]
+  (let [f (fn [idx elem]
+            (if (or (= :with elem) (= :or-with elem) (= :and-with elem))
+              (let [elem-before (nth coll (dec idx) nil)
+                    elem-after  (nth coll (inc idx) nil)]
+                (case [(lcis/id-position (:id elem-before)) (lcis/id-position (:id elem-after))]
+                  [:license-position :exception-position] :with
+                  [:license-position :license-position]   (if (= :or-with elem) :or :and)
+                  nil))
+              elem))]
+    (filter identity (map-indexed f coll))))
+
+(defn- replace-invalid-operator-combos
+  "Replaces invalid operator combinations in `coll` with valid alternatives."
   [coll]
   (when coll
         (->> coll
              (drop-while keyword?)
              (lci3/rdrop-while keyword?)
-             collapse-duplicate-operator-keywords
+             dedupe
+             collapse-multiple-operator-keywords
+             process-invalid-with-operators
              seq)))
 
 ;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
@@ -270,34 +302,34 @@
   [n]
   (when-let [result (-> [n]
                         ; Parsing, with short circuiting of steps if we're done early
-                        ; These generally proceed from longest to shortest (to avoid premature matches), with some exceptions
-                        (lciu/until-> lcipu/done-parsing?
-                                      cursed/sub
-                                      bsd/sub
-                                      cc/sub
-                                      cddl/sub
-                                      cpe/sub
-                                      gnuexc/sub
-                                      epl/sub
-                                      hippocratic/sub
-                                      wtf/sub
-                                      others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
-                                      custom/sub       ; This has to go after the generics, since it matches things like "NCBI Public Domain Notice"
-                                      mpl/sub          ; This has to go after the generics, since it matches things like "SimPL-2.0"
-                                      gnu/sub          ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
-                                      )
+                        ; The order of these steps is important
+                        (tu/until-> lcipu/done-parsing?
+                                    refs/sub
+;####TODO: IMPLEMENT THIS                                    urls/sub
+                                    cursed/sub
+                                    bsd/sub
+                                    cc/sub
+                                    cddl/sub
+                                    cpe/sub
+                                    gnuexc/sub
+                                    epl/sub
+                                    hippocratic/sub
+                                    wtf/sub
+                                    others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
+                                    custom/sub       ; This has to go after the others, since it matches things like "NCBI Public Domain Notice"
+                                    mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
+                                    gnu/sub          ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
+                                    )
+                        ; At this point we've identified all of the licenses we can
                         sub-operators
                         ; Cleanup
+;                        deduplicate-identifiers  ;####TODO: to fix things like "Eclipse Public License 2.0 (EPL)"
                         remove-extraneous-fragments
-                        remove-invalid-operator-combos
+                        replace-invalid-operator-combos
                         sub-unidentifieds
                         fix-addition-refs
-;####TEST!!!!
-;(debug-print "after parse, before rebuild")
                         ; Rebuild the final expression(s)
                         rebuild-expressions)]
-;####TEST!!!!
-;(debug-print result "after rebuild")
     (lciei/prepend-source n result)))
 
 (defn parse-name

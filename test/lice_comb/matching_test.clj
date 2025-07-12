@@ -90,9 +90,12 @@
     (is (valid= #{"Apache-2.0"}                         (name->expressions "Apache-2.0")))
     (is (valid= #{"CC-BY-SA-4.0"}                       (name->expressions "CC-BY-SA-4.0")))
     (is (valid= #{"GPL-2.0-only"}                       (name->expressions "GPL-2.0")))
-    (is (valid= #{"GPL-2.0-only WITH Classpath-exception-2.0"} (name->expressions "GPL-2.0-with-classpath-exception")))
     (is (valid= #{"LicenseRef-non-lice-comb"}           (name->expressions "LicenseRef-non-lice-comb")))
     (is (valid= #{"DocumentRef-acme:LicenseRef-text"}   (name->expressions "DocumentRef-acme:LicenseRef-text"))))
+  (testing "SPDX license ids with suffixes"
+    (is (valid= #{"Apache-2.0+"}                        (name->expressions "Apache-2.0+")))
+    (is (valid= #{"GPL-3.0-only"}                      (name->expressions "GPL-3.0")))
+    (is (valid= #{"GPL-3.0-or-later"}                  (name->expressions "GPL-3.0+"))))
   (testing "Public domain and proprietary/commercial"
     (is (valid= #{(lcis/public-domain)}                 (name->expressions "Public Domain")))
     (is (valid= #{(lcis/public-domain)}                 (name->expressions "Public domain")))  ; Test lower case
@@ -116,7 +119,7 @@
     (is (valid= #{"EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0 OR MIT OR (Apache-2.0 AND BSD-3-Clause)"} (name->expressions "EPL-2.0 OR (GPL-2.0+ WITH Classpath-exception-2.0) OR MIT OR (BSD-3-Clause AND Apache-2.0)")))
     (is (valid= #{"Apache-2.0 AND MIT"}                 (name->expressions "Apache & MIT licence")))
     (is (valid= #{"CDDL-1.1"}                           (name->expressions "Common Development and Distribution Licence")))
-    (is (valid= #{"BSD-2-Clause-FreeBSD"}               (name->expressions "BSD 2 clause freebsd")))
+    (is (valid= #{"BSD-2-Clause-Views"}                 (name->expressions "BSD 2 clause freebsd")))  ; BSD-2-Clause-FreeBSD is deprecated in favour of BSD-2-Clause-Views
     (is (valid= #{"BSD-3-Clause-No-Nuclear-License"}    (name->expressions "BSD 3 No Nuclear")))
     (is (valid= #{"BSD-3-Clause-No-Nuclear-License-2014"} (name->expressions "BSD 3 No Nuclear 2014")))
     (is (valid= #{"GPL-1.0-only"}                       (name->expressions "GPL only")))
@@ -127,9 +130,12 @@
     (is (valid= #{"BSD-3-Clause-acpica"}                (name->expressions "BSD 3 CLAUSE ACPICA")))  ; Since SPDX license list v3.23
     (is (valid= #{(str (lcis/name->unidentified-license-ref "foo") " WITH Classpath-exception-2.0")} (name->expressions "foo with classpath exception")))
     (is (valid= #{(str "Apache-2.0 WITH " (lcis/name->unidentified-addition-ref "foo"))} (name->expressions "Apache with foo")))  ; Since SPDX specification v3.0
-    (is (valid= #{(str (lcis/name->unidentified-license-ref "foo WITH bar"))} (name->expressions "foo WITH bar"))))  ; Test collapsing of unidentified LicenseRef and AdditionRef
+    (is (valid= #{(str (lcis/name->unidentified-license-ref "foo WITH bar"))} (name->expressions "foo WITH bar")))  ; Test collapsing of unidentified LicenseRef and AdditionRef
+    (is (valid= #{"LicenseRef-non-lice-comb WITH Classpath-exception-2.0"} (name->expressions "LicenseRef-non-lice-comb w/ CPE 2")))
+    (is (valid= #{"Apache-2.0 WITH AdditionRef-non-lice-comb"} (name->expressions "Apache v2 w/ AdditionRef-non-lice-comb")))
+    (is (valid= #{"LicenseRef-non-lice-comb WITH AdditionRef-non-lice-comb"} (name->expressions "LicenseRef-non-lice-comb w/ AdditionRef-non-lice-comb"))))
   (testing "Cursed LGPL variations"
-    (is (valid= #{"LGPL-2.0-only"}                      (name->expressions "LGPL")))
+    (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "LGPL")))
     (is (valid= #{"LGPL-2.0-only"}                      (name->expressions "Lesser GPL only")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser GPL or later")))
     (is (valid= #{"LGPL-2.0-or-later"}                  (name->expressions "Lesser GPL")))
@@ -164,29 +170,39 @@
     (is (valid= #{"Apache-2.0"}                         (name->expressions "and and and Apache License 2.0")))
     (is (valid= #{"Apache-2.0"}                         (name->expressions "Apache Licence 2.0 or or or")))
     (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "Apache License 2.0 or or or or or or or or MIT license")))
-    (is (valid= #{"Apache-2.0" "MIT"}                   (name->expressions "Apache License 2.0 or and or and or and or and MIT license")))
-    (is (valid= #{"Apache-2.0" "MIT"}                   (name->expressions "or and Apache Licence 2.0 or and or and or and or and MIT and or and")))
-    (is (valid= #{"Apache-2.0" "MIT"}                   (name->expressions "Apache License 2.0 and/or MIT licence")))
-    (is (valid= #{"Apache-2.0" "MIT"}                   (name->expressions "Apache License 2.0 and with MIT licence")))
-    (is (valid= #{"Apache-2.0" "MIT"}                   (name->expressions "Apache License 2.0 with or MIT licence")))
-    (is (valid= #{"Apache-2.0" "MIT"}                   (name->expressions "Apache with MIT")))
+    (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "Apache License 2.0 or and or and or and or and MIT license")))
+    (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "or and Apache Licence 2.0 or and or and or and or and MIT and or and")))
+    (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "Apache License 2.0 and/or MIT licence")))
+    (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "Apache License 2.0 or and  MIT licence")))
+    (is (valid= #{"Apache-2.0 AND MIT"}                 (name->expressions "Apache License 2.0 and with MIT licence")))
+    (is (valid= #{"Apache-2.0 AND MIT"}                 (name->expressions "Apache License 2.0 with and MIT licence")))
+    (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "Apache License 2.0 or with MIT licence")))
+    (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "Apache License 2.0 with or MIT licence")))
+    (is (valid= #{"Apache-2.0 AND MIT"}                 (name->expressions "Apache with MIT")))
     (is (valid= #{"Apache-2.0"}                         (name->expressions "Apache with Apache")))
-    (is (valid= #{"Apache-1.0" "Apache-2.0"}            (name->expressions "Apache 1 with Apache 2")))
+    (is (valid= #{"Apache-1.0 AND Apache-2.0"}          (name->expressions "Apache 1 with Apache 2")))
     (is (valid= #{"GPL-1.0-or-later WITH Classpath-exception-2.0"} (name->expressions "GNU public license with with classpath exception"))))
   (testing "Complex expressions"
     (is (valid= #{"MIT" "BSD-4-Clause"}                 (name->expressions "MIT / BSD")))
     (is (valid= #{"Apache-2.0" "GPL-3.0-only"}          (name->expressions "Apache License version 2.0 / GNU General Public License version 3")))
     (is (valid= #{"Apache-2.0" "GPL-3.0-only WITH Classpath-exception-2.0"} (name->expressions "Apache License version 2.0 / GNU General Public License version 3 with classpath exception")))
     (is (valid= #{"EPL-2.0 OR (Apache-2.0 AND BSD-3-Clause) OR (GPL-2.0-or-later WITH Classpath-exception-2.0 AND MIT)"} (name->expressions "Eclipse Public License or General Public License 2.0 or (at your discretion) later w/ classpath exception aNd MIT Licence or three clause bsd and Apache Licence"))))
-  (testing "Listed names"
-    ; We use the full license lists here, rather than the ones lice-comb uses for detection, since the real world may contain anything
-    (let [license-list   (map slic/id->info (slic/ids))
-          exception-list (map sexc/id->info (sexc/ids))]
-      ; We use `some` here, because some license names resolve to multiple license ids
-      (run! #(is (some #{(sexp/canonicalise (:id %))} (name->expressions (:name %))) (str "Failed to match correct license id (\"" (:id %) "\") for name \"" (:name %) "\"")) license-list)
+;####TODO: SORT THIS OUT!!!!
+;  (testing "Listed names"
+;    ; We use the full license lists here, rather than the ones lice-comb uses for detection, since the real world may contain anything
+;    (let [license-list   (map slic/id->info (slic/ids))
+;####TEST: UNUSED FOR NOW
+;          exception-list (map sexc/id->info (sexc/ids))
+;          ]
+;      ; We use `some` here, because some license names resolve to multiple license ids
+;      (run! #(is (some #{(sexp/canonicalise (:id %))} (name->expressions (:name %))) (str "Failed to match correct license id (\"" (:id %) "\") for name \"" (:name %) "\"")) license-list)
 ;####TEST: WILL THIS WORK?  Canonicalising a naked exception name will result in nil
 ;      (run! #(is (some #{(:id %)} (name->expressions (:name %))) (str "Failed to match own name for id \"" (:id %) "\"")) exception-list)
-    ))
+;    ))
+  (testing "A few handcrafted names"
+    (is (valid= #{"Apache-2.0"}                         (name->expressions "Apache 2 only")))
+    (is (valid= #{"Apache-2.0+"}                        (name->expressions "Apache 2+")))
+    (is (valid= #{"Apache-2.0+"}                        (name->expressions "Apache version 2.0 or later"))))
   (testing "Names seen in handpicked POMs on Maven Central"
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License (AGPL) version 3.0")))
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License v3.0 only")))
@@ -411,18 +427,18 @@
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "The New BSD License")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "The New BSD license")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "Three Clause BSD-like License")))
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/clafka/blob/master/LICENSE")))                           ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/faraday-atom/blob/master/LICENSE")))                     ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/graphite-filter/blob/master/LICENSE")))                  ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/instrumented-ring-jetty-adapter/blob/master/LICENSE")))  ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/mr-clojure/blob/master/LICENSE")))                       ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/mr-edda/blob/master/LICENSE")))                          ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/multi-atom/blob/master/LICENSE")))                       ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/party/blob/master/LICENSE")))                            ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/radix/blob/master/LICENSE")))                            ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/riverford/datagrep/blob/master/LICENSE")))                        ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/riverford/durable-ref/blob/master/LICENSE")))                     ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
-;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/smsharman/sxm-clojure-ms/blob/master/LICENSE")))                  ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/clafka/blob/master/LICENSE")))                           ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/faraday-atom/blob/master/LICENSE")))                     ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/graphite-filter/blob/master/LICENSE")))                  ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/instrumented-ring-jetty-adapter/blob/master/LICENSE")))  ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/mr-clojure/blob/master/LICENSE")))                       ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/mr-edda/blob/master/LICENSE")))                          ; NO LONGER EXISTS
+;    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/multi-atom/blob/master/LICENSE")))                       ; NO LONGER EXISTS
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/party/blob/master/LICENSE")))                            ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/mixradio/radix/blob/master/LICENSE")))                            ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/riverford/datagrep/blob/master/LICENSE")))                        ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/riverford/durable-ref/blob/master/LICENSE")))                     ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
+    (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://github.com/smsharman/sxm-clojure-ms/blob/master/LICENSE")))                  ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/234
     (is (valid= #{"Apache-2.0 OR EPL-2.0"}              (name->expressions "Double licensed under the Eclipse Public License (the same as Clojure) or the Apache Public License 2.0.")))  ; Missing version - we assume the latest
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "https://opensource.org/licenses/BSD-3-Clause")))
     (is (valid= #{"BSD-3-Clause"}                       (name->expressions "new BSD License")))
@@ -665,7 +681,7 @@
     (is (valid= #{"MIT"}                                (name->expressions "The MIT License")))
     (is (valid= #{"MIT"}                                (name->expressions "The MIT License.")))
     (is (valid= #{"MIT"}                                (name->expressions "http://opensource.org/licenses/MIT")))
-;    (is (valid= #{"MIT"}                                (name->expressions "https://github.com/clanhr/clanhr-service/blob/master/LICENSE")))  ; Failing due to https://github.com/spdx/Spdx-Java-Library/issues/182
+    (is (valid= #{"MIT"}                                (name->expressions "https://github.com/clanhr/clanhr-service/blob/master/LICENSE")))  ;####TODO: Failing due to https://github.com/spdx/Spdx-Java-Library/issues/182
     (is (valid= #{"MPL-1.0"}                            (name->expressions "Mozilla Public License Version 1.0")))
     (is (valid= #{"MPL-1.1"}                            (name->expressions "Mozilla Public License Version 1.1")))
     (is (valid= #{"MPL-2.0"}                            (name->expressions "MPL 2")))

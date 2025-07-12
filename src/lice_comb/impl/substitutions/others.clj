@@ -31,6 +31,7 @@
             [lice-comb.impl.substitutions.gnu-exceptions :as gnuexc]
             [lice-comb.impl.substitutions.hippocratic    :as hippocratic]
             [lice-comb.impl.substitutions.mpl            :as mpl]
+            [lice-comb.impl.substitutions.refs           :as refs]
             [lice-comb.impl.substitutions.wtf            :as wtf]
             [lice-comb.impl.substitutions.utils          :as lcisu]))
 
@@ -42,7 +43,7 @@
       (apply disj (set/union (set @lcis/license-ids-d) (set @lcis/exception-ids-d))
                   (concat @bsd/ids-d @cc/ids-d @cddl/ids-d @cpe/ids-d @cursed/ids-d
                           @custom/ids-d @epl/ids-d @gnu/ids-d @gnuexc/ids-d
-                          @hippocratic/ids-d @mpl/ids-d @wtf/ids-d)))))
+                          @hippocratic/ids-d @mpl/ids-d @refs/ids-d @wtf/ids-d)))))
 
 ; Latest non-deprecated version of ids that have multiple versions
 ;####TEST!!!!
@@ -53,7 +54,7 @@
                                                                          (s/starts-with? % "OPL-")         ; License name is too short & generic for matching
                                                                          (s/starts-with? % "OSL-"))        ; License name is too short & generic for matching
                                                                     @ids-d)
-                                            families        (dissoc (lcif/ids->families ids-to-consider) :none)]
+                                            families        (dissoc (lcif/ids->families ids-to-consider) nil)]  ; Remove all "no family" ids
                                         (lcis/sort-ids (map last (vals families))))))
 
 (def ^:private re-name-and-version (re/join #"(?iuU)(?<name>.+?)" (re/opt-grp lcir/fre-version)))

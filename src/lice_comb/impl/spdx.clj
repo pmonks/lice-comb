@@ -28,6 +28,17 @@
 ; The subset of SPDX exception identifiers that we use, as an unordered set
 (def exception-ids-d (delay (se/ids)))
 
+(defn id-position
+  "Returns the 'position' (expressed as `:license-position` or
+  `:exception-position`) of `id` (a license, LicenseRef, exception, or
+  AdditionRef) in an SPDX expression, or `nil` if it's none of those things."
+  [^String id]
+  (when-not (s/blank? id)
+    (if (or (sl/listed-id? id) (sl/license-ref? id))
+      :license-position
+      (when (or (se/listed-id? id) (se/addition-ref? id))
+        :exception-position))))
+
 (defn id->info
   "Returns the associated SPDX list info for `id`, which can be either a license
   identifier or an exception identifier, or `nil` if `id` is not a valid SPDX

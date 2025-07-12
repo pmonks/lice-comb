@@ -17,7 +17,7 @@
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
 ; This is redundant here, but we include it for consistency with other substutition namespaces
-(def ids-d (delay (set '())))
+(def ids-d (delay '()))
 
 (def ^:private pairs-d (delay [
   ; Proprietary / commercial

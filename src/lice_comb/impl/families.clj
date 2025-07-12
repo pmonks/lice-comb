@@ -51,7 +51,7 @@
   ([ids] (ids->families true ids))
   ([group-non-family-ids? ids]
    (when (seq ids)
-     (let [result (lciu/mapfonv sort (group-by #(id->family (if group-non-family-ids? :none %) %) ids))]
+     (let [result (lciu/mapfonv sort (group-by #(id->family (if group-non-family-ids? nil %) %) ids))]
        (when-not (empty? result)
          result)))))
 

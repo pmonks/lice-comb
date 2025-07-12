@@ -18,7 +18,9 @@
             [embroidery.api  :as e]
             [rencg.api       :as rencg]))
 
-; Note: replace if/when this gets addressed: https://github.com/Reefersleep/thread-until/issues/2
+;####TODO: REMOVE ONCE TESTED!!!
+(comment
+; Note: Replaced by https://github.com/Reefersleep/thread-until
 (defmacro until*->
   "Recursive portion of until-> - not intended for direct use."
   [expr pred? & forms]
@@ -46,6 +48,7 @@
        ~expr
        (until*-> ~expr ~pred? ~@forms))
     expr))
+)
 
 (defn mapfonk
   "Returns a new map where f has been applied to all of the keys of m."
@@ -199,7 +202,9 @@
           (if (= index match-start)
             (recur (conj result rep) match-end (.find m))  ; Back-to-back matches
             (recur (vec (concat result [(subs s index match-start) rep])) match-end (.find m))))
-        (conj result (subs s index (count s)))))))
+        (if (= index (count s))
+          result  ; The last find consumed to the end of the input
+          (conj result (subs s index (count s))))))))  ; There's some trailing text - make sure to preserve it
 
 (defn retained-split
   "As for `clojure.string/split`, but retains whatever `re` matched as distinct

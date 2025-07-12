@@ -77,7 +77,7 @@
          coll            coll]
     (if (or (not re)
             (not repl)
-            (lcip/done-parsing? coll))  ; coll is fully devoid of strings, so we can terminate early
+            (lcip/done-parsing? coll))  ; coll is fully parsed, so we can terminate early
       (seq coll)
       (let [new-coll (lciu/replace-in-coll coll re repl)]
         (recur r new-coll)))))

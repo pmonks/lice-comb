@@ -90,6 +90,13 @@
   [n]
   (when-not (s/blank? n)
     (-> [#"(?iuU)(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
+        ; Special case for some double and/or weird version components (this must come first)
+        (lciu/replace-in-coll #"(?i)\(versions 9\.11 to 9\.20\)"                    #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20\)?")
+        (lciu/replace-in-coll #"(?i)\(versions 9\.22 and beyond\)"                  #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*22[\s\-–—]*(\+|(?:and|&)[\s\-–—]*beyond)\)?")
+        (lciu/replace-in-coll #"(?i)\(for libpng 0\.5 through 1\.6\.35\)"           #"\(?for[\s\-–—]+libpng[\s\-–—]+0+\.0*5[\s\-–—]+through[\s\-–—]+0*1\.0*6\.0*35\)?")
+        (lciu/replace-in-coll #"(?i)\(or possibly 2\.0A and 2\.0B\)"                #"\(?or[\s\-–—]+possibly[\s\-–—]+0*2\.0+A[\s\-–—]+(?:and|&)[\s\-–—]+0*2\.0+B\)?")
+        (lciu/replace-in-coll #"(?i)TORQUE v2\.5\+"                                 #"TORQUE[\s\-–—]+v2\.5\+")
+        (lciu/replace-in-coll #"(?i)clause\s+(?<clauseCount>\d+)"                   (fn [m] (re/join #"clause[\s\-–—]*0*" (get m "clauseCount"))))  ; For BSD
          ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)Apache(?!\w)"                            #"(?:Apache(?:[\s\-–—]*Software)?|ASL)")
         (lciu/replace-in-coll #"(?i)(?<!\w)Beerware(?!\w)"                          #"Beer[\s\-–—]*Ware")
@@ -104,14 +111,9 @@
         (lciu/replace-in-coll #"(?i)\s+(End[\s\-]user licen[cs]e agreement|EULA)\b" #"[\s\-–—]+(?:End[\s\-–—]+User[\s\-–—]+Licen?[cs]e[\s\-–—]+Agreement|EULA)")
         (lciu/replace-in-coll #"(?i)(?<!\w)Plexus\s+Classworlds\s+Licen[cs]e(?!\w)" #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))")
         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!Microsoft[\s\-–—]+)Reciprocal\s+Public\s+Licen[cs]e(?!\w)" #"(?<!Microsoft[\s\-–—]+)Reciprocal(?:[\s\-–—]+Pub?lic)?[\s\-–—]+Licen[cs]e")
-        ; Special case for some double and/or weird version components
-        (lciu/replace-in-coll #"(?i)\(versions 9.11 to 9.20\)"                      #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20\)?")
-        (lciu/replace-in-coll #"(?i)\(versions 9.22 and beyond\)"                   #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*22[\s\-–—]*(\+|(?:and|&)[\s\-–—]*beyond)\)?")
-        (lciu/replace-in-coll #"(?i)\(or possibly 2.0A and 2.0B\)"                  #"\(?or[\s\-–—]+possibly[\s\-–—]+0*2\.0+A[\s\-–—]+(?:and|&)[\s\-–—]+0*2\.0+B\)?")
-        (lciu/replace-in-coll #"(?i)TORQUE v2\.5\+"                                 #"TORQUE[\s\-–—]+v2\.5\+")
-        (lciu/replace-in-coll #"(?i)clause\s+(?<clauseCount>\d+)"                   (fn [m] (re/join #"clause[\s\-–—]*0*" (get m "clauseCount"))))  ; For BSD
         ; Other numbers, especially dates (so that they don't get misidentified as versions)
         (lciu/replace-in-coll #"\d{3,4}(\-\d{2}\-\d{2})?"                           (fn [m] (re-pattern (re/esc (:match m)))))
+;####TODO: CONSIDER MAKING THE VERSION NUMBER REPLACEMENTS "FIRST ONLY" OR "LAST ONLY"
         ; Version components - 2 & 3 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)?(?<versionNumber>\d+\.\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
                                   re-version-replacement)
@@ -119,6 +121,7 @@
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)(?<versionNumber>\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
                                   re-version-replacement)
         ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
+        (lciu/replace-in-coll #"(?i)\s+licen[cs]e[\s\-]agreement(?!\w)"             #"(?:[\s\-–—]+Licen?[cs]e)?(?:[\s\-–—]+agreement)?")
         (lciu/replace-in-coll #"(?i)\s+licen[cs]e(?!\w)"                            #"(?:[\s\-–—]+Licen?[cs]e)?")  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
         (lciu/replace-in-coll #"(?i)licen[cs]e(?!\w)"                               #"(?:Licen?[cs]e)?")
         (lciu/replace-in-coll #"(?i)\s+Lizenz(?!\w)"                                #"(?:[\s\-–—]+Lizenz)?")
