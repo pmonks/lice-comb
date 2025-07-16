@@ -203,6 +203,10 @@
     (is (valid= #{"Apache-2.0"}                         (name->expressions "Apache 2 only")))
     (is (valid= #{"Apache-2.0+"}                        (name->expressions "Apache 2+")))
     (is (valid= #{"Apache-2.0+"}                        (name->expressions "Apache version 2.0 or later"))))
+  (testing "Expressions made up of URIs"
+    (is (valid= #{"Apache-2.0 AND MIT"}                 (name->expressions "http://opensource.org/licenses/MIT and http://www.apache.org/licenses/LICENSE-2.0.html")))
+    (is (valid= #{"Apache-2.0 OR MIT"}                  (name->expressions "http://opensource.org/licenses/MIT or http://www.apache.org/licenses/LICENSE-2.0.html")))
+    (is (valid= #{"GPL-2.0-only WITH Classpath-exception-2.0"} (name->expressions "https://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html WITH http://www.gnu.org/software/classpath/license.html"))))
   (testing "Names seen in handpicked POMs on Maven Central"
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License (AGPL) version 3.0")))
     (is (valid= #{"AGPL-3.0-only"}                      (name->expressions "GNU Affero General Public License v3.0 only")))

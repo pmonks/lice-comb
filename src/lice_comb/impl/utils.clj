@@ -18,38 +18,6 @@
             [embroidery.api  :as e]
             [rencg.api       :as rencg]))
 
-;####TODO: REMOVE ONCE TESTED!!!
-(comment
-; Note: Replaced by https://github.com/Reefersleep/thread-until
-(defmacro until*->
-  "Recursive portion of until-> - not intended for direct use."
-  [expr pred? & forms]
-  (let [[f & r] forms]
-    (if f
-      (let [threaded (if (seq? f)
-                       (with-meta `(~(first f) ~expr ~@(next f)) (meta f))
-                       `(~f ~expr))]
-        (if (seq r)
-          `(let [new-expr# ~threaded]
-             (if (~pred? new-expr#)
-               new-expr#
-               (until*-> new-expr# ~pred? ~@r)))   ; Note: naive recursion (not a tail position)
-          threaded))
-      expr)))
-
-(defmacro until->
-  "As for `->`, but terminates as soon as `pred?` (a function of one argument)
-  returns logical true, skipping any remaining forms.  Skips all forms when
-  `(pred? expr) is logically true.  If `pred?` is never logically true, returns
-  the result of chaining `expr` through all of the forms."
-  [expr pred? & forms]
-  (if (seq forms)
-    `(if (~pred? ~expr)
-       ~expr
-       (until*-> ~expr ~pred? ~@forms))
-    expr))
-)
-
 (defn mapfonk
   "Returns a new map where f has been applied to all of the keys of m."
   [f m]
@@ -118,12 +86,12 @@
           (not (s/blank? x))))))
 
 (defn strim
-  "`nil` safe version of clojure.string/trim"
+  "`nil` safe version of `clojure.string/trim`"
   [^String s]
   (when s (s/trim s)))
 
 (defn trim-non-word
-  "Like clojure.string/trim, but trims `s` of all leading and trailing
+  "Like `clojure.string/trim`, but trims `s` of all leading and trailing
   characters that aren't alphanumeric (`[\\w]` regex class, with Unicode
   support enabled)."
   [s]
@@ -133,9 +101,9 @@
         (s/replace #"(?U)[^\w]+\z" ""))))
 
 (defn is-digits?
-  "Does the given string contains digits only?"
+  "Does `s` contains digits only?"
   [^String s]
-  (boolean  ; Eliminate nil-punning
+  (boolean
     (when-not (s/blank? s)
       (every? #(Character/isDigit ^Character %) s))))
 
@@ -148,7 +116,7 @@
         (java.lang.Double/parseDouble s)))))  ; We use interop instead of clojure.core/parse-double for backwards compatibility with older Clojure versions
 
 (defn nset
-  "nil preserving version of clojure.core/set"
+  "`nil` preserving version of `clojure.core/set`"
   [coll]
   (some-> (seq coll)
           set))
@@ -169,10 +137,12 @@
       (let [buffer (StringBuffer. (.length s))]
         (loop [found true]
           (if found
-            (do (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement (replacement-fn (rencg/re-groups-ncg m ncgs))))
-                (recur (.find m)))
-            (do (.appendTail m buffer)
-                (.toString buffer)))))
+            (do
+              (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement (replacement-fn (rencg/re-groups-ncg m ncgs))))
+              (recur (.find m)))
+            (do
+              (.appendTail m buffer)
+              (str buffer)))))
       s)))
 
 (defn replacing-split
@@ -422,12 +392,13 @@
 
 (defn filter-file-seq*
   "As for clojure.core/file-seq, but with support for filtering.  pred must be
-  a predicate that accepts one argument of type java.io.File.  Files that don't
-  meet pred will not be included in the result, and directories that don't meet
-  pred will not be recursed into (so pred must be able to handle both distinct
-  cases).
+  a predicate that accepts one argument of type java.io.File.  Files for which
+  `pred` returns `false` will not be included in the result, and directories for
+  which `pred` returns `false` will also not be recused into (so `pred` must be
+  able to handle both cases).
 
-  Note also that dir is always returned, even if it does not meet pred."
+  Note also that `dir` is always included in the result, even if `pred` returns
+  `false` for it."
   [^java.io.File dir pred]
   (let [pred   (or pred (constantly true))
         filter (reify java.io.FileFilter (accept [_ f] (boolean (pred (.getCanonicalFile ^java.io.File f)))))]  ; Use the canonical file, otherwise we will get tripped up by "." being "hidden" according to the JVM when running on a Unix 🤡
@@ -437,12 +408,13 @@
       dir)))
 
 (defn filter-file-seq
-  "As for clojure.core/file-seq, but with support for filtering.  dir-pred
+  "As for `clojure.core/file-seq`, but with support for filtering.  `dir-pred`
   controls which directories will be included in the result and recursed into.
-  file-pred controls which files will be included in the result.  Both must be
-  a predicate of one argument of type java.io.File.
+  `file-pred` controls which files will be included in the result.  Both must be
+  a predicate of one argument of type `java.io.File`.
 
-  Note also that dir is always returned, even if it does not meet dir-pred."
+  Note also that `dir` is always included in the result, even if `dir-pred`
+  returns `false` for it."
   [dir dir-pred file-pred]
   (let [dir-pred  (or dir-pred  (constantly true))
         file-pred (or file-pred (constantly true))
@@ -452,17 +424,17 @@
     (filter-file-seq* dir pred)))
 
 (defn filter-file-only-seq
-  "As for clojure.core/file-seq, with support for filtering and only returns
-  files (but not any directories that were traversed during the seq).  dir-pred
-  controls which directories will be recursed into.  file-pred controls which
-  files will be included in the result.  Both must be a predicate of one
-  argument of type java.io.File."
+  "As for `clojure.core/file-seq`, with support for filtering and only returns
+  files (but not any directories that were traversed during the seq).
+  `dir-pred` controls which directories will be recursed into. `file-pred`
+  controls which files will be included in the result.  Both must be a predicate
+  of one argument of type `java.io.File`."
   [dir dir-pred file-pred]
   (seq (filter #(.isFile ^java.io.File %) (filter-file-seq dir dir-pred file-pred))))
 
 (defn getenv
-  "Obtain the given environment variable, returning default (or nil, if default
-  is not provided) if it isn't set."
+  "Obtain the value of environment variable `var`, returning `default` if it
+  isn't set (defaults to `nil` if not specified)."
   ([var] (getenv var nil))
   ([var default]
     (let [val (System/getenv var)]

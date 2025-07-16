@@ -94,7 +94,7 @@
 (defn parse-uri
   "Parses the given license `uri`, returning an expressions-info map, or `nil`
   if no matching license ids were found."
-  [uri]
+  [^String uri]
   (when-not (s/blank? uri)
     (when-let [result (or
                         ; 1. Is the URI a close match for any of the URIs in the SPDX license or exception lists?
@@ -110,29 +110,58 @@
 (defn- make-unidentified-ei
   "Makes an expression-info map for the given license `n`ame, and (optionally)
   unidentified license-ref."
-  ([n] (make-unidentified-ei n (lcis/name->unidentified-license-ref n)))
-  ([n unidentified-license-ref]
+  ([^String n] (make-unidentified-ei n (lcis/name->unidentified-license-ref n)))
+  ([^String n unidentified-license-ref]
     {:id unidentified-license-ref :type :concluded :confidence :high :strategy :unidentified :source (list n)}))
 
 (defn- make-unidentified-eis-map
   "Makes a (singleton) expressions-info map for the given unidentified license
   `n`ame."
-  [n]
+  [^String n]
   (let [unidentified-id (lcis/name->unidentified-license-ref n)]
     {unidentified-id (list (make-unidentified-ei n unidentified-id))}))
 
+; An approximately correct regex for finding http URIs in larger texts - loosely based on https://www.rfc-editor.org/rfc/rfc3986#appendix-B
+; Note: not all matches this regex finds are valid as per RFC-3986 - if that's needed, use lciu/valid-http-uri?
+(def ^:private approximate-uri-re (re/join #"(?i)(?<!\w)"
+                                           #"(?<scheme>https?)://"
+                                           #"(?<address>[^/?#\s]+)"
+                                           #"(?<path>\/[^?#\s]*)?"
+                                           #"(?:\?(?<queryString>[^#\s]*))?"
+                                           #"(?:#(?<fragment>[^\s]*))?"
+                                           #"(?!\w)"))
+
+(defn- sub-uris
+  "Substitutes any uris in the Strings in `coll` with an expression info map.
+  We do that here instead of in a separate namespace because of the dependence
+  on [[parse-uri]]."
+  [coll]
+  (flatten  ; In some cases a single URI results in multiple ids/expression infos, so we flatten them here
+    (lciu/replace-in-coll
+      coll
+      approximate-uri-re
+      #(let [uri (:match %)]
+         (if-let [ei (parse-uri uri)]  ; Note: this may return more than one identifier (and associated info)
+           (vals ei)                   ; Unwrap all expressions info maps, and return them as nested sequences (which gets flattened up top)
+           (make-unidentified-ei uri))))))
+
 (defn- collapse-multiple-operator-keywords
-  "Collapses sequential runs of keywords in `coll`, to either a single keyword
-  identifying the most appropriate operator, or eliding it if there isn't one.
+  "Collapses sequential runs of keywords in `coll`, to a single keyword; one of:
+  * :and
+  * :or
+  * :with
+  * :and-with (further context-dependent processing needed)
+  * :or-with (further context-dependent processing needed)
+
   Non-keyword values are passed through unchanged.
 
   The collapsing rules are:
   * exact duplicates: deduped
   * :and :or (any order): replaced with :or (least restrictive interpretation)
-  * :and :with (any order): replaced with :and-with (further processing needed)
-  * :or :with (any order): replaced with :or-with (further processing needed)
-  : :and :or :with (any order): replaced with :or with (further processing
-    needed)"
+  * :and :with (any order): replaced with :and-with
+  * :or :with (any order): replaced with :or-with
+  : :and :or :with (any order): replaced with :or-with (least restrictive
+    interpretation)"
   [coll]
   (when (seq coll)
     (mapcat #(if (keyword? (first %))
@@ -145,6 +174,7 @@
                %)
             (partition-by keyword? coll))))
 
+;####TODO: FOR CASE 2, CONSIDER TURNING "WITH" INTO "AND"
 (defn- process-invalid-with-operators
   "Processes invalid :with operators in `coll`, which involves either:
   1. when surrounded by two licenses, turns the :with into an :and
@@ -301,11 +331,11 @@
   `nil` if no expressions can be found."
   [n]
   (when-let [result (-> [n]
-                        ; Parsing, with short circuiting of steps if we're done early
+                        ; Substitutions, with short circuiting of steps if we're done early
                         ; The order of these steps is important
                         (tu/until-> lcipu/done-parsing?
                                     refs/sub
-;####TODO: IMPLEMENT THIS                                    urls/sub
+                                    sub-uris         ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
                                     cursed/sub
                                     bsd/sub
                                     cc/sub
@@ -318,8 +348,7 @@
                                     others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
                                     custom/sub       ; This has to go after the others, since it matches things like "NCBI Public Domain Notice"
                                     mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
-                                    gnu/sub          ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
-                                    )
+                                    gnu/sub)         ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
                         ; At this point we've identified all of the licenses we can
                         sub-operators
                         ; Cleanup
@@ -338,7 +367,7 @@
   [n]
   (when-not (s/blank? n)
     (let [n (s/trim n)]
-      ; 1. If it's a valid SPDX expression, return the canonicalised rendition of it
+      ; 1. If it's an SPDX expression, return the canonicalised rendition of it - this should be replaced if/when https://github.com/pmonks/clj-spdx/issues/66 is addressed
       (if-let [parse-tree (sexp/parse n)]
         (let [canonicalised-expression (sexp/unparse parse-tree)]
           {canonicalised-expression (list {:type     :declared
@@ -346,16 +375,10 @@
                                                        1 :spdx-listed-identifier
                                                        :spdx-expression)
                                            :source (list n)})})
-        ; 2. If it's URI, attempt to parse that
-        (if (lciu/valid-http-uri? n)
-          (if-let [ids (parse-uri n)]
-            ids
-            ; It was a URL, but we weren't able to resolve it to any ids, so return it as unidentified
-            (make-unidentified-eis-map n))
-          ; 3. Parse the name
-          (if-let [result (parse-internal n)]
-            result
-            (make-unidentified-eis-map n)))))))
+        ; 2. Parse the name
+        (if-let [result (parse-internal n)]
+          result
+          (make-unidentified-eis-map n))))))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent
@@ -368,6 +391,4 @@
   (lcis/init!)
   (lcihttp/init!)
   @extraneous-fragment-res-d
-;####TODO: REMOVE ME!!!!
-;  @cursed-name-pairs-d
   nil)
