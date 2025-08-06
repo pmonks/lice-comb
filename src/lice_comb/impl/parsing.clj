@@ -108,18 +108,16 @@
       (lciei/prepend-source uri (lcic/correct result)))))
 
 (defn- make-unidentified-ei
-  "Makes an expression-info map for the given license `n`ame, and (optionally)
-  unidentified license-ref."
-  ([^String n] (make-unidentified-ei n (lcis/name->unidentified-license-ref n)))
+  "Makes an expression-info map for the given license `n`ame, optionally
+  including `unidentified-license-ref` in the :id key."
+  ([^String n] (make-unidentified-ei n nil))
   ([^String n unidentified-license-ref]
-    {:id unidentified-license-ref :type :concluded :confidence :high :strategy :unidentified :source (list n)}))
-
-(defn- make-unidentified-eis-map
-  "Makes a (singleton) expressions-info map for the given unidentified license
-  `n`ame."
-  [^String n]
-  (let [unidentified-id (lcis/name->unidentified-license-ref n)]
-    {unidentified-id (list (make-unidentified-ei n unidentified-id))}))
+    (merge {:type :concluded :confidence :high :strategy :unidentified :source (list n)}
+           (if (s/blank? unidentified-license-ref)
+             {:id :unidentified}
+             {:id unidentified-license-ref}))))
+;####TEST: REMOVE ME ONCE DONE
+;    {:id unidentified-license-ref :type :concluded :confidence :high :strategy :unidentified :source (list n)}))
 
 ; An approximately correct regex for finding http URIs in larger texts - loosely based on https://www.rfc-editor.org/rfc/rfc3986#appendix-B
 ; Note: not all matches this regex finds are valid as per RFC-3986 - if that's needed, use lciu/valid-http-uri?
@@ -145,8 +143,9 @@
            (vals ei)                   ; Unwrap all expressions info maps, and return them as nested sequences (which gets flattened up top)
            (make-unidentified-ei uri))))))
 
-(defn- collapse-multiple-operator-keywords
-  "Collapses sequential runs of keywords in `coll`, to a single keyword; one of:
+(defn- collapse-operator-keywords
+  "Collapses sequential runs of operator keywords in `coll`, to a single
+  keyword; one of:
   * :and
   * :or
   * :with
@@ -156,7 +155,8 @@
   Non-keyword values are passed through unchanged.
 
   The collapsing rules are:
-  * exact duplicates: deduped
+  * leading and trailing operator keywords are dropped
+  * duplicates are deduped
   * :and :or (any order): replaced with :or (least restrictive interpretation)
   * :and :with (any order): replaced with :and-with
   * :or :with (any order): replaced with :or-with
@@ -164,17 +164,25 @@
     interpretation)"
   [coll]
   (when (seq coll)
-    (mapcat #(if (keyword? (first %))
-               (case (set %)
-                 #{:and :or :with} [:or-with]
-                 #{:or :with}      [:or-with]
-                 #{:and :with}     [:and-with]
-                 #{:and :or}       [:or]
-                 [(first %)])
-               %)
-            (partition-by keyword? coll))))
+    ; Step 1: drop leading, trailing operator keywords, and dedupe
+    (let [coll (->> coll
+                    (drop-while keyword?)
+                    (lci3/rdrop-while keyword?)
+                    dedupe
+                    seq)]
+      ; Step 2: collapse sequences of operator keywords to a single operator keyword
+      (mapcat #(if (keyword? (first %))
+                 ; Keyword(s) - collapse to a single keyword
+                 (case (set %)
+                   #{:and :or :with} [:or-with]
+                   #{:or :with}      [:or-with]
+                   #{:and :with}     [:and-with]
+                   #{:and :or}       [:or]
+                   [(first %)])
+                 ; Not a keyword - pass through
+                 %)
+              (partition-by keyword? coll)))))
 
-;####TODO: FOR CASE 2, CONSIDER TURNING "WITH" INTO "AND"
 (defn- process-invalid-with-operators
   "Processes invalid :with operators in `coll`, which involves either:
   1. when surrounded by two licenses, turns the :with into an :and
@@ -183,7 +191,7 @@
   Other values are passed through unchanged."
   [coll]
   (let [f (fn [idx elem]
-            (if (or (= :with elem) (= :or-with elem) (= :and-with elem))
+            (if (some #{elem} #{:with :or-with :and-with})
               (let [elem-before (nth coll (dec idx) nil)
                     elem-after  (nth coll (inc idx) nil)]
                 (case [(lcis/id-position (:id elem-before)) (lcis/id-position (:id elem-after))]
@@ -192,18 +200,6 @@
                   nil))
               elem))]
     (filter identity (map-indexed f coll))))
-
-(defn- replace-invalid-operator-combos
-  "Replaces invalid operator combinations in `coll` with valid alternatives."
-  [coll]
-  (when coll
-        (->> coll
-             (drop-while keyword?)
-             (lci3/rdrop-while keyword?)
-             dedupe
-             collapse-multiple-operator-keywords
-             process-invalid-with-operators
-             seq)))
 
 ;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
 (def ^:private extraneous-fragment-res-d (delay [#"(?i)copyright([\s\-–—,]+\(c\))?([\s\-–—,]*©️)?([\s\-–—,]*©)?"  ; Copyright fragments
@@ -222,7 +218,7 @@
             (lcipu/done-parsing? coll))
       (filter lciu/not-blank-string? coll)
       (let [new-coll (lciu/map-str #(let [s (s/trim (s/replace % #"(?U)\W+" ""))]  ; Remove all non-alphanumeric ("word") characters and trim the result
-                                      (when (and (>= (count s) 4)                  ; Strip anything with fewer than 4 word characters
+                                      (when (and (>= (count s) 4)                  ; Strip anything with fewer than 3 word characters
                                                (not (re-matches re (s/trim %))))   ; or that matches one of the extraneous fragment regexes
                                         %))
                                    coll)]
@@ -255,9 +251,9 @@
                                     (get m "with")      :with
                                     :else               nil)))))
 
-(defn- sub-unidentifieds
+(defn- sub-unidentified-placeholders
   "Replace any `String`s in `coll` with an expression-info map containing an
-  unidentified LicenseRef."
+  unidentified placeholder."
   [coll]
   (lciu/map-str #(let [s (lciu/trim-non-word %)]
                    (if (s/blank? s)
@@ -288,21 +284,39 @@
 ;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
           )))))
 
-(defn- fix-addition-refs
-  "Fixes LicenseRefs in `coll` that appear after a `:with`, by turning them
-  into an AdditionRef."
+(defn- fix-unidentified-placeholders
+  "Fixes unidentified placeholders in `coll` by replacing their ids with either
+  a LicenseRef or AdditionRef, depending on the preceding operator."
   [coll]
-  (loop [[f s & r] coll
-         result    []]
-    (if-not f
-      result
-      (if (and (= f :with)
-               (map? s)
-               (lcis/lice-comb-license-ref? (:id s)))
-        (recur (concat [(assoc s :id (lcis/license-ref->addition-ref (:id s)))] r)
-               (conj result f))
-        (recur (concat [s] r)
-               (conj result f))))))
+  (let [unidentified-placeholder? (fn [x] (and (map? x) (= :unidentified (:id x))))]
+    (loop [[f s & r] coll
+           result    []]
+      (if-not f
+        result
+        (cond
+          ; Very first item in coll is unidentified, so convert it to a LicenseRef
+          (unidentified-placeholder? f)
+            (recur (concat [s] r)
+                   (conj result (assoc f :id (lcis/name->unidentified-license-ref (s/trim (last (:source f)))))))
+
+          ; Second item we're currently looking at is unidentified, so convert it based on the preceding item
+          (unidentified-placeholder? s)
+            (if (= f :with)
+              ; AdditionRef
+              (recur (concat [(assoc s :id (lcis/name->unidentified-addition-ref (s/trim (last (:source s)))))] r)
+                     (conj result :with))
+              ; LicenseRef
+              (recur (concat [(assoc s :id (lcis/name->unidentified-license-ref (s/trim (last (:source s)))))] r)
+                     (conj result
+                           (case f
+                             :or-with  :or
+                             :and-with :and
+                             f))))
+
+          ; Neither f nor s are unidentified
+          :else
+          (recur (concat [s] r)
+                 (conj result f)))))))
 
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the `coll`ection containing eis
@@ -349,14 +363,18 @@
                                     custom/sub       ; This has to go after the others, since it matches things like "NCBI Public Domain Notice"
                                     mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
                                     gnu/sub)         ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
-                        ; At this point we've identified all of the licenses we can
+                        ; At this point we've identified all of the licenses we possibly can
+;####TODO: to fix things like "Eclipse Public License 2.0 (EPL)"
+;                        deduplicate-identifiers
+                        ; Identify operators and collapse sequential runs of them to a single value
                         sub-operators
-                        ; Cleanup
-;                        deduplicate-identifiers  ;####TODO: to fix things like "Eclipse Public License 2.0 (EPL)"
+                        collapse-operator-keywords
+                        ; Remove fragments
                         remove-extraneous-fragments
-                        replace-invalid-operator-combos
-                        sub-unidentifieds
-                        fix-addition-refs
+                        ; Substitute unidentifieds
+                        sub-unidentified-placeholders
+                        fix-unidentified-placeholders
+                        process-invalid-with-operators   ;####TODO: IS THIS STILL NEEDED???
                         ; Rebuild the final expression(s)
                         rebuild-expressions)]
     (lciei/prepend-source n result)))
@@ -378,7 +396,8 @@
         ; 2. Parse the name
         (if-let [result (parse-internal n)]
           result
-          (make-unidentified-eis-map n))))))
+          (let [unidentified-license-ref (lcis/name->unidentified-license-ref n)]
+            {unidentified-license-ref (list (make-unidentified-ei n unidentified-license-ref))}))))))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

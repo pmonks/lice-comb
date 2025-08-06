@@ -301,13 +301,7 @@
     (unidentified-license-ref?  id) (unidentified-license-ref->human-readable-name id)
     (unidentified-addition-ref? id) (unidentified-addition-ref->human-readable-name id)))
 
-(defn license-ref->addition-ref
-  "Returns the equivalent AdditionRef for `license-ref`, or `nil` if it isn't a
-  LicenseRef."
-  [license-ref]
-  (when (sl/license-ref? license-ref)
-    (s/replace license-ref "LicenseRef" "AdditionRef")))
-
+;####TODO: REMOVE THIS fn AND REPLACE WITH A DIRECT CALL TO spdx.regexes/id-seq
 (defn find-ids
   "Returns a sequence of the distinct listed SPDX license ids, exceptions ids,
   LicenseRefs and AdditionRefs found in `s` (a `String`), in the order they were
@@ -315,9 +309,7 @@
 
   Note: results are NOT normalised."
   [s]
-  (when s
-    (when-let [matches (map #(get % "Identifier") (rencg/re-seq-ncg (sre/ids-re) s))]
-      (seq (distinct matches)))))
+  (sre/id-seq s))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

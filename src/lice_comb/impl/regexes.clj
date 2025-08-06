@@ -68,15 +68,17 @@
     (-> [#"(?iuU)(?<!\w)" (s/trim id) #"(?!\w)"]
         ; Special cases for some double and/or weird version components
         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
-        ; Version component
-        (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
-                              #(re/join #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
         ; Special cases for certain licenses
         (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                 #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
         (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-        (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:-B)?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:[\s\-–—]+B)?")
+        ; Version component
+        (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
+;####TODO: THIS ID-SPECIFIC WHITESPACE HANDLING SEEMS WRONG
+;                              #(re/join #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
+                              re-version-replacement)
         ; Character equivalents
         (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
         ; Cleanup and combine into a single pattern
@@ -102,7 +104,7 @@
         (lciu/replace-in-coll #"(?i)(?<!\w)Beerware(?!\w)"                          #"Beer[\s\-–—]*Ware")
         (lciu/replace-in-coll #"(?i)(?<!\w)No Derivatives(?!\w)"                    #"No[\s\-–—]*Deriv(?:s|atives)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)Share Alike(?!\w)"                       #"Share[\s\-–—]*Alike")
-        (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                               #"(?:(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))|Bouncy[\s\-–—]+Castle([\s\-–—]+Licen[cs]e)?)")
+        (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                               #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
         (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                               #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                               #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
         (lciu/replace-in-coll #"(?i)(?<!\w)zlib(/libpng)?(?!\w)"                    #"(?:libpng[\\/\-\s]{1,4})?zlib([\\/\-\s]{1,4}libpng)?")

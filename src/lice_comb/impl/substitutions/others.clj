@@ -45,10 +45,8 @@
                           @custom/ids-d @epl/ids-d @gnu/ids-d @gnuexc/ids-d
                           @hippocratic/ids-d @mpl/ids-d @refs/ids-d @wtf/ids-d)))))
 
-; Latest non-deprecated version of ids that have multiple versions
-;####TEST!!!!
-(def latest-version-ids-d (delay
-;(def ^:private latest-version-ids-d (delay
+; Latest non-deprecated version of ids that have multiple versions (i.e. are in a "family")
+(def ^:private latest-version-ids-d (delay
                                       (let [ids-to-consider (remove #(or (:deprecated? (lcis/id->info %))  ; Ignore deprecated ids for versionless matching
                                                                          (s/starts-with? % "LZMA-SDK-")    ; Version-less matching not feasible
                                                                          (s/starts-with? % "OPL-")         ; License name is too short & generic for matching
@@ -57,13 +55,13 @@
                                             families        (dissoc (lcif/ids->families ids-to-consider) nil)]  ; Remove all "no family" ids
                                         (lcis/sort-ids (map last (vals families))))))
 
-(def ^:private re-name-and-version (re/join #"(?iuU)(?<name>.+?)" (re/opt-grp lcir/fre-version)))
+(def ^:private re-name-or-id-and-version (re/join #"(?iuU)(?<nameOrId>.+?)" (re/opt-grp lcir/fre-version)))
 
 (defn- id->deversioned-name
   "Converts `id` into its name, with any version components removed."
   [id]
   (when-let [n (:name (lcis/id->info id))]
-    (get (rencg/re-matches-ncg re-name-and-version n) "name")))
+    (get (rencg/re-matches-ncg re-name-or-id-and-version n) "nameOrId")))
 
 (defn- id->deversioned-name-regex
   "Gets the name of the license with identifier `id`, removed the version from
@@ -71,6 +69,19 @@
   [id]
   (when-let [n (id->deversioned-name id)]
     (lcir/name->regex n)))
+
+(defn- id->deversioned-id
+  "Returns `id` with any version components removed."
+  [id]
+  (when id
+    (get (rencg/re-matches-ncg re-name-or-id-and-version id) "nameOrId")))
+
+(defn- id->deversioned-id-regex
+  "Gets the name of the license with identifier `id`, removed the version from
+  it, then turns that into a name regex."
+  [id]
+  (when-let [id (id->deversioned-id id)]
+    (lcir/id->regex id)))
 
 ; Pairs of regex/fn based on listed SPDX license and exception names and ids
 (def ^:private pairs-d (delay (concat
@@ -81,7 +92,7 @@
   (map #(vec [(id->deversioned-name-regex %) (lcisu/simple-regex-match-ei-fn % :low #{:missing-version})]) @latest-version-ids-d)
 
   ; Regex matching based on ids minus versions
-  (map #(vec [(lcir/id->regex %) (lcisu/simple-regex-match-ei-fn % :low #{:missing-version})]) @latest-version-ids-d))))
+  (map #(vec [(id->deversioned-id-regex %) (lcisu/simple-regex-match-ei-fn % :low #{:missing-version})]) @latest-version-ids-d))))
 
 (defn sub
   "Substitutes any licenses found in the `String`s in `coll` with an

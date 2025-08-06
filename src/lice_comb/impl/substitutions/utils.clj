@@ -147,15 +147,6 @@
       ; Then id match pairs
       (map #(vector (lcir/id->regex %)       (name-id-match-ei-fn %)) ids))))
 
-(comment
-      ; Names match pairs first
-      (sort (by #(count (str (first %))) descending)
-            (map #(vector (lcir/id->name->regex %) (name-id-match-ei-fn %)) ids))
-      ; Then id match pairs
-      (sort (by #(count (str (first %))) descending)
-            (map #(vector (lcir/id->regex %) (name-id-match-ei-fn %)) ids))
-)
-
 (defn simple-regex-match-ei-fn
   "Returns a simple expression-info construction function for `id`, when matched
   with a custom regex.  The returned function takes a single argument; a rencg
