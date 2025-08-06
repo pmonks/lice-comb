@@ -183,24 +183,6 @@
                  %)
               (partition-by keyword? coll)))))
 
-(defn- process-invalid-with-operators
-  "Processes invalid :with operators in `coll`, which involves either:
-  1. when surrounded by two licenses, turns the :with into an :and
-  2. when not preceded by a license and not followed by license exception,
-     removing it.
-  Other values are passed through unchanged."
-  [coll]
-  (let [f (fn [idx elem]
-            (if (some #{elem} #{:with :or-with :and-with})
-              (let [elem-before (nth coll (dec idx) nil)
-                    elem-after  (nth coll (inc idx) nil)]
-                (case [(lcis/id-position (:id elem-before)) (lcis/id-position (:id elem-after))]
-                  [:license-position :exception-position] :with
-                  [:license-position :license-position]   (if (= :or-with elem) :or :and)
-                  nil))
-              elem))]
-    (filter identity (map-indexed f coll))))
-
 ;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
 (def ^:private extraneous-fragment-res-d (delay [#"(?i)copyright([\s\-–—,]+\(c\))?([\s\-–—,]*©️)?([\s\-–—,]*©)?"  ; Copyright fragments
                                                  #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"                         ; Uncaptured "public license" suffixes
@@ -318,6 +300,31 @@
           (recur (concat [s] r)
                  (conj result f)))))))
 
+(defn- fix-invalid-operators
+  "Fixes invalid operators in `coll`."
+  [coll]
+  (let [f (fn [idx elem]
+;####TODO: REMOVE ONCE TESTED!!!!
+;            (if (some #{elem} #{:with :or-with :and-with})
+            (if (keyword? elem)
+              (let [elem-before (nth coll (dec idx) nil)
+                    elem-after  (nth coll (inc idx) nil)]
+                (case [(lcis/id-position (:id elem-before)) (lcis/id-position (:id elem-after))]
+                  [:license-position :exception-position] :with
+                  (case elem
+                    :with     :and
+                    :or-with  :or
+                    :and-with :and
+                    elem)))
+;                  [:license-position :license-position]   elem
+;                  [:license-position :license-position]   (if (= :or-with elem) :or :and)
+;                  [:exception-position :license-position] elem
+;####TODO: INVALID CASE - THROW IF IT HAPPENS
+;                  nil
+;                  ))
+              elem))]
+    (filter identity (map-indexed f coll))))
+
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the `coll`ection containing eis
   and operator keywords.  Returns an expressions-info map."
@@ -333,7 +340,9 @@
                                                                                       (s/upper-case (name elem))
                                                                                       (:id elem)))
                                                                                   %))
-                                                  expression     (sexp/canonicalise raw-expression)
+                                                  expression     (if-let [exp (sexp/canonicalise raw-expression)]
+                                                                   exp
+                                                                   (throw (ex-info (str "Internal error: invalid SPDX expression constructed: " raw-expression) {})))
                                                   eis            (filter map? %)]
                                               [expression eis])
                                            grouped-expressions))]
@@ -374,7 +383,12 @@
                         ; Substitute unidentifieds
                         sub-unidentified-placeholders
                         fix-unidentified-placeholders
-                        process-invalid-with-operators   ;####TODO: IS THIS STILL NEEDED???
+                        ; Fix invalid operators (e.g. "or" between a license and an exception)
+;####TEST!!!!
+;(debug-print "BEFORE OPERATOR FIX")
+                        fix-invalid-operators
+;####TEST!!!!
+;(debug-print "PRIOR TO REBUILD")
                         ; Rebuild the final expression(s)
                         rebuild-expressions)]
     (lciei/prepend-source n result)))

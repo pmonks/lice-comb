@@ -13,7 +13,7 @@
   API of lice-comb and may change without notice."
   (:require [clojure.string           :as s]
             [embroidery.api           :as e]
-            [rencg.api                :as rencg]
+            [spdx.identifiers         :as si]
             [spdx.licenses            :as sl]
             [spdx.exceptions          :as se]
             [spdx.expressions         :as sexp]
@@ -33,11 +33,17 @@
   `:exception-position`) of `id` (a license, LicenseRef, exception, or
   AdditionRef) in an SPDX expression, or `nil` if it's none of those things."
   [^String id]
-  (when-not (s/blank? id)
-    (if (or (sl/listed-id? id) (sl/license-ref? id))
-      :license-position
-      (when (or (se/listed-id? id) (se/addition-ref? id))
-        :exception-position))))
+  (when-let [type (si/id-type id)]
+    (case type
+      :license-id   :license-position
+      :license-ref  :license-position
+      :exception-id :exception-position
+      :addition-ref :exception-position)))
+;####TODO: REMOVE ONCE TESTED!!!
+;    (if (or (sl/listed-id? id) (sl/license-ref? id))
+;      :license-position
+;      (when (or (se/listed-id? id) (se/addition-ref? id))
+;        :exception-position))))
 
 (defn id->info
   "Returns the associated SPDX list info for `id`, which can be either a license
