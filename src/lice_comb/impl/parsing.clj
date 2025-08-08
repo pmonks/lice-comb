@@ -25,7 +25,6 @@
             [lice-comb.impl.correction                   :as lcic]
             [lice-comb.impl.utils                        :as lciu]
             [lice-comb.impl.parsing-utils                :as lcipu]
-            [lice-comb.impl.regexes                      :as lcir]
             [lice-comb.impl.3rd-party                    :as lci3]
             [lice-comb.impl.substitutions.cursed         :as cursed]
             [lice-comb.impl.substitutions.bsd            :as bsd]
@@ -52,6 +51,12 @@
    (println "⬅️ ⭐️⭐️⭐️")
    (flush)
    x))
+(defn print-fragments
+  [coll n]
+;  (binding [*out* *err*]
+    (if-let [fragments (seq (filter #(and (string? %) (< (count %) 3)) coll))]
+      (debug-print fragments (str n " fragments:")))
+  coll)
 
 (defmulti match-text
   "Returns an expressions-info map for the given license text, or nil if no
@@ -143,7 +148,121 @@
            (vals ei)                   ; Unwrap all expressions info maps, and return them as nested sequences (which gets flattened up top)
            (make-unidentified-ei uri))))))
 
-(defn- collapse-operator-keywords
+(def ^:private operator-re (re/join #"(?i)\s*"
+                                    (re/alt #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
+                                            #"(?<!\w)(?<and>and)(?!\w)"
+                                            #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
+                                            #"(?<!\w)(?<with>with(?!\w)|w/)"
+                                            #"(?<ampersand>&+)"
+                                            #"(?<forwardSlash>/+)"
+                                            #"(?<backSlash>\\+)")
+                                    #"\s*"))
+
+(defn- sub-operators
+  "Substitutes operators in `String` values in `coll`, replacing each one with a
+  keyword representing the detected operator. The possible keyword values are:
+  `:and`, `:or`, and `:with`."
+  [coll]
+  (filter lciu/not-blank-string?
+          (lciu/replace-in-coll coll
+                                operator-re
+                                (fn [m]
+                                  (cond
+                                    (get m "and")       :and
+                                    (get m "ampersand") :and
+                                    (get m "or")        :or
+                                    (get m "andOr")     :or   ; We assume the least restrictive interpretation
+                                    (get m "with")      :with
+                                    :else               nil)))))
+
+(defn- remove-extraneous-fragments
+  "Removes 'extraneous' fragments from `coll`."
+  [coll]
+  (seq (filter identity (lciu/map-str #(let [s (s/trim (s/replace % #"(?U)\W+" ""))]  ; Strip all word characters and trim the result
+                                         (when (>= (count s) 3)                       ; Then remove anything short
+                                           %))
+                                      coll))))
+
+;####TODO: REMOVE ME ONCE TESTED!!!!
+(comment
+(defn- remove-extraneous-fragments
+  "Removes 'extraneous' fragments (`String`s) from `coll`."
+  (loop [[re & r] @extraneous-fragment-res-d
+         coll     coll]
+    (if (or (not re)
+            (lcipu/done-parsing? coll))
+      (filter lciu/not-blank-string? coll)
+      (let [new-coll (lciu/map-str #(let [s (s/trim (s/replace % #"(?U)\W+" ""))]  ; Strip all non-alphanumeric ("word") characters and trim the result
+                                      (when (and (>= (count s) 3)                  ; Remove anything short
+                                               (not (re-matches re (s/trim %))))   ; or that matches one of the extraneous fragment regexes
+                                        %))
+                                   coll)]
+        (recur r new-coll)))))
+)
+
+(defn- sub-unidentifieds
+  "Replace any `String`s in `coll` with an expression-info map containing an
+  unidentified LicenseRef or AdditionRef."
+  [coll]
+  (let [placeholders              (lciu/map-str #(let [s (lciu/trim-non-word %)]
+                                                   (if (s/blank? s)
+                                                     (make-unidentified-ei %)
+                                                     (make-unidentified-ei s)))
+                                                coll)
+        unidentified-placeholder? (fn [x] (and (map? x) (= :unidentified (:id x))))]
+    (loop [[f s & r] placeholders
+           result    []]
+      (if-not f
+        result
+        (cond
+          ; Very first item in coll is unidentified, so convert it to a LicenseRef
+          (unidentified-placeholder? f)
+            (recur (concat [s] r)
+                   (conj result (assoc f :id (lcis/name->unidentified-license-ref (s/trim (last (:source f)))))))
+
+          ; Second item we're currently looking at is unidentified, so convert it based on the preceding item
+          (unidentified-placeholder? s)
+            (if (= f :with)
+              ; Convert to AdditionRef
+              (recur (concat [(assoc s :id (lcis/name->unidentified-addition-ref (s/trim (last (:source s)))))] r)
+                     (conj result :with))
+              ; Convert to LicenseRef
+              (recur (concat [(assoc s :id (lcis/name->unidentified-license-ref (s/trim (last (:source s)))))] r)
+                     (conj result
+                           (case f
+                             :or-with  :or
+                             :and-with :and
+                             f))))
+
+          ; Neither f nor s are unidentified, so pass through unchanged
+          :else
+            (recur (concat [s] r)
+                   (conj result f)))))))
+
+(defn- group-expressions
+  "Groups expressions in `coll` into sequences that can be turned into valid
+  SPDX expressions.
+
+  For example:
+  [{:id \"Apache-2.0\" ...}]                                                       -> [[{:id \"Apache-2.0\" ...}]]
+  [{:id \"Apache-2.0\" ...} {:id \"MIT\"}]                                         -> [[{:id \"Apache-2.0\" ...}] [{:id \"MIT\" ...}]]
+  [{:id \"Apache-2.0\" ...} :or {:id \"MIT\" ...}]                                 -> [[\"Apache-2.0\" :or \"MIT\"]]
+  [{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...} {:id \"GPL-2.0-or-later\" ...}] -> [[{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...}] [{:id \"GPL-2.0-or-later\" ...}]]"
+  [coll]
+  (loop [result  [[]]
+         [f & r] coll]
+    (if-not f
+      ; Base case
+      result
+      ; Recursive case
+      (let [l (last result)]
+        (case [(map? (last l)) (map? f)]
+          [true  true]                (recur (conj result [f])                          r) ; map/map, so start a new nested sequence in result
+          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; map/keyword or keyword/map, so continue the current last collection in result
+;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
+          )))))
+
+(defn- collapse-operators
   "Collapses sequential runs of operator keywords in `coll`, to a single
   keyword; one of:
   * :and
@@ -183,170 +302,53 @@
                  %)
               (partition-by keyword? coll)))))
 
-;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
-(def ^:private extraneous-fragment-res-d (delay [#"(?i)copyright([\s\-–—,]+\(c\))?([\s\-–—,]*©️)?([\s\-–—,]*©)?"  ; Copyright fragments
-                                                 #"(?i)(pub?lic[\s\-–—\\\/]+)?licen[cs]e"                         ; Uncaptured "public license" suffixes
-                                                 #"(?i)dual"                                                      ; Uncaptured "dual" prefix
-                                                 (re/join #"(?i)" lcir/fre-date)                                  ; Uncaptured dates
-                                                 #"(?U)\W+"]))                                                    ; Fragments containing no (Unicode) alphabetic characters i.e. punctuation only
-
-;####TODO: THIS NEEDS TO BE REVISITED BASED ON REAL WORLD EXTRANEOUS FRAGMENTS!!!
-(defn- remove-extraneous-fragments
-  "Removes 'extraneous' fragments (`String`s) from `coll`."
-  [coll]
-  (loop [[re & r] @extraneous-fragment-res-d
-         coll     coll]
-    (if (or (not re)
-            (lcipu/done-parsing? coll))
-      (filter lciu/not-blank-string? coll)
-      (let [new-coll (lciu/map-str #(let [s (s/trim (s/replace % #"(?U)\W+" ""))]  ; Remove all non-alphanumeric ("word") characters and trim the result
-                                      (when (and (>= (count s) 4)                  ; Strip anything with fewer than 3 word characters
-                                               (not (re-matches re (s/trim %))))   ; or that matches one of the extraneous fragment regexes
-                                        %))
-                                   coll)]
-        (recur r new-coll)))))
-
-(def ^:private operator-re (re/join #"(?i)\s*"
-                                    (re/alt #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
-                                            #"(?<!\w)(?<and>and)(?!\w)"
-                                            #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
-                                            #"(?<!\w)(?<with>with(?!\w)|w/)"
-                                            #"(?<ampersand>&+)"
-                                            #"(?<forwardSlash>/+)"
-                                            #"(?<backSlash>\\+)")
-                                    #"\s*"))
-
-(defn- sub-operators
-  "Substitutes operators in `String` values in `coll`, replacing each one with a
-  keyword representing the detected operator. The possible keyword values are:
-  `:and`, `:or`, and `:with`."
-  [coll]
-  (filter lciu/not-blank-string?
-          (lciu/replace-in-coll coll
-                                operator-re
-                                (fn [m]
-                                  (cond
-                                    (get m "and")       :and
-                                    (get m "ampersand") :and
-                                    (get m "or")        :or
-                                    (get m "andOr")     :or   ; We assume the least restrictive interpretation
-                                    (get m "with")      :with
-                                    :else               nil)))))
-
-(defn- sub-unidentified-placeholders
-  "Replace any `String`s in `coll` with an expression-info map containing an
-  unidentified placeholder."
-  [coll]
-  (lciu/map-str #(let [s (lciu/trim-non-word %)]
-                   (if (s/blank? s)
-                     (make-unidentified-ei %)
-                     (make-unidentified-ei s)))
-                coll))
-
-(defn- group-expressions
-  "Groups expressions in `coll` into sequences that can be turned into valid
-  SPDX expressions.
-
-  For example:
-  [{:id \"Apache-2.0\" ...}]                                                       -> [[{:id \"Apache-2.0\" ...}]]
-  [{:id \"Apache-2.0\" ...} {:id \"MIT\"}]                                         -> [[{:id \"Apache-2.0\" ...}] [{:id \"MIT\" ...}]]
-  [{:id \"Apache-2.0\" ...} :or {:id \"MIT\" ...}]                                 -> [[\"Apache-2.0\" :or \"MIT\"]]
-  [{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...} {:id \"GPL-2.0-or-later\" ...}] -> [[{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...}] [{:id \"GPL-2.0-or-later\" ...}]]"
-  [coll]
-  (loop [result  [[]]
-         [f & r] coll]
-    (if-not f
-      ; Base case
-      result
-      ; Recursive case
-      (let [l (last result)]
-        (case [(map? (last l)) (map? f)]
-          [true  true]                (recur (conj result [f])                          r) ; map/map, so start a new nested sequence in result
-          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; map/keyword or keyword/map, so continue the current last collection in result
-;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
-          )))))
-
-(defn- fix-unidentified-placeholders
-  "Fixes unidentified placeholders in `coll` by replacing their ids with either
-  a LicenseRef or AdditionRef, depending on the preceding operator."
-  [coll]
-  (let [unidentified-placeholder? (fn [x] (and (map? x) (= :unidentified (:id x))))]
-    (loop [[f s & r] coll
-           result    []]
-      (if-not f
-        result
-        (cond
-          ; Very first item in coll is unidentified, so convert it to a LicenseRef
-          (unidentified-placeholder? f)
-            (recur (concat [s] r)
-                   (conj result (assoc f :id (lcis/name->unidentified-license-ref (s/trim (last (:source f)))))))
-
-          ; Second item we're currently looking at is unidentified, so convert it based on the preceding item
-          (unidentified-placeholder? s)
-            (if (= f :with)
-              ; AdditionRef
-              (recur (concat [(assoc s :id (lcis/name->unidentified-addition-ref (s/trim (last (:source s)))))] r)
-                     (conj result :with))
-              ; LicenseRef
-              (recur (concat [(assoc s :id (lcis/name->unidentified-license-ref (s/trim (last (:source s)))))] r)
-                     (conj result
-                           (case f
-                             :or-with  :or
-                             :and-with :and
-                             f))))
-
-          ; Neither f nor s are unidentified
-          :else
-          (recur (concat [s] r)
-                 (conj result f)))))))
-
-(defn- fix-invalid-operators
+(defn- finalise-operators
   "Fixes invalid operators in `coll`."
   [coll]
-  (let [f (fn [idx elem]
-;####TODO: REMOVE ONCE TESTED!!!!
-;            (if (some #{elem} #{:with :or-with :and-with})
-            (if (keyword? elem)
-              (let [elem-before (nth coll (dec idx) nil)
-                    elem-after  (nth coll (inc idx) nil)]
-                (case [(lcis/id-position (:id elem-before)) (lcis/id-position (:id elem-after))]
-                  [:license-position :exception-position] :with
-                  (case elem
-                    :with     :and
-                    :or-with  :or
-                    :and-with :and
-                    elem)))
-;                  [:license-position :license-position]   elem
-;                  [:license-position :license-position]   (if (= :or-with elem) :or :and)
-;                  [:exception-position :license-position] elem
-;####TODO: INVALID CASE - THROW IF IT HAPPENS
-;                  nil
-;                  ))
-              elem))]
+  (let [coll (collapse-operators coll)
+        f    (fn [idx elem]
+               (if (keyword? elem)
+                 (let [elem-before (nth coll (dec idx) nil)
+                       elem-after  (nth coll (inc idx) nil)]
+                   (case [(lcis/id-position (:id elem-before)) (lcis/id-position (:id elem-after))]
+                     [:license-position :exception-position] :with
+                     (case elem
+                       :with     :and
+                       :or-with  :or
+                       :and-with :and
+                       elem)))
+                 elem))]
     (filter identity (map-indexed f coll))))
 
 (defn- rebuild-expressions
-  "Rebuilds one or more SPDX expressions from the `coll`ection containing eis
-  and operator keywords.  Returns an expressions-info map."
+  "Rebuilds one or more SPDX expressions from the `coll`ection containing ei
+  maps and operator keywords.  Returns a single expressions-info map."
   [coll]
-  ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
-  (when-not (every? lcis/unidentified? (map :id (filter map? coll)))
-    (if (= 1 (count coll))
-      {(:id (first coll)) coll}  ; Single id detected, so return it
-      (let [grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
-            result              (into {}
-                                      (map #(let [raw-expression (s/join " " (map (fn [elem]
-                                                                                    (if (keyword? elem)
-                                                                                      (s/upper-case (name elem))
-                                                                                      (:id elem)))
-                                                                                  %))
-                                                  expression     (if-let [exp (sexp/canonicalise raw-expression)]
-                                                                   exp
-                                                                   (throw (ex-info (str "Internal error: invalid SPDX expression constructed: " raw-expression) {})))
-                                                  eis            (filter map? %)]
-                                              [expression eis])
-                                           grouped-expressions))]
-        result))))
+  (when coll
+    ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
+    (when-not (every? lcis/unidentified? (map :id (filter map? coll)))
+      (if (= 1 (count coll))
+        {(:id (first coll)) coll}  ; Single id detected, so return it
+        (let [grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
+              result              (into {}
+                                        (map #(let [raw-expression (s/join " " (map (fn [elem]
+                                                                                      (cond
+                                                                                        (keyword? elem)
+                                                                                          (s/upper-case (name elem))
+
+                                                                                        (map? elem)
+                                                                                          (:id elem)
+
+                                                                                        :else
+                                                                                         (throw (ex-info "Unexpected element in collection" {:collection coll}))))
+                                                                                    %))
+                                                    expression     (if-let [exp (sexp/canonicalise raw-expression)]
+                                                                     exp
+                                                                     (throw (ex-info (str "Invalid SPDX expression constructed: " raw-expression) {})))
+                                                    eis            (filter map? %)]
+                                                [expression eis])
+                                             grouped-expressions))]
+          result)))))
 
 ;####TODO: CAN PROBABLY MOVE THIS INTO parse-name ONCE ITS WORKING!!!!
 (defn- parse-internal
@@ -375,18 +377,15 @@
                         ; At this point we've identified all of the licenses we possibly can
 ;####TODO: to fix things like "Eclipse Public License 2.0 (EPL)"
 ;                        deduplicate-identifiers
-                        ; Identify operators and collapse sequential runs of them to a single value
                         sub-operators
-                        collapse-operator-keywords
-                        ; Remove fragments
-                        remove-extraneous-fragments
-                        ; Substitute unidentifieds
-                        sub-unidentified-placeholders
-                        fix-unidentified-placeholders
-                        ; Fix invalid operators (e.g. "or" between a license and an exception)
 ;####TEST!!!!
-;(debug-print "BEFORE OPERATOR FIX")
-                        fix-invalid-operators
+;(print-fragments n)
+;####TEST!!!!
+;(debug-print "PRIOR TO REMOVING FRAGMENTS")
+                        remove-extraneous-fragments
+;(debug-print "AFTER REMOVING FRAGMENTS")
+                        sub-unidentifieds
+                        finalise-operators
 ;####TEST!!!!
 ;(debug-print "PRIOR TO REBUILD")
                         ; Rebuild the final expression(s)
@@ -423,5 +422,4 @@
   []
   (lcis/init!)
   (lcihttp/init!)
-  @extraneous-fragment-res-d
   nil)

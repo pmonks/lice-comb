@@ -76,8 +76,6 @@
         (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:[\s\-–—]+B)?")
         ; Version component
         (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
-;####TODO: THIS ID-SPECIFIC WHITESPACE HANDLING SEEMS WRONG
-;                              #(re/join #"[\s\-–—]*" (re-version-replacement %)))  ; Note: we handle leading whitespace slightly differently in id regexes vs name regexes
                               re-version-replacement)
         ; Character equivalents
         (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash

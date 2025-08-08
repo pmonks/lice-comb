@@ -17,7 +17,6 @@
             [spdx.licenses            :as sl]
             [spdx.exceptions          :as se]
             [spdx.expressions         :as sexp]
-            [spdx.regexes             :as sre]
             [lice-comb.impl.families  :as lcif]
             [lice-comb.impl.3rd-party :refer [by ascending descending] :as lc3]
             [lice-comb.impl.utils     :as lciu]))
@@ -39,11 +38,6 @@
       :license-ref  :license-position
       :exception-id :exception-position
       :addition-ref :exception-position)))
-;####TODO: REMOVE ONCE TESTED!!!
-;    (if (or (sl/listed-id? id) (sl/license-ref? id))
-;      :license-position
-;      (when (or (se/listed-id? id) (se/addition-ref? id))
-;        :exception-position))))
 
 (defn id->info
   "Returns the associated SPDX list info for `id`, which can be either a license
@@ -61,9 +55,7 @@
     (when-let [exception-entry (se/id->info id {:include-large-text-values? false})]
       (assoc exception-entry :type :exception))))
 
-;####TEST!!!!
-(defn sort-id-infos
-;(defn- sort-id-infos
+(defn- sort-id-infos
   "Sorts the given id info maps according to lice-comb's preferred sort order:
 
   1. non-deprecated before deprecated
@@ -84,9 +76,7 @@
       (mapcat #(reverse (second %)) (sort sorter non-deprecated-families))
       (mapcat #(reverse (second %)) (sort sorter deprecated-families)))))
 
-;####TEST!!!!
-(defn sort-ids->id-infos
-;(defn- sort-ids->id-infos
+(defn- sort-ids->id-infos
   "Sorts the given SPDX listed ids according to lice-comb's preferred sort
   order, returning a sequence of id info maps for each one. The sort order is:
 
@@ -306,16 +296,6 @@
   (cond
     (unidentified-license-ref?  id) (unidentified-license-ref->human-readable-name id)
     (unidentified-addition-ref? id) (unidentified-addition-ref->human-readable-name id)))
-
-;####TODO: REMOVE THIS fn AND REPLACE WITH A DIRECT CALL TO spdx.regexes/id-seq
-(defn find-ids
-  "Returns a sequence of the distinct listed SPDX license ids, exceptions ids,
-  LicenseRefs and AdditionRefs found in `s` (a `String`), in the order they were
-  found, or `nil` if no listed ids were found or `s` was `nil`.
-
-  Note: results are NOT normalised."
-  [s]
-  (sre/id-seq s))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

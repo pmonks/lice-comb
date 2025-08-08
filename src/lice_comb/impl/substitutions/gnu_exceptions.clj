@@ -13,11 +13,13 @@
   exceptions.
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [lice-comb.impl.spdx                :as lcis]
+  (:require [clojure.set                        :as set]
+            [lice-comb.impl.spdx                :as lcis]
+            [lice-comb.impl.substitutions.cpe   :as cpe]
             [lice-comb.impl.substitutions.utils :as lcisu]))
 
 ; All GNU-esque exception ids, including deprecated ones
-(def ids-d (delay (lcis/sort-ids (filter lcisu/gnu-family? @lcis/exception-ids-d))))
+(def ids-d (delay (lcis/sort-ids (filter lcisu/gnu-family? (set/difference (set @lcis/exception-ids-d) (set @cpe/ids-d))))))
 
 ; Pairs of regex/fn based on listed SPDX exception names and ids
 (def ^:private pairs-d (delay (concat
