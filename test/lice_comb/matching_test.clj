@@ -113,6 +113,9 @@
     (is (valid= #{"EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0 OR MIT OR (Apache-2.0 AND BSD-3-Clause)"} (name->expressions "EPL-2.0 OR (GPL-2.0+ WITH Classpath-exception-2.0) OR MIT OR (BSD-3-Clause AND Apache-2.0)")))
     (is (valid= #{"LicenseRef-non-lice-comb WITH AdditionRef-non-lice-comb"} (name->expressions "LicenseRef-non-lice-comb WITH AdditionRef-non-lice-comb")))                                   ; Since SPDX specification v3.0
     (is (valid= #{"DocumentRef-acme:LicenseRef-test WITH DocumentRef-acme:AdditionRef-test"} (name->expressions "DocumentRef-acme:LicenseRef-test with DocumentRef-acme:AdditionRef-test"))))  ; Since SPDX specification v3.0
+  (testing "Complex singleton identifiers"
+    (is (valid= #{"Apache-2.0"}                          (name->expressions "Apache Software License 2 (Apache)")))
+    (is (valid= #{"Apache-1.0"}                          (name->expressions "Apache Software License (Apache 1.0)"))))
   (testing "Simple expressions that are not SPDX expressions"
     (is (valid= #{"GPL-2.0-only WITH Classpath-exception-2.0"} (name->expressions "GNU General Public License, version 2 with the GNU Classpath Exception")))
     (is (valid= #{"Apache-2.0 OR GPL-3.0-only"}         (name->expressions "Apache License version 2.0 or GNU General Public License version 3")))

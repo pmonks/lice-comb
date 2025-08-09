@@ -327,7 +327,7 @@
   (when coll
     ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
     (when-not (every? lcis/unidentified? (map :id (filter map? coll)))
-      (if (= 1 (count coll))
+      (if (and (= 1 (count coll)) (map? (first coll)))
         {(:id (first coll)) coll}  ; Single id detected, so return it
         (let [grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
               result              (into {}

@@ -23,6 +23,11 @@
 (def fre-mws                      (re/oom fre-ws))
 (def fre-quote                    #"[\"“”„‟'‘’‚‛`]")
 (def fre-oquote                   (re/opt fre-quote))
+(def fre-date                     (re/ncg "date" (re/join (re/zom-grp #"\d\d?" fre-ows #"(?:st|nd|rd|th)?")
+                                                 fre-ows
+                                                 (re/alt-grp #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
+                                                 fre-ows #"\d\d(?:\d\d)?" fre-ows)))
+
 (def ^:private fre-version-label  (re/grp fre-ows #"v(?:er(?:sions?)?)?"))
 (def ^:private fre-version-number (re/ncg "versionNumber" #"\d+(?:[,\._]\d+)*"))
 (def fre-version                  (re/join (re/opt fre-version-label) fre-ows fre-version-number))
@@ -31,10 +36,6 @@
                                               #"\+"
                                               #"(?:\(?or(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)[\),]*)?(?:[\s\-–—]+a(?:ny)?)?[\s\-–—]+(?:lat[eo]r|newer)(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)\)?)?(?:[\s\-–—]+(?:v(?:er(?:sions?)?)?))?\)?)"))
 (def fre-only-or-later            (re/alt-grp fre-only fre-or-later))
-(def fre-date                     (re/ncg "date" (re/join (re/zom-grp #"\d\d?" fre-ows #"(?:st|nd|rd|th)?")
-                                                 fre-ows
-                                                 (re/alt-grp #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
-                                                 fre-ows #"\d\d(?:\d\d)?" fre-ows)))
 
 (defn- re-version-replacement
   "Emits a suitable regex for matching the version identified in map `m` (a map

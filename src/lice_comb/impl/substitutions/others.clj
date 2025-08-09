@@ -19,7 +19,7 @@
             [wreck.api                                   :as re]
             [lice-comb.impl.spdx                         :as lcis]
             [lice-comb.impl.regexes                      :as lcir]
-            [lice-comb.impl.families                     :as lcif]
+            [lice-comb.impl.version-series               :as lcivs]
             [lice-comb.impl.substitutions.bsd            :as bsd]
             [lice-comb.impl.substitutions.cc             :as cc]
             [lice-comb.impl.substitutions.cddl           :as cddl]
@@ -45,15 +45,15 @@
                           @custom/ids-d @epl/ids-d @gnu/ids-d @gnuexc/ids-d
                           @hippocratic/ids-d @mpl/ids-d @refs/ids-d @wtf/ids-d)))))
 
-; Latest non-deprecated version of ids that have multiple versions (i.e. are in a "family")
+; Latest non-deprecated version of ids that have multiple versions (i.e. are in a version series)
 (def ^:private latest-version-ids-d (delay
                                       (let [ids-to-consider (remove #(or (:deprecated? (lcis/id->info %))  ; Ignore deprecated ids for versionless matching
                                                                          (s/starts-with? % "LZMA-SDK-")    ; Version-less matching not feasible
                                                                          (s/starts-with? % "OPL-")         ; License name is too short & generic for matching
                                                                          (s/starts-with? % "OSL-"))        ; License name is too short & generic for matching
                                                                     @ids-d)
-                                            families        (dissoc (lcif/ids->families ids-to-consider) nil)]  ; Remove all "no family" ids
-                                        (lcis/sort-ids (map last (vals families))))))
+                                            version-series  (dissoc (lcivs/ids->version-series ids-to-consider) nil)]  ; Remove all "no version series" ids
+                                        (lcis/sort-ids (map last (vals version-series))))))
 
 (def ^:private re-name-or-id-and-version (re/join #"(?iuU)(?<nameOrId>.+?)" (re/opt-grp lcir/fre-version)))
 

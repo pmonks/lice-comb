@@ -11,15 +11,15 @@
 (ns lice-comb.impl.spdx
   "SPDX-related functionality. Note: this namespace is not part of the public
   API of lice-comb and may change without notice."
-  (:require [clojure.string           :as s]
-            [embroidery.api           :as e]
-            [spdx.identifiers         :as si]
-            [spdx.licenses            :as sl]
-            [spdx.exceptions          :as se]
-            [spdx.expressions         :as sexp]
-            [lice-comb.impl.families  :as lcif]
-            [lice-comb.impl.3rd-party :refer [by ascending descending] :as lc3]
-            [lice-comb.impl.utils     :as lciu]))
+  (:require [clojure.string                :as s]
+            [embroidery.api                :as e]
+            [spdx.identifiers              :as si]
+            [spdx.licenses                 :as sl]
+            [spdx.exceptions               :as se]
+            [spdx.expressions              :as sexp]
+            [lice-comb.impl.version-series :as lcivs]
+            [lice-comb.impl.3rd-party      :refer [by ascending descending] :as lc3]
+            [lice-comb.impl.utils          :as lciu]))
 
 ; The subset of SPDX license identifiers that we use, as an unordered set
 (def license-ids-d (delay (sl/ids)))
@@ -65,9 +65,9 @@
      family
   5. by id (newest version first)"
   [id-infos]
-  (let [; Split non-deprecated and deprecated, then identify families in each
-        non-deprecated-families (lcif/id-infos->families false (filter (complement :deprecated?) id-infos))
-        deprecated-families     (lcif/id-infos->families false (filter :deprecated? id-infos))
+  (let [; Split non-deprecated and deprecated, then identify version series' in each
+        non-deprecated-families (lcivs/id-infos->version-series false (filter (complement :deprecated?) id-infos))
+        deprecated-families     (lcivs/id-infos->version-series false (filter :deprecated? id-infos))
         ; Sorter function
         sorter                  (by #(:type (last (val %)))         descending  ; licenses first, exceptions second
                                     #(count (:name (last (val %)))) descending
