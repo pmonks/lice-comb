@@ -277,7 +277,7 @@
                  (re/opt-grp lcir/fre-mws (re-suffix-clauses))
                  "\n\n#### Random dingleberries ####\n"
                  (re/zom-grp lcir/fre-mws #"(?:variant|(?:Pub?lic[\s\-–—]+)?licen[cs]e)")
-                 (re/opt-grp lcir/fre-version)
+                 (re/opt-grp lcir/fre-ows (lcir/re-version))
                  "\n\n#### Coda ####\n"
                  #"(?!\w)"))
 

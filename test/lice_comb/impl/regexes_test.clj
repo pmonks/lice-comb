@@ -18,10 +18,287 @@
 
 (ns lice-comb.impl.regexes-test
   (:require [clojure.test               :refer [deftest testing is use-fixtures]]
+            [wreck.api                  :as re]
+            [rencg.api                  :as rencg]
             [lice-comb.test-boilerplate :refer [fixture lic-ids-d exc-ids-d license-list-d exception-list-d non-deprecated-license-list-d non-deprecated-lic-ids-d]]
-            [lice-comb.impl.regexes     :refer [id->regex name->regex]]))
+            [lice-comb.impl.regexes     :refer [re-version-and-suffix id->regex name->regex]]))
 
 (use-fixtures :once fixture)
+
+(defn- re-version-and-suffix*
+  "As for re-version-and-suffix, but prepends #\"(?iuU)\" to the resulting regex
+  (required for it to function as expected)."
+  [version-number version-number-ncg-name
+   only?          only-ncg-name
+   or-later?      or-later-ncg-name]
+  (when-let [re (re-version-and-suffix version-number version-number-ncg-name only? only-ncg-name or-later? or-later-ncg-name)]
+    (re/join #"(?iuU)" re)))
+
+(deftest re-version-and-suffix-tests
+  (testing "Nil, blank, etc. - note that these all result in generic 'any version number' regexes"
+    (is (not (nil? (re-version-and-suffix nil nil false nil false nil))))
+    (is (not (nil? (re-version-and-suffix "" nil false nil false nil))))
+    (is (not (nil? (re-version-and-suffix " " nil false nil false nil))))
+    (is (not (nil? (re-version-and-suffix "\r\n  \n \t" nil false nil false nil)))))
+  (testing "Any version matching regexes"
+    (let [any-version-re (re-version-and-suffix* nil nil false nil false nil)]
+      (is (true?  (boolean (re-matches any-version-re "0"))))
+      (is (true?  (boolean (re-matches any-version-re "1"))))
+      (is (true?  (boolean (re-matches any-version-re "009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "0.1"))))
+      (is (true?  (boolean (re-matches any-version-re "1.0.0"))))
+      (is (true?  (boolean (re-matches any-version-re "1-0-0"))))
+      (is (true?  (boolean (re-matches any-version-re "1_0_0"))))
+      (is (true?  (boolean (re-matches any-version-re "009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "v009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "v 009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "v-009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "v_009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "ver009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "ver 009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "ver-009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "ver_009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "version009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "version 009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "version-009999999.009999999.009999999"))))
+      (is (true?  (boolean (re-matches any-version-re "version_009999999.009999999.009999999"))))))
+  (testing "Specific version number regexes"
+    (let [v0-re (re-version-and-suffix* "0" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v0-re "0"))))
+      (is (true?  (boolean (re-matches v0-re "00"))))
+      (is (true?  (boolean (re-matches v0-re "0000000000000000000"))))
+      (is (true?  (boolean (re-matches v0-re "0.0"))))
+      (is (true?  (boolean (re-matches v0-re "00.00"))))
+      (is (true?  (boolean (re-matches v0-re "0.0.0"))))
+      (is (true?  (boolean (re-matches v0-re "0.0.0000"))))
+      (is (false? (boolean (re-matches v0-re "1"))))
+      (is (false? (boolean (re-matches v0-re "1.0"))))
+      (is (false? (boolean (re-matches v0-re "0.1"))))
+      (is (false? (boolean (re-matches v0-re "00000000001"))))
+      (is (false? (boolean (re-matches v0-re "0.00000000001")))))
+    (let [v0-re (re-version-and-suffix* "0.0" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v0-re "0"))))
+      (is (true?  (boolean (re-matches v0-re "00"))))
+      (is (true?  (boolean (re-matches v0-re "0000000000000000000"))))
+      (is (true?  (boolean (re-matches v0-re "0.0"))))
+      (is (true?  (boolean (re-matches v0-re "00.00"))))
+      (is (true?  (boolean (re-matches v0-re "0.0.0"))))
+      (is (true?  (boolean (re-matches v0-re "0.0.0000"))))
+      (is (false? (boolean (re-matches v0-re "1"))))
+      (is (false? (boolean (re-matches v0-re "1.0"))))
+      (is (false? (boolean (re-matches v0-re "0.1"))))
+      (is (false? (boolean (re-matches v0-re "00000000001"))))
+      (is (false? (boolean (re-matches v0-re "0.00000000001")))))
+    (let [v0-re (re-version-and-suffix* "0.0.0.0.0.0.0" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v0-re "0"))))
+      (is (true?  (boolean (re-matches v0-re "00"))))
+      (is (true?  (boolean (re-matches v0-re "0000000000000000000"))))
+      (is (true?  (boolean (re-matches v0-re "0.0"))))
+      (is (true?  (boolean (re-matches v0-re "00.00"))))
+      (is (true?  (boolean (re-matches v0-re "0.0.0"))))
+      (is (true?  (boolean (re-matches v0-re "0.0.0000"))))
+      (is (false? (boolean (re-matches v0-re "1"))))
+      (is (false? (boolean (re-matches v0-re "1.0"))))
+      (is (false? (boolean (re-matches v0-re "0.1"))))
+      (is (false? (boolean (re-matches v0-re "00000000001"))))
+      (is (false? (boolean (re-matches v0-re "0.00000000001")))))
+    (let [v1-re (re-version-and-suffix* "1" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v1-re "1"))))
+      (is (true?  (boolean (re-matches v1-re "01"))))
+      (is (true?  (boolean (re-matches v1-re "0000000000000000001"))))
+      (is (true?  (boolean (re-matches v1-re "1.0"))))
+      (is (true?  (boolean (re-matches v1-re "01.00"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000"))))
+      (is (false? (boolean (re-matches v1-re "0"))))
+      (is (false? (boolean (re-matches v1-re "0.1"))))
+      (is (false? (boolean (re-matches v1-re "0.0.1"))))
+      (is (false? (boolean (re-matches v1-re "10"))))
+      (is (false? (boolean (re-matches v1-re "0.00000000001")))))
+    (let [v1-re (re-version-and-suffix* "1.0" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v1-re "1"))))
+      (is (true?  (boolean (re-matches v1-re "01"))))
+      (is (true?  (boolean (re-matches v1-re "0000000000000000001"))))
+      (is (true?  (boolean (re-matches v1-re "1.0"))))
+      (is (true?  (boolean (re-matches v1-re "01.00"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000"))))
+      (is (false? (boolean (re-matches v1-re "0"))))
+      (is (false? (boolean (re-matches v1-re "0.1"))))
+      (is (false? (boolean (re-matches v1-re "0.0.1"))))
+      (is (false? (boolean (re-matches v1-re "10"))))
+      (is (false? (boolean (re-matches v1-re "0.00000000001")))))
+    (let [v11-re (re-version-and-suffix* "1.1" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v11-re "1.1"))))
+      (is (true?  (boolean (re-matches v11-re "01.1"))))
+      (is (true?  (boolean (re-matches v11-re "0000000000000000001.01"))))
+      (is (true?  (boolean (re-matches v11-re "1.1.0"))))
+      (is (true?  (boolean (re-matches v11-re "01.01.00.00.00"))))
+      (is (true?  (boolean (re-matches v11-re "1.1.0000"))))
+      (is (false? (boolean (re-matches v11-re "1"))))
+      (is (false? (boolean (re-matches v11-re "1.0"))))
+      (is (false? (boolean (re-matches v11-re "1.10"))))
+      (is (false? (boolean (re-matches v11-re "1.0.1"))))
+      (is (false? (boolean (re-matches v11-re "10"))))
+      (is (false? (boolean (re-matches v11-re "0.00000000001")))))
+    (let [v321-re (re-version-and-suffix* "3.2.1" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v321-re "3.2.1"))))
+      (is (true?  (boolean (re-matches v321-re "03.02.01"))))
+      (is (true?  (boolean (re-matches v321-re "0000000000000000003.0000002.0000001"))))
+      (is (true?  (boolean (re-matches v321-re "3.2.1.0"))))
+      (is (true?  (boolean (re-matches v321-re "03.02.01.00.00.00"))))
+      (is (true?  (boolean (re-matches v321-re "3.2.00001"))))
+      (is (false? (boolean (re-matches v321-re "3"))))
+      (is (false? (boolean (re-matches v321-re "3.2"))))
+      (is (false? (boolean (re-matches v321-re "3.2.10"))))
+      (is (false? (boolean (re-matches v321-re "3.1.2"))))
+      (is (false? (boolean (re-matches v321-re "30.2.1"))))
+      (is (false? (boolean (re-matches v321-re "3.2.000000000010")))))
+    (let [v321-re (re-version-and-suffix* "03.02.01.0.0.0.0.0" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v321-re "3.2.1"))))
+      (is (true?  (boolean (re-matches v321-re "03.02.01"))))
+      (is (true?  (boolean (re-matches v321-re "0000000000000000003.0000002.0000001"))))
+      (is (true?  (boolean (re-matches v321-re "3.2.1.0"))))
+      (is (true?  (boolean (re-matches v321-re "03.02.01.00.00.00"))))
+      (is (true?  (boolean (re-matches v321-re "3.2.00001"))))
+      (is (false? (boolean (re-matches v321-re "3"))))
+      (is (false? (boolean (re-matches v321-re "3.2"))))
+      (is (false? (boolean (re-matches v321-re "3.2.10"))))
+      (is (false? (boolean (re-matches v321-re "3.1.2"))))
+      (is (false? (boolean (re-matches v321-re "30.2.1"))))
+      (is (false? (boolean (re-matches v321-re "3.2.000000000010"))))))
+  (testing "Version numbers with alternative decimals"
+    (let [v21-re (re-version-and-suffix* "2.1.0" nil false nil false nil)]
+      (is (true? (boolean (re-matches v21-re "2_1"))))
+      (is (true? (boolean (re-matches v21-re "2-1"))))
+      (is (true? (boolean (re-matches v21-re "2,1"))))))
+  (testing "Version labels"
+    (let [v2-re (re-version-and-suffix* "2.0" nil false nil false nil)]
+      (is (true?  (boolean (re-matches v2-re "v2"))))
+      (is (true?  (boolean (re-matches v2-re "V2"))))
+      (is (true?  (boolean (re-matches v2-re "v2.0"))))
+      (is (true?  (boolean (re-matches v2-re "v 2"))))
+      (is (true?  (boolean (re-matches v2-re "v 2.0"))))
+      (is (true?  (boolean (re-matches v2-re "ver2"))))
+      (is (true?  (boolean (re-matches v2-re "VER2"))))
+      (is (true?  (boolean (re-matches v2-re "ver2.0"))))
+      (is (true?  (boolean (re-matches v2-re "ver 2"))))
+      (is (true?  (boolean (re-matches v2-re "ver 2.0"))))
+      (is (true?  (boolean (re-matches v2-re "version2"))))
+      (is (true?  (boolean (re-matches v2-re "version2.0"))))
+      (is (true?  (boolean (re-matches v2-re "version 2"))))
+      (is (true?  (boolean (re-matches v2-re "VERSION 2"))))
+      (is (true?  (boolean (re-matches v2-re "version 2.0"))))
+      (is (true?  (boolean (re-matches v2-re "vErSiON 2.0"))))
+      (is (true?  (boolean (re-matches v2-re "versions 2"))))
+      (is (false? (boolean (re-matches v2-re "vers 2"))))))
+  (testing "Version number NCG"
+    (let [v2-re (re-version-and-suffix* "2.0" "versionNumber" false nil false nil)]
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2") "versionNumber")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "02") "versionNumber")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2.0") "versionNumber")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "02.00") "versionNumber")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2.0.0") "versionNumber")))))
+  (testing "only suffix"
+    (let [v1-re (re-version-and-suffix* "1.0" nil true nil false nil)]
+      (is (true?  (boolean (re-matches v1-re "1 only"))))
+      (is (true?  (boolean (re-matches v1-re "01only"))))
+      (is (true?  (boolean (re-matches v1-re "0000000000000000001       only"))))
+      (is (true?  (boolean (re-matches v1-re "1.0-only"))))
+      (is (true?  (boolean (re-matches v1-re "01.00_only"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0, only"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 only"))))
+      (is (false? (boolean (re-matches v1-re "1"))))
+      (is (false? (boolean (re-matches v1-re "01"))))
+      (is (false? (boolean (re-matches v1-re "0000000000000000001"))))
+      (is (false? (boolean (re-matches v1-re "1.0"))))
+      (is (false? (boolean (re-matches v1-re "01.00"))))
+      (is (false? (boolean (re-matches v1-re "1.0.0"))))
+      (is (false? (boolean (re-matches v1-re "1.0.0000 or later"))))))
+  (testing "only suffix NCG"
+    (let [v2-re (re-version-and-suffix* "2.0" nil true "only" false nil)]
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2 only") "only")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "02only") "only")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "0000000000000000002       only") "only")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2.0-only") "only")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "02.00_only") "only")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2.0.0 only") "only")))))
+(testing "or later suffix"
+    (let [v1-re (re-version-and-suffix* "1.0" nil false nil true nil)]
+      (is (true?  (boolean (re-matches v1-re "1 or later"))))
+      (is (true?  (boolean (re-matches v1-re "1+"))))
+      (is (true?  (boolean (re-matches v1-re "01or later"))))
+      (is (true?  (boolean (re-matches v1-re "01 +"))))
+      (is (true?  (boolean (re-matches v1-re "0000000000000000001       or              later"))))
+      (is (true?  (boolean (re-matches v1-re "1.0-or-later"))))
+      (is (true?  (boolean (re-matches v1-re "01.00_or_later"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0, or later"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or,later"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or any later version"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or a later version"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or a later ver"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 (or any later version)"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or any lator version"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or newer version"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or at your discretion a newer version"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or, at your option, a later version"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 or (at your option) any newer version"))))
+      (is (true?  (boolean (re-matches v1-re "1.0.0000 (or at your discretion any lator versions)"))))
+      (is (false? (boolean (re-matches v1-re "1"))))
+      (is (false? (boolean (re-matches v1-re "01"))))
+      (is (false? (boolean (re-matches v1-re "0000000000000000001"))))
+      (is (false? (boolean (re-matches v1-re "1.0"))))
+      (is (false? (boolean (re-matches v1-re "01.00"))))
+      (is (false? (boolean (re-matches v1-re "1.0.0"))))
+      (is (false? (boolean (re-matches v1-re "1.0.0000 only"))))))
+  (testing "or later-suffix NCG"
+    (let [v2-re (re-version-and-suffix* "2.0" nil false nil true "orLater")]
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2 or later") "orLater")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "02or later") "orLater")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "0000000000000000002       or                     later") "orLater")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2.0-or-later") "orLater")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "02.00_or_later") "orLater")))
+      (is (true? (contains? (rencg/re-matches-ncg v2-re "2.0.0 or,later") "orLater")))))
+  (testing "only and/or or-later suffixes"
+    (let [v3-re (re-version-and-suffix* "3.0" nil true "only" true "orLater")]
+      ; No suffix
+      (is (true?  (boolean (re-matches v3-re "3"))))
+      (is (true?  (boolean (re-matches v3-re "03"))))
+      (is (true?  (boolean (re-matches v3-re "0000000000000000003"))))
+      (is (true?  (boolean (re-matches v3-re "3.0"))))
+      (is (true?  (boolean (re-matches v3-re "03.00"))))
+      (is (true?  (boolean (re-matches v3-re "3.0.0"))))
+      (is (false? (boolean (re-matches v3-re "3 only or later"))))
+      ; Only suffix
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3 only") "only")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "03only") "only")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "0000000000000000003       only") "only")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3.0-only") "only")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "03.00_only") "only")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3.0.0 only") "only")))
+      ; Or later suffix
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "03or later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "0000000000000000003       or                     later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3.0-or-later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "03.00_or_later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3.0.0 or,later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3 or later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "03or later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "0000000000000000003       or                     later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3.0-or-later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "03.00_or_later") "orLater")))
+      (is (true?  (contains? (rencg/re-matches-ncg v3-re "3.0.0 or,later") "orLater")))))
+  (testing "The whole enchilada"
+    (let [v21-re (re-version-and-suffix* "2.1" "versionNumber" true "only" true "orLater")]
+      (let [m1 (rencg/re-matches-ncg v21-re "version 2.1 only")]
+        (is (true?  (contains? m1 "versionNumber")))
+        (is (true?  (contains? m1 "only")))
+        (is (false? (contains? m1 "orLater"))))
+      (let [m2 (rencg/re-matches-ncg v21-re "version 2.1+")]
+        (is (true?  (contains? m2 "versionNumber")))
+        (is (false? (contains? m2 "only")))
+        (is (true?  (contains? m2 "orLater"))))
+      (is (nil? (rencg/re-matches-ncg v21-re "version 2.1 only or later"))))))
 
 (deftest id->regex-tests
   (testing "Nil, blank, etc."
@@ -34,22 +311,22 @@
         regex-mit       (id->regex "MIT")
         regex-lzma-920  (id->regex "LZMA-SDK-9.11-to-9.20")]
     (testing "Id variations - matches"
-      (is (not (nil? (re-matches regex-apache-11 "Apache 1.1"))))             ; Licence with 2 c's
-      (is (not (nil? (re-matches regex-apache-11 "Apache 1.1+"))))            ; "+" suffix
-      (is (not (nil? (re-matches regex-apache-11 "Apache 1.1 or later"))))    ; "or later" suffix
-      (is (not (nil? (re-matches regex-apache-11 "Apache 1.1 only"))))        ; "only" suffix
-      (is (not (nil? (re-matches regex-apache-11 "Apache 1.1.0"))))           ; Extra .0 component
-      (is (not (nil? (re-matches regex-apache-20 "Apache 2"))))               ; Whole number version
-      (is (not (nil? (re-matches regex-apache-20 "Apache-2"))))               ; Hyphens instead of spaces
-      (is (not (nil? (re-matches regex-apache-20 "Apache 02"))))              ; Leading zeroes
-      (is (not (nil? (re-matches regex-apache-20 "Apache 002.000"))))         ; Excess zeroes
-      (is (not (nil? (re-matches regex-apache-11 "Apache 001.001"))))         ; Excess zeroes
-      (is (not (nil? (re-matches regex-apache-20 "Apache 2.0.0.0.0.0"))))     ; Excess .0 components
-      (is (not (nil? (re-matches regex-apache-20 "Apache v2.0"))))            ; Version prefix added
-      (is (not (nil? (re-matches regex-apache-20 "Apache ver 2.0"))))         ; Version prefix added
-      (is (not (nil? (re-matches regex-apache-20 "Apache version 2.0"))))     ; Version prefix added
-      (is (not (nil? (re-matches regex-lzma-920  "LZMA-SDK-9.11-to-9.20"))))  ; Double version number
-      (is (not (nil? (re-matches regex-lzma-920  "LZMA-SDK-9.11-9.20")))))    ; Removed "to"
+      (is (true? (boolean (re-matches regex-apache-11 "Apache 1.1"))))             ; Licence with 2 c's
+      (is (true? (boolean (re-matches regex-apache-11 "Apache 1.1+"))))            ; "+" suffix
+      (is (true? (boolean (re-matches regex-apache-11 "Apache 1.1 or later"))))    ; "or later" suffix
+      (is (true? (boolean (re-matches regex-apache-11 "Apache 1.1 only"))))        ; "only" suffix
+      (is (true? (boolean (re-matches regex-apache-11 "Apache 1.1.0"))))           ; Extra .0 component
+      (is (true? (boolean (re-matches regex-apache-20 "Apache 2"))))               ; Whole number version
+      (is (true? (boolean (re-matches regex-apache-20 "Apache-2"))))               ; Hyphens instead of spaces
+      (is (true? (boolean (re-matches regex-apache-20 "Apache 02"))))              ; Leading zeroes
+      (is (true? (boolean (re-matches regex-apache-20 "Apache 002.000"))))         ; Excess zeroes
+      (is (true? (boolean (re-matches regex-apache-11 "Apache 001.001"))))         ; Excess zeroes
+      (is (true? (boolean (re-matches regex-apache-20 "Apache 2.0.0.0.0.0"))))     ; Excess .0 components
+      (is (true? (boolean (re-matches regex-apache-20 "Apache v2.0"))))            ; Version prefix added
+      (is (true? (boolean (re-matches regex-apache-20 "Apache ver 2.0"))))         ; Version prefix added
+      (is (true? (boolean (re-matches regex-apache-20 "Apache version 2.0"))))     ; Version prefix added
+      (is (true? (boolean (re-matches regex-lzma-920  "LZMA-SDK-9.11-to-9.20"))))  ; Double version number
+      (is (true? (boolean (re-matches regex-lzma-920  "LZMA-SDK-9.11-9.20")))))    ; Removed "to"
     (testing "Id variations - non-matches"
       (is (nil? (re-matches regex-apache-11 "Apache 1.0")))       ; Wrong minor version
       (is (nil? (re-matches regex-apache-11 "Apache 1.10")))      ; Wrong minor version
@@ -147,3 +424,5 @@
                (run! (fn [name-to-test] (is (nil? (re-matches re name-to-test)) (str "Regex for name '" % "' erroneously matches name '" name-to-test "'"))) names-to-test))
             all-names))))
   ; Note: we don't test to ensure that a regex doesn't `find` other names, as some of them will (e.g. 'BSD with attribution' will find 'BSD with Attribution and HPND disclaimer')
+
+

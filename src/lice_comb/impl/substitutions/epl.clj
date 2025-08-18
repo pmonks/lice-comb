@@ -28,8 +28,7 @@
                                       (re/opt-grp lcir/fre-mws #"Pub?lic")
                                       (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
                                       (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")))
-                 (re/opt-grp lcir/fre-ows lcir/fre-version)
-                 (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                 (re/opt-grp lcir/fre-ows (lcir/re-version-and-suffix))
                  (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")
                  (re/opt-grp lcir/fre-mws (re/opt-grp "the") lcir/fre-mws "same" lcir/fre-mws "as" lcir/fre-mws "Clojure")))
 

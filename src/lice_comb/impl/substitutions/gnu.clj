@@ -29,31 +29,6 @@
 ;
 ; We do this because of the sheer number of variations of GNU family license names in the wild.
 
-;####TODO: REMOVE ME!!!!
-(comment
-(defn- base-id
-  "Returns the 'base id' of a GNU family id.  This is the id with version
-  suffixes removed (`+`, `-or-later`, or `-only`)."
-  [id]
-  (when id
-    (-> (s/trim id)
-        (s/replace #"\+\z"        "")
-        (s/replace #"-or-later\z" "")
-        (s/replace #"-only\z"     ""))))
-
-(defn- suffix
-  "Returns a keyword representing the suffix of `id`; one of:
-  * `:only` - `-only` suffix
-  * `:or-later` - `+` or `-or-later` suffix
-
-  If no suffix is found, returns `nil`."
-  [id]
-  (when id
-    (cond
-      (s/ends-with? id "-only")                                :only
-      (or (s/ends-with? id "+") (s/ends-with? id "-or-later")) :or-later)))
-)
-
 ; All GNU family license ids, including deprecated ones - we report that we match all GPL ids so that they're removed from lice-comb.impl.substitutions.others matching
 (def ids-d (delay (lcis/sort-ids (filter lcisu/gnu-family? @lcis/license-ids-d))))
 
@@ -109,8 +84,7 @@
                       "\n\n#### Pre-version word salad ####\n"
                       (re/zom-grp lcir/fre-mws fre-agpl-words-before)
                       "\n\n#### Version and version qualifier ####\n"
-                      (re/opt-grp lcir/fre-ows lcir/fre-version)
-                      (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                      (re/opt-grp lcir/fre-ows (lcir/re-version-or-suffix))
                       "\n\n#### Post-version word salad ####\n"
                       (re/zom-grp lcir/fre-mws fre-agpl-words-after)
                       "\n\n#### Date ####\n"
@@ -134,8 +108,7 @@
                       "\n\n#### Pre-version word salad ####\n"
                       (re/zom-grp lcir/fre-mws fre-lgpl-words-before)
                       "\n\n#### Version and version qualifier ####\n"
-                      (re/opt-grp lcir/fre-ows lcir/fre-version)
-                      (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                      (re/opt-grp lcir/fre-ows (lcir/re-version-or-suffix))
                       "\n\n#### Post-version word salad ####\n"
                       (re/zom-grp lcir/fre-mws fre-lgpl-words-after)
                       "\n\n#### Date ####\n"
@@ -155,8 +128,7 @@
                      "\n\n#### Pre-version word salad ####\n"
                      (re/zom-grp lcir/fre-mws fre-gpl-words-before)
                      "\n\n#### Version and version qualifier ####\n"
-                     (re/opt-grp lcir/fre-ows lcir/fre-version)
-                     (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)
+                      (re/opt-grp lcir/fre-ows (lcir/re-version-or-suffix))
                      "\n\n#### Post-version word salad ####\n"
                      (re/zom-grp lcir/fre-mws fre-gpl-words-after)
                      "\n\n#### Date ####\n"

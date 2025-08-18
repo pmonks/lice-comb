@@ -11,79 +11,205 @@
 (ns lice-comb.impl.regexes
   "Regexes related functionality. Note: this namespace is not part of the public
   API of lice-comb and may change without notice."
-  (:require [clojure.string       :as s]
-            [spdx.licenses        :as sl]
-            [spdx.exceptions      :as se]
-            [wreck.api            :as re]
-            [lice-comb.impl.utils :as lciu]))
-
-; Regex fragments - these should all be prefixed with #"(?iuU)" by callers
-(def fre-ws                       #"[\s\-–—_,\.\(\)]")
-(def fre-ows                      (re/zom fre-ws))
-(def fre-mws                      (re/oom fre-ws))
-(def fre-quote                    #"[\"“”„‟'‘’‚‛`]")
-(def fre-oquote                   (re/opt fre-quote))
-(def fre-date                     (re/ncg "date" (re/join (re/zom-grp #"\d\d?" fre-ows #"(?:st|nd|rd|th)?")
-                                                 fre-ows
-                                                 (re/alt-grp #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
-                                                 fre-ows #"\d\d(?:\d\d)?" fre-ows)))
-
-(def ^:private fre-version-label  (re/grp fre-ows #"v(?:er(?:sions?)?)?"))
-(def ^:private fre-version-number (re/ncg "versionNumber" #"\d+(?:[,\._]\d+)*"))
-(def fre-version                  (re/join (re/opt fre-version-label) fre-ows fre-version-number))
-(def ^:private fre-only           (re/ncg "only" #"only"))
-(def ^:private fre-or-later       (re/alt-ncg "orLater"
-                                              #"\+"
-                                              #"(?:\(?or(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)[\),]*)?(?:[\s\-–—]+a(?:ny)?)?[\s\-–—]+(?:lat[eo]r|newer)(?:[\s\-–—,\(]+at[\s\-–—]+your[\s\-–—]+(?:option|discretion)\)?)?(?:[\s\-–—]+(?:v(?:er(?:sions?)?)?))?\)?)"))
-(def fre-only-or-later            (re/alt-grp fre-only fre-or-later))
-
-(defn- re-version-replacement
-  "Emits a suitable regex for matching the version identified in map `m` (a map
-  as returned by rencg)."
-  [m]
-  (let [version-number              (get m "versionNumber")
-        only?                       (boolean (get m "only"))
-        or-later?                   (boolean (get m "orLater"))
-        version-components          (seq (s/split version-number #"\."))
-        dot-zero?                   (boolean (re-matches #"0+" (last version-components)))
-        non-zero-version-components (if dot-zero? (drop-last version-components) version-components)]  ; If version number ends in 0, make last component optional
-    (re/join (re/opt-grp fre-version-label)
-             fre-ows
-             (re/ncg "versionNumber"
-                     (s/join "\\." (map #(str "0*" %) non-zero-version-components))
-                     #"(?:\.0+)*")  ; Allow any number of ".0" to appear at the end
-             fre-ows
-             (case [only? or-later?]
-               [true false]  (re/opt fre-only)      ; only only
-               [false true]  (re/opt fre-or-later)  ; or-later only
-               (re/opt fre-only-or-later)))))       ; Undefined, so accept either
+  (:require [clojure.string           :as s]
+            [spdx.identifiers         :as si]
+            [wreck.api                :as re]
+            [lice-comb.impl.3rd-party :as lci3]
+            [lice-comb.impl.utils     :as lciu]))
 
 ; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
 
+; Regex fragments - these should all be prefixed with #"(?iuU)" by callers
+(def fre-ws     #"[\s\-–—_,\.\(\)]")
+(def fre-ows    (re/zom fre-ws))
+(def fre-mws    (re/oom fre-ws))
+(def fre-quote  #"[\"“”„‟'‘’‚‛`]")
+(def fre-oquote (re/opt fre-quote))
+(def fre-date   (re/ncg "date" (re/join (re/zom-grp #"\d\d?" fre-ows #"(?:st|nd|rd|th)?")
+                               fre-ows
+                               (re/alt-grp #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
+                               fre-ows #"\d\d(?:\d\d)?" fre-ows)))
+
+; Internal regex fragments
+(def ^:private fre-version-label  #"v(?:er(?:sions?)?)?")
+(def ^:private fre-only           #"only")
+(def ^:private fre-or-later       (re/alt-grp #"\+"
+                                              (re/grp (re/opt-grp #"\(" fre-ows)
+                                                      "or"
+                                                      fre-mws
+                                                      (re/opt-grp "at" fre-mws "your" fre-mws (re/alt-grp "option" "discretion") fre-mws)
+                                                      (re/opt-grp #"a(?:ny)?" fre-mws)
+                                                      (re/alt-grp #"lat[eo]r" "newer")
+                                                      (re/opt-grp fre-mws #"(?:v(?:er(?:sions?)?)?)")
+                                                      (re/opt-grp fre-ows "at" fre-mws "your" fre-mws (re/alt-grp "option" "discretion"))  ; To handle corner cases such as "Affero General Public License v3 or later (at your option)"
+                                                      fre-ows)))
+
+(defn- oncgrp
+  "Wraps `re` in a group, either a NCG (when `ncg-name` is not blank) or a non-
+  capturing group."
+  [ncg-name & res]
+  (if (s/blank? ncg-name)
+    (apply re/grp res)
+    (apply re/ncg ncg-name res)))
+
+(defn- version-number-to-re
+  "Emits a regex fragment for matching the given version number (a `String` in
+  `x[.y.z & .more]` format)."
+  [version-number]
+  (let [components (if-let [components (seq (lci3/rdrop-while (partial re-matches #"0+") (s/split version-number #"\.")))]  ; Drop all trailing components that are 0
+                     (map #(s/join (drop-while (partial = \0) %)) components)                                               ; Strip leading 0s from each individual component (e.g. "002" -> "2") - we handle this case via a regex fragment below
+                     ["0"])]  ; Always make sure we have at least one "hardcoded" version number component
+    (re/join (s/join "[-–—_,\\.]" (map #(str "0*" %) components))  ; Allow any number of 0s at the start of each component
+             #"(?:[-–—_,\.]0+)*")))  ; Allow any number of ".0" to appear at the end
+
+(defn- re-version-impl
+  "Emits a regex fragment for matching a version expression, made up of:
+
+  1. a static version label ('v', 'ver', 'version', and the like)
+  2. the version number component itself.  When `version-number` (a `String` in
+     `x.y[.z & .more]` format) is provided, wil only match variations of that
+     version number.  Otherwise will match any possible version number.  When
+     `version-number-ncg-name` is provided, will wrap the version number
+     match in an NCG.
+
+  Notes:
+
+  * Does not match suffixes (only, or-later) - for that use
+  [[re-version-and-suffix]]."
+  ([] (re-version-impl "versionNumber" nil))
+  ([version-number-ncg-name] (re-version-impl "versionNumber" version-number-ncg-name))
+  ([version-number-ncg-name version-number]
+   (let [fre-version-number (if (s/blank? version-number)
+                              #"\d+(?:[-–—_,\\.]\d+)*"
+                              (version-number-to-re version-number))]
+     (re/join (re/opt-grp fre-version-label)
+              fre-ows
+              (oncgrp version-number-ncg-name fre-version-number)))))
+(def re-version (memoize re-version-impl))  ; Memoize as this will be called with the same args a LOT
+
+(defn- re-version-suffix-impl
+  "Emits a regex fragment for matching a version suffix component, made up of:
+
+   * when `only?` is `true`: an 'only' component, optionally placed in a NCG
+     with the name provided by `only-ncg-name`
+   * when `or-later?` is `true`: an 'or-later' component, optionally placed in
+     a NCG with the name provided by `or-later-ncg-name`
+   * when both `only?` and `or-later?` are `true`: an optional alternation
+     group that captures one or the other or neither (but not both)
+   * when both `only?` and `or-later?` are `false`: no suffix matching (no
+     suffixes will match)"
+  ([] (re-version-suffix-impl true "only" true "orLater"))
+  ([only?          only-ncg-name
+    or-later?      or-later-ncg-name]
+    (case [only? or-later?]
+      ; Match only suffix only
+      [true false] (oncgrp only-ncg-name fre-only)
+
+      ; Match or later suffix only
+      [false true] (oncgrp or-later-ncg-name fre-or-later)
+
+      ; Default to matching one of the 2 suffixes, or neither (but never both)
+      (re/opt (re/alt-grp (oncgrp only-ncg-name fre-only)
+                          (oncgrp or-later-ncg-name fre-or-later))))))
+(def re-version-suffix (memoize re-version-suffix-impl))  ; Memoize as this will be called with the same args a LOT
+
+(defn- re-version-and-suffix-impl
+  "Emits a regex fragment for matching a version expression, made up of:
+  1. a static version label ('version', 'v' or the like)
+  2. the version number component itself, matching the number provided by
+     `version-number` (a `String` in `x.y[.z...]` format), optionally placed in
+     a NCG with the name provided by `version-number-ncg-name` (or a non-
+     capturing group when `version-number-ncg-name` is blank)
+  3. a suffix component, made up of:
+     * when `only?` is `true`: an 'only' component, optionally placed in a NCG
+       with the name provided by `only-ncg-name`
+     * when `or-later?` is `true`: an 'or-later' component, optionally placed in
+       a NCG with the name provided by `or-later-ncg-name`
+     * when both `only?` and `or-later?` are `true`: an optional alternation
+       group that captures one or the other or neither (but not both)
+     * when both `only?` and `or-later?` are `false`: no suffix matching (no
+       suffixes will match)"
+  ([] (re-version-and-suffix-impl nil "versionNumber", true "only" true "orLater"))
+  ([version-number] (re-version-and-suffix-impl version-number "versionNumber", true "only" true "orLater"))
+  ([version-number version-number-ncg-name
+    only?          only-ncg-name
+    or-later?      or-later-ncg-name]
+   (re/join (re-version version-number-ncg-name version-number)
+            fre-ows
+            (re-version-suffix only? only-ncg-name or-later? or-later-ncg-name))))
+(def re-version-and-suffix (memoize re-version-and-suffix-impl))  ; Memoize as this will be called with the same args a LOT
+
+(defn- re-version-or-suffix-impl
+  "Emits a regex fragment for matching a version expression, made up of any
+  combination of:
+  1. a static version label ('version', 'v' or the like)
+  2. the version number component itself, matching the number provided by
+     `version-number` (a `String` in `x.y[.z...]` format), optionally placed in
+     a NCG with the name provided by `version-number-ncg-name` (or a non-
+     capturing group when `version-number-ncg-name` is blank)
+  3. a suffix component, made up of:
+     * when `only?` is `true`: an 'only' component, optionally placed in a NCG
+       with the name provided by `only-ncg-name`
+     * when `or-later?` is `true`: an 'or-later' component, optionally placed in
+       a NCG with the name provided by `or-later-ncg-name`
+     * when both `only?` and `or-later?` are `true`: an optional alternation
+       group that captures one or the other or neither (but not both)
+     * when both `only?` and `or-later?` are `false`: no suffix matching (no
+       suffixes will match)"
+  ([] (re-version-or-suffix-impl nil "versionNumber", true "only" true "orLater"))
+  ([version-number] (re-version-or-suffix-impl version-number "versionNumber", true "only" true "orLater"))
+  ([version-number version-number-ncg-name
+    only?          only-ncg-name
+    or-later?      or-later-ncg-name]
+   (re/join (re/opt-grp (re-version version-number-ncg-name version-number))
+            fre-ows
+            (re-version-suffix only? only-ncg-name or-later? or-later-ncg-name))))
+(def re-version-or-suffix (memoize re-version-or-suffix-impl))  ; Memoize as this will be called with the same args a LOT
+
+
+
+(defn- re-version-replacement
+  "Emits a suitable regex for matching the version identified in map `m` (a map
+  as returned by rencg). The version number component will be placed in a NCG
+  called `version-number-ncg-name`, if that argument is not blank. When
+  `suffixes-ncg?` is `true`, the 'only' and 'or later' suffixes will also be
+  placed in their own NCGS."
+  [version-number-ncg-name suffix-ncgs? m]
+  (let [version-number (lciu/strim (get m "versionNumber"))
+        only?          (not (s/blank? (get m "only")))
+        or-later?      (not (s/blank? (get m "orLater")))]
+    (re/join fre-ows
+             (re-version-and-suffix version-number version-number-ncg-name only? (when suffix-ncgs? "only") or-later? (when suffix-ncgs? "orLater"))
+             fre-ows)))
+
 (defn id->regex
   "Turns `id`, an SPDX license or exception id, into a regex that can be used to
-  near-match it.  Returns `nil` if `id` is blank."
-  [id]
-  (when-not (s/blank? id)
-    (-> [#"(?iuU)(?<!\w)" (s/trim id) #"(?!\w)"]
-        ; Special cases for some double and/or weird version components
-        (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
-        ; Special cases for certain licenses
-        (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                 #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
-        (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
-        (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-        (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:[\s\-–—]+B)?")
-        ; Version component
-        (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
-                              re-version-replacement)
-        ; Character equivalents
-        (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
-        ; Cleanup and combine into a single pattern
-        (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
-             (lciu/mapcat-str #(vector (re/esc %)))
-             (apply re/join)))))
+  near-match it.  Returns `nil` if `id` is blank.
+
+  `ncgs?` (default `true`) controls whether named capturing groups are included
+  to capture 'only' or 'or-later' suffixes."
+  ([id] (id->regex id true))
+  ([id ncgs?]
+   (when-not (s/blank? id)
+     (-> [#"(?iuU)(?<!\w)" (s/trim id) #"(?!\w)"]
+         ; Special cases for some double and/or weird version components
+         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
+         ; Special cases for certain licenses
+         (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                 #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
+         (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
+         (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
+         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
+         (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:[\s\-–—]+B)?")
+         ; Version component
+         (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
+                               (partial re-version-replacement "versionNumberId" ncgs?))
+         ; Character equivalents
+         (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
+         ; Cleanup and combine into a single pattern
+         (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
+              (lciu/mapcat-str #(vector (re/esc %)))
+              (apply re/join))))))
 
 (defn name->regex
   "Turns `n`, a license or exception name, into a regex that can be used to
@@ -114,13 +240,12 @@
         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!Microsoft[\s\-–—]+)Reciprocal\s+Public\s+Licen[cs]e(?!\w)" #"(?<!Microsoft[\s\-–—]+)Reciprocal(?:[\s\-–—]+Pub?lic)?[\s\-–—]+Licen[cs]e")
         ; Other numbers, especially dates (so that they don't get misidentified as versions)
         (lciu/replace-in-coll #"\d{3,4}(\-\d{2}\-\d{2})?"                           (fn [m] (re-pattern (re/esc (:match m)))))
-;####TODO: CONSIDER MAKING THE VERSION NUMBER REPLACEMENTS "FIRST ONLY" OR "LAST ONLY"
         ; Version components - 2 & 3 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)?(?<versionNumber>\d+\.\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
-                                  re-version-replacement)
+                              (partial re-version-replacement "versionNumber" true))
         ; Version components - 1 & 2 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)(?<versionNumber>\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
-                                  re-version-replacement)
+                              (partial re-version-replacement "versionNumber" true))
         ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
         (lciu/replace-in-coll #"(?i)\s+licen[cs]e[\s\-]agreement(?!\w)"             #"(?:[\s\-–—]+Licen?[cs]e)?(?:[\s\-–—]+agreement)?")
         (lciu/replace-in-coll #"(?i)\s+licen[cs]e(?!\w)"                            #"(?:[\s\-–—]+Licen?[cs]e)?")  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
@@ -173,6 +298,13 @@
   "Convenience method for obtaining the name regex from an `id`, which is the
   SPDX identifier of a license or exception."
   [id]
-  (when-let [info (or (sl/id->info id)
-                      (se/id->info id))]
+  (when-let [info (si/id->info id)]
     (name->regex (:name info))))
+;####TODO: ADD (OPTIONAL) ID REGEX ONTO THE END!!!!
+(comment
+    (re/join (name->regex (:name info))
+             (re/opt-grp fre-ows
+                         #"\(*"
+                         (id->regex id false)
+                         #"\)*"))
+)

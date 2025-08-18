@@ -115,6 +115,14 @@
       (when (re-matches #"-?\d+(\.\d+)?" s)
         (java.lang.Double/parseDouble s)))))  ; We use interop instead of clojure.core/parse-double for backwards compatibility with older Clojure versions
 
+(defn parse-lng
+  "Parses `s` (a `String`) as a long, returning `nil` if it can't be parsed."
+  [s]
+  (when (not (s/blank? s))
+    (let [s (s/trim s)]
+      (when (re-matches #"-?\d+" s)
+        (java.lang.Long/parseLong s)))))  ; We use interop instead of clojure.core/parse-long for backwards compatibility with older Clojure versions
+
 (defn nset
   "`nil` preserving version of `clojure.core/set`"
   [coll]

@@ -73,14 +73,15 @@
   them to substitute matches in the `String` value in `coll`, returning a new
   `coll`."
   [re-sub-pairs coll]
-  (loop [[[re repl] & r] re-sub-pairs
-         coll            coll]
-    (if (or (not re)
-            (not repl)
-            (lcip/done-parsing? coll))  ; coll is fully parsed, so we can terminate early
-      (seq coll)
-      (let [new-coll (lciu/replace-in-coll coll re repl)]
-        (recur r new-coll)))))
+  (when (and re-sub-pairs coll)
+    (loop [[[re repl] & r] re-sub-pairs
+           coll            coll]
+      (if (or (not re)
+              (not repl)
+              (lcip/done-parsing? coll))  ; coll is fully parsed, so we can terminate early
+        (seq coll)
+        (let [new-coll (lciu/replace-in-coll coll re repl)]
+          (recur r new-coll))))))
 
 ; These are here because the GNU family are SUCH A HUGE PAIN IN THE ARSE!!!!!
 (defn agpl-identifier?
@@ -164,6 +165,23 @@
                :source     (list match)}
               (when confidence-explanations {:confidence-explanations confidence-explanations}))))))
 
+(defn- version-number
+  "Obtains the version number from match `m`, a rencg-executed regex obtained
+  from [[lice-comb.impl.regexes]].  Normalises numbers with leading zeros e.g.
+  '01.01' -> '1.1'
+
+  Note:
+
+  * this will break version numbers that include leading 0s. As of SPDX license
+    list version 3.27.0, the only example of this is `PHP-3.01`, which we're
+    unlikely to run into in the JVM ecosystem.  But stil it would be nice if
+    SPDX had more rigour around identifiers..."
+  [m]
+  (let [raw-version-number (lciu/strim (get m "versionNumber" (get m "versionNumberId")))]
+    (when-not (s/blank? raw-version-number)
+      (let [version-components (map #(s/join (drop-while (partial = \0) %)) (s/split raw-version-number #"\."))]  ; Strip leading 0s from each individual component (e.g. "002" -> "2")
+        (s/join "." version-components)))))
+
 (defn version-handling-regex-match-ei-fn
   "Returns a expression-info construction function that takes a single argument;
   a rencg find/match match map.  `id-prefix` is the prefix of the SPDX
@@ -172,22 +190,22 @@
   versions of the given license."
   [id-prefix default-version all-versions]
   (fn [m]
-    (let [has-version-number?     (not (s/blank? (get m "versionNumber")))
+    (let [raw-version-number      (version-number m)
+          has-version-number?     (not (s/blank? raw-version-number))
           [version-number valid-version? missing-minor-version?]
-                                  (if (not has-version-number?)
+                                  (if-not has-version-number?
                                     ; No version number - fall back on the default
                                     [default-version true false]
                                     ; We found a version number - validate it
-                                    (let [raw-version-number (s/trim (get m "versionNumber"))]
-                                      ; Is it valid?
-                                      (if (some #{raw-version-number} all-versions)
-                                        [raw-version-number true false]
-                                        ; Not valid so try with .0 tacked on the end (e.g. "1" -> "1.0")
-                                        (let [raw-version-number (str raw-version-number ".0")]
-                                          (if (some #{raw-version-number} all-versions)
-                                            [raw-version-number true true]
-                                            ; Fall back to the default
-                                            [default-version false true])))))
+                                    (if (some #{raw-version-number} all-versions)
+                                      ; It's valid
+                                      [raw-version-number true false]
+                                      ; Not valid so try with .0 tacked on the end (e.g. "1" -> "1.0")
+                                      (let [raw-version-number (str raw-version-number ".0")]
+                                        (if (some #{raw-version-number} all-versions)
+                                          [raw-version-number true true]
+                                          ; Fall back to the default
+                                          [default-version false true]))))
           id                      (str id-prefix version-number (when (get m "orLater") "+"))
           id                      (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: naked exception identifiers won't canonicalise, so this has to be conditional
           confidence              (if (and has-version-number? valid-version? (not missing-minor-version?)) :high :medium)

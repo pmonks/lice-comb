@@ -22,8 +22,9 @@
 (def ids-d (delay (lcis/sort-ids (filter #(s/starts-with? % "Hippocratic-") @lcis/license-ids-d))))
 
 (def ^:private pairs-d (delay (concat
-  (lcisu/spdx-match-pairs @ids-d)                                                                     ; Generic license regexes handle most cases, except...
-  [[(re/join #"(?iuU)Hippocratic(?:[\s\-–—]+Licen?[cs]e)?" (re/opt-grp lcir/fre-ows lcir/fre-only-or-later))  ; ...when no version is provided
+  (lcisu/spdx-match-pairs @ids-d)                                 ; Generic license regexes handle most cases, except...
+  [[(re/join #"(?iuU)Hippocratic(?:[\s\-–—]+Licen?[cs]e)?"
+             (re/opt-grp lcir/fre-ows (lcir/re-version-suffix)))  ; ...when no version is provided
    (fn [m]
      {:id                      (str "Hippocratic-2.1" (when (get m "orLater") "+"))
       :type                    :concluded

@@ -25,8 +25,7 @@
                  (re/alt-grp "CDDL"
                              (re/join #"Common[\s\-–—]+Development[\s\-–—]+(?:and|&)[\s\-–—]+Distribution(?:[\s\-–—]+Licen?[cs]e)?"
                                       (re/opt-grp lcir/fre-ows #"\(?CDDL\)?")))
-                 (re/opt-grp lcir/fre-ows lcir/fre-version)
-                 (re/opt-grp lcir/fre-ows lcir/fre-only-or-later)))
+                 (re/opt-grp lcir/fre-ows (lcir/re-version-and-suffix))))
 
 (def ^:private pairs-d (delay (concat
   [[re (lcisu/version-handling-regex-match-ei-fn "CDDL-" "1.1" ["1.0" "1.1"])]]  ; Match custom regex first, so default ones don't partially consume

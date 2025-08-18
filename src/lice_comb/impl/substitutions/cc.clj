@@ -244,7 +244,9 @@
                  "\n\n#### Clauses ####\n"
                  (re-clauses)
                  "\n\n#### Version ####\n"
-                 (re/opt-grp lcir/fre-version)
+;####TODO: REMOVE ONCE TESTED!!!!
+;                 (re/opt-grp lcir/fre-version)
+                 (re/opt-grp (lcir/re-version-and-suffix))
                  "\n\n#### Suffix ####\n"
                  (re-suffix)
                  "\n\n#### Random dingleberries ####\n"

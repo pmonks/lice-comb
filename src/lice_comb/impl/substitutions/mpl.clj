@@ -22,8 +22,9 @@
 (def ids-d (delay (lcis/sort-ids (filter #(s/starts-with? % "MPL-") @lcis/license-ids-d))))
 
 (def ^:private pairs-d (delay (concat
-  (lcisu/spdx-match-pairs @ids-d)                                                                                       ; Generic license regexes handle most cases, except...
-  [[(re/join #"(?iuU)(?:MPL|Mozilla(?:[\s\-–—]+Public)?(?:[\s\-–—]+Licen?[cs]e)?)" (re/opt-grp lcir/fre-ows lcir/fre-only-or-later))  ; ...when no version is provided
+  (lcisu/spdx-match-pairs @ids-d)                                                    ; Generic license regexes handle most cases, except...
+  [[(re/join #"(?iuU)(?:MPL|Mozilla(?:[\s\-–—]+Public)?(?:[\s\-–—]+Licen?[cs]e)?)"   ; ...when no version is provided
+             (re/opt-grp lcir/fre-ows (lcir/re-version-suffix)))
    (fn [m]
      {:id                      (str "MPL-2.0" (when (get m "orLater") "+"))
       :type                    :concluded
@@ -36,7 +37,7 @@
   "Substitutes any MPL licenses found in the strings in `coll` with an
   expression-info map. Returns other elements unchanged."
   [coll]
-  (lcisu/sub-res @pairs-d  coll))
+  (lcisu/sub-res @pairs-d coll))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent
