@@ -375,7 +375,7 @@
                                     mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
                                     gnu/sub)         ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
                         ; At this point we've identified all of the licenses we possibly can
-;####TODO: to fix things like "Eclipse Public License 2.0 (EPL)"
+;####TODO: to fix things like "Eclipse Public License 2.0 (EPL)", though perhaps not necessary??
 ;                        deduplicate-identifiers
                         sub-operators
 ;####TEST!!!!

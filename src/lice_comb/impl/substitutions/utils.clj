@@ -17,7 +17,8 @@
             [spdx.licenses                :as slic]
             [spdx.exceptions              :as sexc]
             [spdx.expressions             :as sexp]
-            [lice-comb.impl.3rd-party     :refer [by ascending descending] :as lc3]
+;####TODO: REMOVE ONCE TESTED!
+;            [lice-comb.impl.3rd-party     :refer [by ascending descending] :as lc3]
             [lice-comb.impl.regexes       :as lcir]
             [lice-comb.impl.spdx          :as lcis]
             [lice-comb.impl.parsing-utils :as lcip]
@@ -118,9 +119,9 @@
   [id]
   (let [n (:name (or (slic/id->info id) (sexc/id->info id)))]
     (fn [m]
-      (let [id                  (str id (when (get m "orLater") "+"))               ; This can end up with things like GPL-2.0-or-later+, but those get canonicalised by clj-spdx in the next step
+      (let [id                  (str id (when (or (get m "orLater") (get m "orLaterId")) "+"))               ; This can end up with things like GPL-2.0-or-later+, but those get canonicalised by clj-spdx in the next step
             id                  (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: exception ids won't canonicalise by themselves
-            gnu-suffix-missing? (and (gnu-family? id) (not (get m "orLater")) (not (get m "only")))  ; Special case GNU family licenses missing version suffixes
+            gnu-suffix-missing? (and (gnu-family? id) (not (or (get m "orLater") (get m "orLaterId"))) (not (or (get m "only") (get m "onlyId"))))  ; Special case GNU family licenses missing version suffixes
             match               (s/trim (:match m))
             strategy            (cond
                                   (= (s/lower-case match) (s/lower-case id)) :spdx-listed-identifier  ; Because some name regexes will also match the associated id
@@ -155,7 +156,7 @@
   ([id] (simple-regex-match-ei-fn id nil nil))
   ([id confidence confidence-explanations]
    (fn [m]
-     (let [id (str id (when (get m "orLater") "+"))
+     (let [id (str id (when (or (get m "orLater") (get m "orLaterId")) "+"))
            id (if-let [new-id (sexp/canonicalise id)] new-id id)  ; Note: naked exception identifiers won't canonicalise, so this has to be conditional
            match      (s/trim (:match m))]
        (merge {:id         id
@@ -177,9 +178,9 @@
     unlikely to run into in the JVM ecosystem.  But stil it would be nice if
     SPDX had more rigour around identifiers..."
   [m]
-  (let [raw-version-number (lciu/strim (get m "versionNumber" (get m "versionNumberId")))]
+  (let [raw-version-number (lciu/strim (or (get m "versionNumber") (get m "versionNumberId")))]
     (when-not (s/blank? raw-version-number)
-      (let [version-components (map #(s/join (drop-while (partial = \0) %)) (s/split raw-version-number #"\."))]  ; Strip leading 0s from each individual component (e.g. "002" -> "2")
+      (let [version-components (map #(str (lciu/parse-lng %)) (s/split raw-version-number #"\."))]  ; Strip leading 0s from each individual component (e.g. "002" -> "2")
         (s/join "." version-components)))))
 
 (defn version-handling-regex-match-ei-fn

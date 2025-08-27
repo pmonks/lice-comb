@@ -78,7 +78,7 @@
 
 (defn- id->deversioned-id-regex
   "Gets the name of the license with identifier `id`, removed the version from
-  it, then turns that into a name regex."
+  it, then turns that into an id regex."
   [id]
   (when-let [id (id->deversioned-id id)]
     (lcir/id->regex id)))

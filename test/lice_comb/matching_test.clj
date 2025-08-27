@@ -115,7 +115,10 @@
     (is (valid= #{"DocumentRef-acme:LicenseRef-test WITH DocumentRef-acme:AdditionRef-test"} (name->expressions "DocumentRef-acme:LicenseRef-test with DocumentRef-acme:AdditionRef-test"))))  ; Since SPDX specification v3.0
   (testing "Complex singleton identifiers"
     (is (valid= #{"Apache-2.0"}                          (name->expressions "Apache Software License 2 (Apache)")))
-    (is (valid= #{"Apache-1.0"}                          (name->expressions "Apache Software License (Apache 1.0)"))))
+    (is (valid= #{"Apache-1.0"}                          (name->expressions "Apache Software License (Apache 1.0)")))
+    (is (valid= #{"Apache-2.0"}                          (name->expressions "Apache Software License 2.0 (Apache 1.0)")))  ; Ambiguous, but we favour the version number in the name portion
+    (is (valid= #{"GPL-2.0-only"}                        (name->expressions "GNU GPL 2 (GPL 2)")))
+    (is (valid= #{"GPL-2.0-or-later"}                    (name->expressions "GNU GPL (GPL 2+)"))))
   (testing "Simple expressions that are not SPDX expressions"
     (is (valid= #{"GPL-2.0-only WITH Classpath-exception-2.0"} (name->expressions "GNU General Public License, version 2 with the GNU Classpath Exception")))
     (is (valid= #{"Apache-2.0 OR GPL-3.0-only"}         (name->expressions "Apache License version 2.0 or GNU General Public License version 3")))

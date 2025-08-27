@@ -15,7 +15,7 @@
 
   Notes:
 
-  * this is _not_ an official SPDX concept, though see https://github.com/spdx/license-list-XML/issues/2805
+  * this is _not_ an official SPDX concept, though see [[https://github.com/spdx/license-list-XML/issues/2805]]
   * this namespace is not part of the public API of lice-comb and may change
     without notice."
   (:require [clojure.string       :as s]

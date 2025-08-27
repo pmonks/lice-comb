@@ -58,7 +58,7 @@
   `x[.y.z & .more]` format)."
   [version-number]
   (let [components (if-let [components (seq (lci3/rdrop-while (partial re-matches #"0+") (s/split version-number #"\.")))]  ; Drop all trailing components that are 0
-                     (map #(s/join (drop-while (partial = \0) %)) components)                                               ; Strip leading 0s from each individual component (e.g. "002" -> "2") - we handle this case via a regex fragment below
+                     (map #(str (lciu/parse-lng %)) components)                                                             ; Strip leading 0s from each individual component (e.g. "002" -> "2") - we handle this case via a regex fragment below
                      ["0"])]  ; Always make sure we have at least one "hardcoded" version number component
     (re/join (s/join "[-–—_,\\.]" (map #(str "0*" %) components))  ; Allow any number of 0s at the start of each component
              #"(?:[-–—_,\.]0+)*")))  ; Allow any number of ".0" to appear at the end
@@ -167,20 +167,21 @@
             (re-version-suffix only? only-ncg-name or-later? or-later-ncg-name))))
 (def re-version-or-suffix (memoize re-version-or-suffix-impl))  ; Memoize as this will be called with the same args a LOT
 
-
-
 (defn- re-version-replacement
   "Emits a suitable regex for matching the version identified in map `m` (a map
   as returned by rencg). The version number component will be placed in a NCG
-  called `version-number-ncg-name`, if that argument is not blank. When
-  `suffixes-ncg?` is `true`, the 'only' and 'or later' suffixes will also be
-  placed in their own NCGS."
-  [version-number-ncg-name suffix-ncgs? m]
+  called `version-number-ncg-name`, if that argument is not blank. The only
+  component will be placed in a NCG called `only-ncg-name`, if that argument is
+  not blank. The orLater component will be placed in a NCG called
+  `or-later-name`, if that argument is not blank."
+  [version-number-ncg-name only-ncg-name or-later-ncg-name m]
   (let [version-number (lciu/strim (get m "versionNumber"))
         only?          (not (s/blank? (get m "only")))
         or-later?      (not (s/blank? (get m "orLater")))]
     (re/join fre-ows
-             (re-version-and-suffix version-number version-number-ncg-name only? (when suffix-ncgs? "only") or-later? (when suffix-ncgs? "orLater"))
+             (re-version-and-suffix version-number version-number-ncg-name
+                                    only?          only-ncg-name
+                                    or-later?      or-later-ncg-name)
              fre-ows)))
 
 (defn id->regex
@@ -189,27 +190,26 @@
 
   `ncgs?` (default `true`) controls whether named capturing groups are included
   to capture 'only' or 'or-later' suffixes."
-  ([id] (id->regex id true))
-  ([id ncgs?]
-   (when-not (s/blank? id)
-     (-> [#"(?iuU)(?<!\w)" (s/trim id) #"(?!\w)"]
-         ; Special cases for some double and/or weird version components
-         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
-         ; Special cases for certain licenses
-         (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                 #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
-         (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
-         (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
-         (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-         (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:[\s\-–—]+B)?")
-         ; Version component
-         (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
-                               (partial re-version-replacement "versionNumberId" ncgs?))
-         ; Character equivalents
-         (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
-         ; Cleanup and combine into a single pattern
-         (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
-              (lciu/mapcat-str #(vector (re/esc %)))
-              (apply re/join))))))
+  [id]
+  (when-not (s/blank? id)
+    (-> [#"(?iuU)(?<!\w)" (s/trim id) #"(?!\w)"]
+        ; Special cases for some double and/or weird version components
+        (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
+        ; Special cases for certain licenses
+        (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                 #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
+        (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
+        (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
+        (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:[\s\-–—]+B)?")
+        ; Version component
+        (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
+                              (partial re-version-replacement "versionNumberId" "onlyId" "orLaterId"))
+        ; Character equivalents
+        (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
+        ; Cleanup and combine into a single pattern
+        (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
+             (lciu/mapcat-str #(vector (re/esc %)))
+             (apply re/join)))))
 
 (defn name->regex
   "Turns `n`, a license or exception name, into a regex that can be used to
@@ -242,10 +242,10 @@
         (lciu/replace-in-coll #"\d{3,4}(\-\d{2}\-\d{2})?"                           (fn [m] (re-pattern (re/esc (:match m)))))
         ; Version components - 2 & 3 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)?(?<versionNumber>\d+\.\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
-                              (partial re-version-replacement "versionNumber" true))
+                              (partial re-version-replacement "versionNumber" "only" "orLater"))
         ; Version components - 1 & 2 element versions
         (lciu/replace-in-coll #"(?i)\s+((v|ver|versions?)?\s*)(?<versionNumber>\d+(\.\d+)*)([\s\-–—]+((?<only>only)|(?<orLater>or[\s\-–—]+later)))?(?=\z|[\w\s\-–—])"
-                              (partial re-version-replacement "versionNumber" true))
+                              (partial re-version-replacement "versionNumber" "only" "orLater"))
         ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
         (lciu/replace-in-coll #"(?i)\s+licen[cs]e[\s\-]agreement(?!\w)"             #"(?:[\s\-–—]+Licen?[cs]e)?(?:[\s\-–—]+agreement)?")
         (lciu/replace-in-coll #"(?i)\s+licen[cs]e(?!\w)"                            #"(?:[\s\-–—]+Licen?[cs]e)?")  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
@@ -299,12 +299,12 @@
   SPDX identifier of a license or exception."
   [id]
   (when-let [info (si/id->info id)]
-    (name->regex (:name info))))
-;####TODO: ADD (OPTIONAL) ID REGEX ONTO THE END!!!!
-(comment
-    (re/join (name->regex (:name info))
+;####TODO: REMOVE ONCE TESTED
+;    (name->regex (:name info))))
+    (re/join #"(?x)"
+             "\n\n#### Name (mandatory) ####\n"
+             (name->regex (:name info))
+             "\n\n#### Trailing identifier (optional) ####\n"
              (re/opt-grp fre-ows
-                         #"\(*"
-                         (id->regex id false)
-                         #"\)*"))
-)
+                         (id->regex id)
+                         fre-ows))))
