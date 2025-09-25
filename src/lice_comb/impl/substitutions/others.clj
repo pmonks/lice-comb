@@ -55,7 +55,7 @@
                                             version-series  (dissoc (lcivs/ids->version-series ids-to-consider) nil)]  ; Remove all "no version series" ids
                                         (lcis/sort-ids (map last (vals version-series))))))
 
-(def ^:private re-name-or-id-and-version (re/join #"(?iuU)(?<nameOrId>.+?)" (re/opt-grp lcir/fre-ows (lcir/re-version))))
+(def ^:private re-name-or-id-and-version (re/flags-grp "iuU" #"(?<nameOrId>.+?)" (re/opt-grp lcir/fre-ows (lcir/re-version))))
 
 (defn- id->deversioned-name
   "Converts `id` into its name, with any version components removed."

@@ -18,9 +18,9 @@
     dev.weavejester/medley                {:mvn/version "1.9.0"}
     miikka/clj-base62                     {:mvn/version "0.1.1"}
     com.github.reefersleep/thread-until   {:mvn/version "1.0.0"}
-    com.github.pmonks/clj-spdx            {:mvn/version "1.0.276"}
+    com.github.pmonks/clj-spdx            {:mvn/version "1.0.286"}
     com.github.pmonks/rencg               {:mvn/version "1.0.64"}
-    com.github.pmonks/wreck               {:mvn/version "1.0.96"}
+    com.github.pmonks/wreck               {:mvn/version "1.0.109"}
     com.github.pmonks/embroidery          {:mvn/version "1.0.44"}}
  :aliases
    {:build {:deps       {com.github.pmonks/pbr {:mvn/version "RELEASE"}}

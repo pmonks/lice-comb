@@ -22,14 +22,14 @@
 (def ids-d (delay (lcis/sort-ids #{wtf-id})))
 
 (def ^:private pairs-d (delay (concat [
-  [(re/join #"(?iuU)"
-            (re/alt-grp
-              #"(?:\(?WTFPL\)?[\s\-–—]+)?(?:The[\s\-–—]+)?Do[\s\-–—]+(?:WTF|What[\s\-–—]+The[\s\-–—]+[f\*][u\*][c\*][k\*])[\s\-–—]+(?:You|U)[\s\-–—]+Want[\s\-–—]+(?:To|2)"
-              "WTFPL")
-            (re/opt-grp lcir/fre-mws "Public")
-            (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
-            (re/opt-grp lcir/fre-ows #"(?:v|ver|version)" lcir/fre-ows #"[\d\.]+")   ; We don't care about capturing the version number for WTFPL, as there are no official versions
-            #"(?!\w)")
+  [(re/flags-grp "iuU"
+                 (re/alt-grp
+                   #"(?:\(?WTFPL\)?[\s\-–—]+)?(?:The[\s\-–—]+)?Do[\s\-–—]+(?:WTF|What[\s\-–—]+The[\s\-–—]+[f\*][u\*][c\*][k\*])[\s\-–—]+(?:You|U)[\s\-–—]+Want[\s\-–—]+(?:To|2)"
+                   "WTFPL")
+                 (re/opt-grp lcir/fre-mws "Public")
+                 (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
+                 (re/opt-grp lcir/fre-ows #"(?:v|ver|version)" lcir/fre-ows #"[\d\.]+")   ; We don't care about capturing the version number for WTFPL, as there are no official versions
+                 #"(?!\w)")
    (lcisu/simple-regex-match-ei-fn wtf-id)]])))
 
 (defn sub

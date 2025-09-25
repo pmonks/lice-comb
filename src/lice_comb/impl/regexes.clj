@@ -192,7 +192,7 @@
   to capture 'only' or 'or-later' suffixes."
   [id]
   (when-not (s/blank? id)
-    (-> [#"(?iuU)(?<!\w)" (s/trim id) #"(?!\w)"]
+    (-> [#"(?<!\w)" (s/trim id) #"(?!\w)"]
         ; Special cases for some double and/or weird version components
         (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
         ; Special cases for certain licenses
@@ -209,14 +209,14 @@
         ; Cleanup and combine into a single pattern
         (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
              (lciu/mapcat-str #(vector (re/esc %)))
-             (apply re/join)))))
+             (apply (partial re/flags-grp "iuU"))))))
 
 (defn name->regex
   "Turns `n`, a license or exception name, into a regex that can be used to
   near-match it.  Returns `nil` if `n` is blank."
   [n]
   (when-not (s/blank? n)
-    (-> [#"(?iuU)(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
+    (-> [#"(?<!\w)(The[\s\-–—]+)?" (s/trim n) #"(?!\w)"]
         ; Special case for some double and/or weird version components (this must come first)
         (lciu/replace-in-coll #"(?i)\(versions 9\.11 to 9\.20\)"                    #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20\)?")
         (lciu/replace-in-coll #"(?i)\(versions 9\.22 and beyond\)"                  #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*22[\s\-–—]*(\+|(?:and|&)[\s\-–—]*beyond)\)?")
@@ -292,7 +292,7 @@
         ; Cleanup, escape, and concat into a single pattern
         (->> (filter #(or (not (string? %)) (not (s/blank? %))))
              (lciu/mapcat-str #(vector (re/esc %)))
-             (apply re/join)))))
+             (apply (partial re/flags-grp "iuU"))))))
 
 (defn id->name->regex
   "Convenience method for obtaining the name regex from an `id`, which is the
@@ -301,10 +301,10 @@
   (when-let [info (si/id->info id)]
 ;####TODO: REMOVE ONCE TESTED
 ;    (name->regex (:name info))))
-    (re/join #"(?x)"
-             "\n\n#### Name (mandatory) ####\n"
-             (name->regex (:name info))
-             "\n\n#### Trailing identifier (optional) ####\n"
-             (re/opt-grp fre-ows
-                         (id->regex id)
-                         fre-ows))))
+    (re/flags-grp "x"
+                  "\n\n#### Name (mandatory) ####\n"
+                  (name->regex (:name info))
+                  "\n\n#### Trailing identifier (optional) ####\n"
+                  (re/opt-grp fre-ows
+                              (id->regex id)
+                              fre-ows))))

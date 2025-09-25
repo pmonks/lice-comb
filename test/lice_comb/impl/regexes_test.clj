@@ -26,13 +26,13 @@
 (use-fixtures :once fixture)
 
 (defn- re-version-and-suffix*
-  "As for re-version-and-suffix, but prepends #\"(?iuU)\" to the resulting regex
-  (required for it to function as expected)."
+  "As for re-version-and-suffix, but wraps it in flags \"iuU\" (required for it
+  to function as expected as an independent regex)."
   [version-number version-number-ncg-name
    only?          only-ncg-name
    or-later?      or-later-ncg-name]
   (when-let [re (re-version-and-suffix version-number version-number-ncg-name only? only-ncg-name or-later? or-later-ncg-name)]
-    (re/join #"(?iuU)" re)))
+    (re/flags-grp "iuU" re)))
 
 (deftest re-version-and-suffix-tests
   (testing "Nil, blank, etc. - note that these all result in generic 'any version number' regexes"

@@ -23,7 +23,8 @@
 
 (def ^:private pairs-d (delay (concat
   (lcisu/spdx-match-pairs @ids-d)                                                    ; Generic license regexes handle most cases, except...
-  [[(re/join #"(?iuU)(?:MPL|Mozilla(?:[\s\-–—]+Public)?(?:[\s\-–—]+Licen?[cs]e)?)"   ; ...when no version is provided
+  [[(re/flags-grp "iuU"
+                  #"(?:MPL|Mozilla(?:[\s\-–—]+Public)?(?:[\s\-–—]+Licen?[cs]e)?)"   ; ...when no version is provided
              (re/opt-grp lcir/fre-ows (lcir/re-version-suffix)))
    (fn [m]
      {:id                      (str "MPL-2.0" (when (get m "orLater") "+"))

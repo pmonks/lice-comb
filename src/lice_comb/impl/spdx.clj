@@ -116,16 +116,6 @@
 (def ^:private lice-comb-addition-ref-prefix      "AdditionRef-lice-comb")
 (def ^:private unidentified-addition-ref-prefix   (str lice-comb-addition-ref-prefix "-UNIDENTIFIED"))
 
-; Map of lower case SPDX id to correctly cased SPDX id
-(def ^:private spdx-ids-d (delay (merge (into {} (map #(vec [(s/lower-case %) %]) @license-ids-d))
-                                        (into {} (map #(vec [(s/lower-case %) %]) @exception-ids-d)))))
-
-(defn case-insensitive-match-id
-  "Returns the (case-corrected) id for the given license or exception id `id`,
-  or `nil` if one wasn't found."
-  [id]
-  (get @spdx-ids-d (s/lower-case id)))
-
 (defn- best-identifier
   "Finds the 'best' identifier in `ids`, a `set` of license or exceptions
   identifiers, `nil` if `ids` is empty. 'Best' is defined as the shortest
@@ -317,6 +307,5 @@
   @exception-ids-d
   @license-list-d
   @exception-list-d
-  @spdx-ids-d
   @index-uri->id-d
   nil)

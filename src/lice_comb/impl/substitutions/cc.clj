@@ -231,29 +231,30 @@
           (re/ncg "netherlands"       (re/alt "Netherlands" "NL"))
           (re/ncg "usa"               (re/alt #"United[\s\-–—]+States(?:[\s\-–—]+of[\s\-–—]+America)?" #"USA?"))))))
 
-(def re (re/join #"(?iuUx)(?<!\w)(?:The[\s\-–—]+)?"  ; Only public for ease of testing
-                 "\n\n#### Prefix ####\n"
-                 (re/opt-grp (re-prefixes) lcir/fre-mws)
-                 "\n\n#### Matching word ####\n"
-                 (re/or-grp #"\(?CC(?:[\s\-–—]+BY)?\)?"
-                            (re/or-grp (re/join "(?<!" (re/alt-grp "No" "With" #"\s*\-\s*" "Public" #"Data\s+Commons") ")\\s*Attribution")
-                                       (re/join "Creative" lcir/fre-ows "Commons"
-                                                (re/opt-grp lcir/fre-ows "Legal" lcir/fre-ows "Code"))
-                                       lcir/fre-ows)  ; We use "Attribution" as a matching word because of https://repo.clojars.org/spectrum/spectrum/0.2.5/spectrum-0.2.5.pom
-                            lcir/fre-ows)
-                 "\n\n#### Clauses ####\n"
-                 (re-clauses)
-                 "\n\n#### Version ####\n"
+(def re (re/flags-grp "iuUx"
+                      #"(?<!\w)(?:The[\s\-–—]+)?"  ; Only public for ease of testing
+                      "\n\n#### Prefix ####\n"
+                      (re/opt-grp (re-prefixes) lcir/fre-mws)
+                      "\n\n#### Matching word ####\n"
+                      (re/or-grp #"\(?CC(?:[\s\-–—]+BY)?\)?"
+                                 (re/or-grp (re/join "(?<!" (re/alt-grp "No" "With" #"\s*\-\s*" "Public" #"Data\s+Commons") ")\\s*Attribution")
+                                            (re/join "Creative" lcir/fre-ows "Commons"
+                                                     (re/opt-grp lcir/fre-ows "Legal" lcir/fre-ows "Code"))
+                                            lcir/fre-ows)  ; We use "Attribution" as a matching word because of https://repo.clojars.org/spectrum/spectrum/0.2.5/spectrum-0.2.5.pom
+                                 lcir/fre-ows)
+                      "\n\n#### Clauses ####\n"
+                      (re-clauses)
+                      "\n\n#### Version ####\n"
 ;####TODO: REMOVE ONCE TESTED!!!!
-;                 (re/opt-grp lcir/fre-version)
-                 (re/opt-grp (lcir/re-version-and-suffix))
-                 "\n\n#### Suffix ####\n"
-                 (re-suffix)
-                 "\n\n#### Random dingleberries ####\n"
-                 (re/opt-grp lcir/fre-ows #"\(?CC.{0,13}\)?")
-                 (re/opt-grp lcir/fre-mws #"licen[cs]e")
-                 "\n\n#### Coda ####\n"
-                 #"(?!\w)"))
+;                      (re/opt-grp lcir/fre-version)
+                      (re/opt-grp (lcir/re-version-and-suffix))
+                      "\n\n#### Suffix ####\n"
+                      (re-suffix)
+                      "\n\n#### Random dingleberries ####\n"
+                      (re/opt-grp lcir/fre-ows #"\(?CC.{0,13}\)?")
+                      (re/opt-grp lcir/fre-mws #"licen[cs]e")
+                      "\n\n#### Coda ####\n"
+                      #"(?!\w)"))
 
 (def ^:private pairs-d (delay (concat
 ;  (lcisu/spdx-match-pairs @ids-d)  ; Generic license regexes handle some cases

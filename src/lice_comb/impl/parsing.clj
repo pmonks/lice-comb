@@ -126,13 +126,14 @@
 
 ; An approximately correct regex for finding http URIs in larger texts - loosely based on https://www.rfc-editor.org/rfc/rfc3986#appendix-B
 ; Note: not all matches this regex finds are valid as per RFC-3986 - if that's needed, use lciu/valid-http-uri?
-(def ^:private approximate-uri-re (re/join #"(?i)(?<!\w)"
-                                           #"(?<scheme>https?)://"
-                                           #"(?<address>[^/?#\s]+)"
-                                           #"(?<path>\/[^?#\s]*)?"
-                                           #"(?:\?(?<queryString>[^#\s]*))?"
-                                           #"(?:#(?<fragment>[^\s]*))?"
-                                           #"(?!\w)"))
+(def ^:private approximate-uri-re (re/flags-grp "i"
+                                                #"(?<!\w)"
+                                                #"(?<scheme>https?)://"
+                                                #"(?<address>[^/?#\s]+)"
+                                                #"(?<path>\/[^?#\s]*)?"
+                                                #"(?:\?(?<queryString>[^#\s]*))?"
+                                                #"(?:#(?<fragment>[^\s]*))?"
+                                                #"(?!\w)"))
 
 (defn- sub-uris
   "Substitutes any uris in the Strings in `coll` with an expression info map.
@@ -148,15 +149,16 @@
            (vals ei)                   ; Unwrap all expressions info maps, and return them as nested sequences (which gets flattened up top)
            (make-unidentified-ei uri))))))
 
-(def ^:private operator-re (re/join #"(?i)\s*"
-                                    (re/alt #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
-                                            #"(?<!\w)(?<and>and)(?!\w)"
-                                            #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
-                                            #"(?<!\w)(?<with>with(?!\w)|w/)"
-                                            #"(?<ampersand>&+)"
-                                            #"(?<forwardSlash>/+)"
-                                            #"(?<backSlash>\\+)")
-                                    #"\s*"))
+(def ^:private operator-re (re/flags-grp "i"
+                                         #"\s*"
+                                         (re/alt #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
+                                                 #"(?<!\w)(?<and>and)(?!\w)"
+                                                 #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
+                                                 #"(?<!\w)(?<with>with(?!\w)|w/)"
+                                                 #"(?<ampersand>&+)"
+                                                 #"(?<forwardSlash>/+)"
+                                                 #"(?<backSlash>\\+)")
+                                         #"\s*"))
 
 (defn- sub-operators
   "Substitutes operators in `String` values in `coll`, replacing each one with a
@@ -178,7 +180,7 @@
 (defn- remove-extraneous-fragments
   "Removes 'extraneous' fragments from `coll`."
   [coll]
-  (seq (filter identity (lciu/map-str #(let [s (s/trim (s/replace % #"(?U)\W+" ""))]  ; Strip all word characters and trim the result
+  (seq (filter identity (lciu/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all word characters and trim the result
                                          (when (>= (count s) 3)                       ; Then remove anything short
                                            %))
                                       coll))))

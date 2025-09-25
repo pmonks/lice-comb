@@ -261,25 +261,26 @@
     #"(?<afterSystemics>Systemics(?<afterW3works>[\s\-–—]+W3Works)?)"
     #"(?<afterAMPAS>AMPAS|Academy[\s\-–—]+of[\s\-–—]+Motion[\s\-–—]+Picture[\s\-–—]+Arts[\s\-–—]+(?:and|&)[\s\-–—]+Sciences)"))
 
-(def re (re/join #"(?iuUx)(?<!\w)(?:The[\s\-–—]+)?"  ; Only public for ease of testing
-                 "\n\n#### Prefix ####\n"
-                 (re/opt-grp (re-prefix-clauses) lcir/fre-mws)
-                 "\n\n#### Leading clause ####\n"
-                 (re/opt-grp (re-bsd-any-clause "before") lcir/fre-ows)  ; We use optional ws here to catch values like "0BSD"
-                 "\n\n#### Matching word ####\n"
-                 (re/opt (re/alt-grp (re/ncg "beforeFreeBSD" "Free")
-                                     (re/ncg "beforeNetBSD"  "Net")))
-                 "BSD"
-                 (re/opt-grp #"[\s\-–—]*(?:style|like)")
-                 "\n\n#### Trailing clause ####\n"
-                 (re/opt-grp lcir/fre-mws (re-bsd-any-clause "after"))
-                 "\n\n#### Suffix ####\n"
-                 (re/opt-grp lcir/fre-mws (re-suffix-clauses))
-                 "\n\n#### Random dingleberries ####\n"
-                 (re/zom-grp lcir/fre-mws #"(?:variant|(?:Pub?lic[\s\-–—]+)?licen[cs]e)")
-                 (re/opt-grp lcir/fre-ows (lcir/re-version))
-                 "\n\n#### Coda ####\n"
-                 #"(?!\w)"))
+(def re (re/flags-grp "iuUx"
+                      #"(?<!\w)(?:The[\s\-–—]+)?"  ; Only public for ease of testing
+                      "\n\n#### Prefix ####\n"
+                      (re/opt-grp (re-prefix-clauses) lcir/fre-mws)
+                      "\n\n#### Leading clause ####\n"
+                      (re/opt-grp (re-bsd-any-clause "before") lcir/fre-ows)  ; We use optional ws here to catch values like "0BSD"
+                      "\n\n#### Matching word ####\n"
+                      (re/opt (re/alt-grp (re/ncg "beforeFreeBSD" "Free")
+                                          (re/ncg "beforeNetBSD"  "Net")))
+                      "BSD"
+                      (re/opt-grp #"[\s\-–—]*(?:style|like)")
+                      "\n\n#### Trailing clause ####\n"
+                      (re/opt-grp lcir/fre-mws (re-bsd-any-clause "after"))
+                      "\n\n#### Suffix ####\n"
+                      (re/opt-grp lcir/fre-mws (re-suffix-clauses))
+                      "\n\n#### Random dingleberries ####\n"
+                      (re/zom-grp lcir/fre-mws #"(?:variant|(?:Pub?lic[\s\-–—]+)?licen[cs]e)")
+                      (re/opt-grp lcir/fre-ows (lcir/re-version))
+                      "\n\n#### Coda ####\n"
+                      #"(?!\w)"))
 
 (def ^:private pairs-d (delay (concat [
   [re match->ei]])))

@@ -21,16 +21,16 @@
 
 (def ids-d (delay (lcis/sort-ids (filter #(s/starts-with? % "EPL-") @lcis/license-ids-d))))
 
-(def re (re/join #"(?iuU)"  ; Only public for ease of testing
-                 (re/alt-grp "EPL"
-                             (re/join (re/opt-grp "Some" lcir/fre-mws)
-                                      #"Eclipse"
-                                      (re/opt-grp lcir/fre-mws #"Pub?lic")
-                                      (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
-                                      (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")))
-                 (re/opt-grp lcir/fre-ows (lcir/re-version-and-suffix))
-                 (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")
-                 (re/opt-grp lcir/fre-mws (re/opt-grp "the") lcir/fre-mws "same" lcir/fre-mws "as" lcir/fre-mws "Clojure")))
+(def re (re/flags-grp "iuU"  ; Only public for ease of testing
+                      (re/alt-grp "EPL"
+                                  (re/join (re/opt-grp "Some" lcir/fre-mws)
+                                           #"Eclipse"
+                                           (re/opt-grp lcir/fre-mws #"Pub?lic")
+                                           (re/opt-grp lcir/fre-mws #"Licen?[cs]e")
+                                           (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")))
+                      (re/opt-grp lcir/fre-ows (lcir/re-version-and-suffix))
+                      (re/opt-grp lcir/fre-mws #"\(?EPL[\s\-–—v\d\.]*\)?")
+                      (re/opt-grp lcir/fre-mws (re/opt-grp "the") lcir/fre-mws "same" lcir/fre-mws "as" lcir/fre-mws "Clojure")))
 
 (def ^:private pairs-d (delay [[re (lcisu/version-handling-regex-match-ei-fn "EPL-" "2.0" ["1.0" "2.0"])]]))
 

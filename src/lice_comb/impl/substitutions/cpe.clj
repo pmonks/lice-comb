@@ -25,10 +25,10 @@
   ; Generic license regexes handle most cases, except...
   (lcisu/spdx-match-pairs @ids-d)
   ; ...when no version is provided (and note that exceptions can't have "only", "+", "or later", etc.)
-  [[(re/join #"(?iuU)"
-             (re/opt-grp "The" lcir/fre-mws)
-             (re/opt-grp "GNU" lcir/fre-ows)
-             (re/alt-grp "CPE" (re/join "Classpath" lcir/fre-mws "exception")))
+  [[(re/flags-grp "iuU"
+                  (re/opt-grp "The" lcir/fre-mws)
+                  (re/opt-grp "GNU" lcir/fre-ows)
+                  (re/alt-grp "CPE" (re/join "Classpath" lcir/fre-mws "exception")))
    (fn [m]
      {:id                      "Classpath-exception-2.0"
       :type                    :concluded
