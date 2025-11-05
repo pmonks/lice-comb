@@ -21,7 +21,7 @@
             [wreck.api                  :as re]
             [rencg.api                  :as rencg]
             [lice-comb.test-boilerplate :refer [fixture lic-ids-d exc-ids-d license-list-d exception-list-d non-deprecated-license-list-d non-deprecated-lic-ids-d]]
-            [lice-comb.impl.regexes     :refer [re-version-and-suffix id->regex name->regex]]))
+            [lice-comb.impl.regexes     :refer [version-number->re re-version-and-suffix id->regex name->regex]]))
 
 (use-fixtures :once fixture)
 
@@ -33,6 +33,50 @@
    or-later?      or-later-ncg-name]
   (when-let [re (re-version-and-suffix version-number version-number-ncg-name only? only-ncg-name or-later? or-later-ncg-name)]
     (re/flags-grp "iuU" re)))
+
+(deftest version-number->re-tests
+  (testing "Nil, blank, etc."
+    (is (nil? (version-number->re nil)))
+    (is (nil? (version-number->re "")))
+    (is (nil? (version-number->re "  "))))
+  (testing "Invalid version values"
+    (is (nil? (version-number->re "foo")))
+    (is (nil? (version-number->re ".")))
+    (is (nil? (version-number->re ".2")))
+    (is (nil? (version-number->re "-2"))))
+  (testing "Valid version numbers - semver (non-strict)"
+    (is (re/=' #"0*0(?:[\-–—_,\.]0+)*"                           (version-number->re "00")))
+    (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (version-number->re "2")))
+    (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (version-number->re "02")))
+    (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (version-number->re "2.0")))
+    (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (version-number->re "2.0.0")))
+    (is (re/=' #"0*2[\-–—_,\.]0*1(?:[\-–—_,\.]0+)*"              (version-number->re "2.1")))
+    (is (re/=' #"0*2[\-–—_,\.]0*0[\-–—_,\.]0*1(?:[\-–—_,\.]0+)*" (version-number->re "2.0.1")))
+    (is (re/=' #"0*99[\-–—_,\.]0*100(?:[\-–—_,\.]0+)*"           (version-number->re "000000099.00000100"))))
+  (testing "Valid version numbers - semver (strict)"
+    (is (re/=' #"0*0(?:\.0+)*"           (version-number->re "00"    true)))
+    (is (re/=' #"0*2(?:\.0+)*"           (version-number->re "2"     true)))
+    (is (re/=' #"0*2(?:\.0+)*"           (version-number->re "02"    true)))
+    (is (re/=' #"0*2(?:\.0+)*"           (version-number->re "2.0"   true)))
+    (is (re/=' #"0*2(?:\.0+)*"           (version-number->re "2.0.0" true)))
+    (is (re/=' #"0*2\.0*1(?:\.0+)*"      (version-number->re "2.1"   true)))
+    (is (re/=' #"0*2\.0*0\.0*1(?:\.0+)*" (version-number->re "2.0.1" true)))
+    (is (re/=' #"0*99\.0*100(?:\.0+)*"   (version-number->re "000000099.00000100" true))))
+  (testing "Valid version numbers - 2 digit year"
+    (is (re/=' #"0*86" (version-number->re "86")))
+    (is (re/=' #"0*86" (version-number->re "86" true)))
+    (is (re/=' #"0*89" (version-number->re "0000089"))))
+  (testing "Valid version numbers - 4 digit year"
+    (is (re/=' #"0*1986" (version-number->re "1986")))
+    (is (re/=' #"0*1986" (version-number->re "1986" true)))
+    (is (re/=' #"0*2006" (version-number->re "000002006"))))
+  (testing "Valid version numbers - 8 digit year"
+    (is (re/=' #"0*19980720" (version-number->re "19980720")))
+    (is (re/=' #"0*19980720" (version-number->re "19980720" true)))
+    (is (re/=' #"0*20150513" (version-number->re "0020150513"))))
+  (testing "Valid version numbers - suffixes")
+; 1.3a
+  )
 
 (deftest re-version-and-suffix-tests
   (testing "Nil, blank, etc. - note that these all result in generic 'any version number' regexes"

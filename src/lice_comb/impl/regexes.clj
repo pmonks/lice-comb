@@ -11,11 +11,10 @@
 (ns lice-comb.impl.regexes
   "Regexes related functionality. Note: this namespace is not part of the public
   API of lice-comb and may change without notice."
-  (:require [clojure.string           :as s]
-            [spdx.identifiers         :as si]
-            [wreck.api                :as re]
-            [lice-comb.impl.3rd-party :as lci3]
-            [lice-comb.impl.utils     :as lciu]))
+  (:require [clojure.string       :as s]
+            [spdx.identifiers     :as si]
+            [wreck.api            :as re]
+            [lice-comb.impl.utils :as lciu]))
 
 ; Note: some of the regexes in this namespace uses classes (e.g. [\\/-\s]{1,4}) instead of alternation (e.g. (\\|/|-|\s){1,4}) due to an apparent bug in the JVM's regex libraries when
 ; the latter are used in look-behind groups.  See https://stackoverflow.com/questions/24874404/java-regex-look-behind-group-does-not-have-obvious-maximum-length-error/24922107
@@ -53,15 +52,21 @@
     (apply re/grp res)
     (apply re/ncg ncg-name res)))
 
-(defn- version-number-to-re
-  "Emits a regex fragment for matching the given version number (a `String` in
-  `x[.y.z & .more]` format)."
-  [version-number]
-  (let [components (if-let [components (seq (lci3/rdrop-while (partial re-matches #"0+") (s/split version-number #"\.")))]  ; Drop all trailing components that are 0
-                     (map #(str (lciu/parse-lng %)) components)                                                             ; Strip leading 0s from each individual component (e.g. "002" -> "2") - we handle this case via a regex fragment below
-                     ["0"])]  ; Always make sure we have at least one "hardcoded" version number component
-    (re/join (s/join "[-–—_,\\.]" (map #(str "0*" %) components))  ; Allow any number of 0s at the start of each component
-             #"(?:[-–—_,\.]0+)*")))  ; Allow any number of ".0" to appear at the end
+(defn version-number->re
+  "Emits a regex fragment for matching the given version number, a `String`
+  representing a version number.  See [[lice-comb.impl.utils/canonicalise-version-number]]
+  for supported version number formats.  Does not include any constructs for
+  matching whitespace, labels, or only/or-later suffixes in the regex.
+
+  `strict-separator` (default `false`) controls whether only . is accepted as a
+  separator between version number components."
+  ([version-number] (version-number->re version-number false))
+  ([version-number strict-separator]
+   (when-let [{components :components version-type :type suffix :suffix} (lciu/canonicalise-version-number version-number)]
+     (let [separator (if strict-separator (re/esc ".") (str "[" (re/esc "-–—_,.") "]"))]
+       (re/join (s/join separator (map #(str "0*" %) components))            ; Allow any number of 0s at the start of each component
+                (when (= version-type :semver) (re/zom-grp separator "0+"))  ; Allow any number of ".0" to appear at the end of a semver version
+                (when suffix (re/flags-grp "i" suffix)))))))                 ; Match suffix case-insensitively
 
 (defn- re-version-impl
   "Emits a regex fragment for matching a version expression, made up of:
@@ -82,11 +87,11 @@
   ([version-number-ncg-name version-number]
    (let [fre-version-number (if (s/blank? version-number)
                               #"\d+(?:[-–—_,\\.]\d+)*"
-                              (version-number-to-re version-number))]
+                              (version-number->re version-number))]
      (re/join (re/opt-grp fre-version-label)
               fre-ows
               (oncgrp version-number-ncg-name fre-version-number)))))
-(def re-version (memoize re-version-impl))  ; Memoize as this will be called with the same args a LOT
+(def re-version (memoize re-version-impl))  ; Memoize as this will be called with the same (few) args a LOT
 
 (defn- re-version-suffix-impl
   "Emits a regex fragment for matching a version suffix component, made up of:

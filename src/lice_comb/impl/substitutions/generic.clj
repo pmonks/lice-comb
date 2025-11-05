@@ -8,15 +8,16 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.substitutions.others
-  "Helper functionality related to substituting matches for any other licenses
-  or exceptions not otherwise handled explicitly.
+(ns lice-comb.impl.substitutions.generic
+  "Helper functionality related to substituting matches for any generic license
+  or exceptions that are not handled explicitly.
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string                              :as s]
             [clojure.set                                 :as set]
             [rencg.api                                   :as rencg]
             [wreck.api                                   :as re]
+            [spdx.identifiers                            :as si]
             [lice-comb.impl.spdx                         :as lcis]
             [lice-comb.impl.regexes                      :as lcir]
             [lice-comb.impl.version-series               :as lcivs]
@@ -35,15 +36,43 @@
             [lice-comb.impl.substitutions.wtf            :as wtf]
             [lice-comb.impl.substitutions.utils          :as lcisu]))
 
-; Ids of all of the "other" licenses i.e. those without special-cased support
+; Ids of all of the generic licenses i.e. those without special-cased support
 ; Note: includes both license AND exception identifiers
 (def ids-d
   (delay
-    (lcis/sort-ids
-      (apply disj (set/union (set @lcis/license-ids-d) (set @lcis/exception-ids-d))
-                  (concat @bsd/ids-d @cc/ids-d @cddl/ids-d @cpe/ids-d @cursed/ids-d
-                          @custom/ids-d @epl/ids-d @gnu/ids-d @gnuexc/ids-d
-                          @hippocratic/ids-d @mpl/ids-d @refs/ids-d @wtf/ids-d)))))
+    (apply disj (si/ids)
+                (concat @bsd/ids-d @cc/ids-d @cddl/ids-d @cpe/ids-d @cursed/ids-d
+                        @custom/ids-d @epl/ids-d @gnu/ids-d @gnuexc/ids-d
+                        @hippocratic/ids-d @mpl/ids-d @refs/ids-d @wtf/ids-d))))
+
+(defn- sorter
+  "A comparator for sorting a mix of version series maps and (unversioned) ids
+  (Strings) by type descending, then name length descending, then id."
+  [x y]
+  (let [x-id         (if (map? x) (:default-id x) x)
+        y-id         (if (map? y) (:default-id y) y)
+        x-info       (si/id->info x-id)
+        y-info       (si/id->info y-id)
+        type-compare (compare (:type y-info) (:type x-info))]  ; Descending order (:license before :exception)
+    (if-not (zero? type-compare)
+      type-compare
+      (let [name-length-compare (compare (count (:name y-info)) (count (:name x-info)))]  ; Descending order (longer names first)
+        (if-not (zero? name-length-compare)
+          name-length-compare
+          (compare x-id y-id))))))
+
+
+;####TODO: MAKE THESE PRIVATE
+(def ids-and-version-series-d
+  (delay
+    (let [id-infos                              (map si/id->info @ids-d)
+          non-deprecated-ids                    (map :id (filter (complement :deprecated?) id-infos))
+          deprecated-ids                        (map :id (filter :deprecated? id-infos))
+          non-deprecated-version-series-and-ids (let [[vs ids] (lcivs/version-series non-deprecated-ids)] (concat vs ids))
+          deprecated-version-series-and-ids     (let [[vs ids] (lcivs/version-series deprecated-ids)] (concat vs ids))]
+      (concat
+        (sort sorter non-deprecated-version-series-and-ids)
+        (sort sorter deprecated-version-series-and-ids)))))
 
 ; Latest non-deprecated version of ids that have multiple versions (i.e. are in a version series)
 (def ^:private latest-version-ids-d (delay
@@ -108,9 +137,11 @@
 
   Note: this method has a substantial performance cost."
   []
+  (si/init!)
   (lcis/init!)
   @ids-d
   @latest-version-ids-d
+  @ids-and-version-series-d
   @pairs-d
   nil)
 

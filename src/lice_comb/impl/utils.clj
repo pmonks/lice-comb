@@ -12,11 +12,12 @@
   "General purpose utility fns that I seem to end up needing in every single
   project I write... Note: this namespace is not part of the public API of
   lice-comb and may change without notice."
-  (:require [clojure.string  :as s]
-            [clojure.java.io :as io]
-            [clj-base62.core :as base62]
-            [embroidery.api  :as e]
-            [rencg.api       :as rencg]))
+  (:require [clojure.string           :as s]
+            [clojure.java.io          :as io]
+            [clj-base62.core          :as base62]
+            [embroidery.api           :as e]
+            [rencg.api                :as rencg]
+            [lice-comb.impl.3rd-party :as lci3]))
 
 (defn mapfonk
   "Returns a new map where f has been applied to all of the keys of m."
@@ -214,6 +215,50 @@
       "eight" 8
       "nine"  9
       nil)))
+
+(defn canonicalise-version-number
+  "Canonicalises `version-number` (a `String`), returning either `nil` if
+  `version-number` isn't recognised as a version number, or a map with these
+  keys:
+
+  * `:components` - a sequence of the numeric components in the version number,
+                    as ints. Always has at least one element.
+  * `:type`       - a keyword describing the type of the version number; one of:
+                    `:semver`, `:year2`, `:year4`, `:date`.  Not present if the
+                    type can't be determined
+  * `:suffix`     - a `String` containing a single letter, if `version-number`
+                    had a single letter suffix (e.g. `\"c\"` for `1.3c`)
+
+  Supports these formats for `version-number`:
+
+  * Semver-esque e.g. `1`, `1.0`, `1.2.3`, `1.2.3.4`, `0002`, etc.
+  * Year / date e.g. `86`, `2006`, `20150513`
+  * Any of the above with a single letter suffix e.g. `1.3c`
+
+  Canonicalisation involves:
+
+  * Stripping off any leading zeros from all version number components
+  * Dropping all trailing '.0' components"
+  [version-number]
+  (when-not (s/blank? version-number)
+    (when-let [m (rencg/re-matches-ncg #"(?<versionFirst>\d+)(?<versionRest>(?:\.\d+)+)?(?<suffix>\w)?" (s/trim version-number))]
+      (let [version-first (parse-lng (get m "versionFirst"))
+            version-rest  (when-let [vr (get m "versionRest")]
+                            (subs vr 1))  ; Strip leading . character
+            suffix        (get m "suffix")
+            components    (concat [version-first]
+                                  (when version-rest (lci3/rdrop-while zero? (map parse-lng (s/split version-rest #"\.")))))
+            version-type  (if-not (nil? version-rest)
+                            :semver
+                            (case (count (str version-first))
+                              1 :semver
+                              2 :year2
+                              4 :year4
+                              8 :date
+                              nil))]
+        (merge {:components components}
+               (when version-type {:type version-type})
+               (when suffix       {:suffix suffix}))))))
 
 (def ^java.nio.charset.Charset utf8-charset java.nio.charset.StandardCharsets/UTF_8)
 

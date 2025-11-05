@@ -18,7 +18,7 @@
             [lice-comb.impl.substitutions.epl         :as epl]
             [lice-comb.impl.substitutions.gnu         :as gnu]
             [lice-comb.impl.substitutions.hippocratic :as hippocratic]
-            [lice-comb.impl.substitutions.others      :as others]
+            [lice-comb.impl.substitutions.generic     :as generic]  ;###TODO: Add tests for this?
             [lice-comb.impl.substitutions.mpl         :as mpl]
             [lice-comb.impl.substitutions.wtf         :as wtf]))
 
@@ -26,9 +26,9 @@
 
 (def bsd-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/bsd.edn")))
 
-(def cc-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cc.edn")))
+(def cc-names-d          (delay (load-edn-resource "lice_comb/data/name_lists/cc.edn")))
 
-(def cddl-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cddl.edn")))
+(def cddl-names-d        (delay (load-edn-resource "lice_comb/data/name_lists/cddl.edn")))
 
 (def cpe-names-d         (delay (load-edn-resource "lice_comb/data/name_lists/cpe.edn")))
 

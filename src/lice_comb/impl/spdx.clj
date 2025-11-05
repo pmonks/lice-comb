@@ -21,11 +21,14 @@
             [lice-comb.impl.3rd-party      :refer [by ascending descending] :as lc3]
             [lice-comb.impl.utils          :as lciu]))
 
+;####TODO: THESE TWO MAY BE REDUNDANT!!!!
+
 ; The subset of SPDX license identifiers that we use, as an unordered set
 (def license-ids-d (delay (sl/ids)))
 
 ; The subset of SPDX exception identifiers that we use, as an unordered set
 (def exception-ids-d (delay (se/ids)))
+
 
 (defn id-position
   "Returns the 'position' (expressed as `:license-position` or
@@ -39,6 +42,7 @@
       :exception-id :exception-position
       :addition-ref :exception-position)))
 
+;####TODO: SUPERCEDED BY spdx.identifiers/id->info ??
 (defn id->info
   "Returns the associated SPDX list info for `id`, which can be either a license
   identifier or an exception identifier, or `nil` if `id` is not a valid SPDX
@@ -55,6 +59,7 @@
     (when-let [exception-entry (se/id->info id {:include-large-text-values? false})]
       (assoc exception-entry :type :exception))))
 
+;###TODO: NOT SURE THESE ARE NEEDED ANYMORE
 (defn- sort-id-infos
   "Sorts the given id info maps according to lice-comb's preferred sort order:
 
@@ -102,6 +107,7 @@
   [ids]
   (map :id (sort-ids->id-infos ids)))
 
+;####TODO: ARE THESE STILL NEEDED??
 ; The license and exception lists, in the order they should be processed
 (def license-list-d   (delay (sort-ids->id-infos @license-ids-d)))
 (def exception-list-d (delay (sort-ids->id-infos @exception-ids-d)))

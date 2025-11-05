@@ -39,7 +39,7 @@
             [lice-comb.impl.substitutions.refs           :as refs]
             [lice-comb.impl.substitutions.wtf            :as wtf]
             [lice-comb.impl.substitutions.custom         :as custom]
-            [lice-comb.impl.substitutions.others         :as others]))
+            [lice-comb.impl.substitutions.generic        :as generic]))
 
 ;####TODO: REMOVE ME!!!!
 (require '[clojure.pprint :as pp])
@@ -372,7 +372,7 @@
                                     epl/sub
                                     hippocratic/sub
                                     wtf/sub
-                                    others/sub       ; This handles all other SPDX license and exceptions in a generic fashion
+                                    generic/sub      ; This handles all other SPDX license and exceptions in a generic fashion
                                     custom/sub       ; This has to go after the others, since it matches things like "NCBI Public Domain Notice"
                                     mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
                                     gnu/sub)         ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
