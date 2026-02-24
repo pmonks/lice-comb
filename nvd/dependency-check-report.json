@@ -5,11 +5,11 @@
         "dataSource": [
 {
                 "name": "NVD API Last Checked",
-                "timestamp": "2026-02-17T04:36:49Z"
+                "timestamp": "2026-02-24T04:36:13Z"
             }
 ,{
                 "name": "NVD API Last Modified",
-                "timestamp": "2026-02-17T03:16:01Z"
+                "timestamp": "2026-02-24T04:15:59Z"
             }
         ]
 
@@ -17,7 +17,7 @@
     },
     "projectInfo": {
         "name": "com.github.pmonks\/lice-comb 2.0.348-SNAPSHOT",
-        "reportDate": "2026-02-17T04:36:59.516973851Z",
+        "reportDate": "2026-02-24T04:36:24.517002537Z",
         "credits": {
             "NVD": "This product uses the NVD API but is not endorsed or certified by the NVD. This report contains data retrieved from the National Vulnerability Database: https://nvd.nist.gov",
             "CISA": "This report may contain data retrieved from the CISA Known Exploited Vulnerability Catalog: https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
