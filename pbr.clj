@@ -19,7 +19,7 @@
          :validate-pom true
          :pom          {:description      "A Clojure library for software license detection."
                         :url              "https://github.com/pmonks/lice-comb"
-                        :licenses         [:license   {:name "MPL-2.0" :url "https://www.mozilla.org/en-US/MPL/2.0/"}]
+                        :licenses         [:license   {:name "MPL-2.0 AND (CC0-1.0 OR MIT) AND LicenseRef-lice-comb-PUBLIC-DOMAIN"}]  ; Additional licenses are due to vendored code in lice-comb.impl.3rd-party
                         :developers       [:developer {:id "pmonks" :name "Peter Monks" :email "pmonks+lice-comb@gmail.com"}]
                         :scm              {:url "https://github.com/pmonks/lice-comb" :connection "scm:git:git://github.com/pmonks/lice-comb.git" :developer-connection "scm:git:ssh://git@github.com/pmonks/lice-comb.git"}
                         :issue-management {:system "github" :url "https://github.com/pmonks/lice-comb/issues"}}
