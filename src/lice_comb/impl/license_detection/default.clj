@@ -19,7 +19,7 @@
             [spdx.identifiers                                  :as si]
             [lice-comb.impl.version-series                     :as verser]
             [lice-comb.impl.faux-parse                         :as faux]
-            [lice-comb.impl.regex.licenses                     :as rel]
+            [lice-comb.impl.license-regexes                    :as licre]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
 ;####TODO: REMOVE ONCE UNNEEDED (duplicated in lice-comb.impl.license-detection.utils)
@@ -64,7 +64,7 @@
 ;####TODO: COME UP WITH A BETTER NAME!!!!
 (defn- build-regex-fn-pairs
   [id-or-version-series]
-  (when-let [regexes (rel/regexes id-or-version-series)]
+  (when-let [regexes (licre/regexes id-or-version-series)]
     (mapcat (partial build-pairs-from-regexes id-or-version-series) regexes)))
 
 (defn- build-regex-fn-pairs-for-ids

@@ -8,7 +8,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.regex.fragments
+(ns lice-comb.impl.regex-fragments
   "Regex fragments. Note: this namespace is not part of the public API of
   lice-comb and may change without notice."
   (:require [wreck.api :as re]))

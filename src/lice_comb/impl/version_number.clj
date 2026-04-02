@@ -12,7 +12,7 @@
 
 ;####TODO: CONSIDER MOVING UP A NAMESPACE, AS IT DOES MORE THAN JUST REGEXES NOW??
 
-(ns lice-comb.impl.regex.version-number
+(ns lice-comb.impl.version-number
   "Version number regex related functionality. Note: this namespace is not part
   of the public API of lice-comb and may change without notice."
   (:require [clojure.string           :as s]

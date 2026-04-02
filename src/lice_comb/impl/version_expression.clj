@@ -8,7 +8,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.regex.version-expression
+(ns lice-comb.impl.version-expression
   "Version expression regex related functionality. A version expression is
   comprised of:
   * a version label (e.g. 'v', 'ver', 'version', etc.)
@@ -18,10 +18,10 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [clojure.string                      :as s]
-            [wreck.api                           :as re]
-            [lice-comb.impl.regex.fragments      :as ref]
-            [lice-comb.impl.regex.version-number :as ver]))
+  (:require [clojure.string                 :as s]
+            [wreck.api                      :as re]
+            [lice-comb.impl.regex-fragments :as ref]
+            [lice-comb.impl.version-number  :as ver]))
 
 (def re-version-label (re/fgrp "i" "v" (re/opt-grp "er" (re/opt-grp "sion" (re/opt "s")))))
 

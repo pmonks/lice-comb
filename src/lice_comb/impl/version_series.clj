@@ -19,14 +19,14 @@
     which would make this namespace superfluous)
   * this namespace is not part of the public API of lice-comb and may change
     without notice"
-  (:require [clojure.string                          :as s]
-            [spdx.identifiers                        :as si]
-            [wreck.api                               :as re]
-            [rencg.api                               :as ncg]
-            [lice-comb.impl.spdx                     :as lcis]
-            [lice-comb.impl.regex.fragments          :as ref]
-            [lice-comb.impl.regex.version-number     :as vernum]
-            [lice-comb.impl.regex.version-expression :as verexp]))
+  (:require [clojure.string                    :as s]
+            [spdx.identifiers                  :as si]
+            [wreck.api                         :as re]
+            [rencg.api                         :as ncg]
+            [lice-comb.impl.spdx               :as lcis]
+            [lice-comb.impl.regex-fragments    :as ref]
+            [lice-comb.impl.version-number     :as vernum]
+            [lice-comb.impl.version-expression :as verexp]))
 
 ; These are public because lice-comb.impl.regex.licenses and lice-comb.impl.id-detection.default depend on knowing what these values are
 (def placeholder-ver  "${VER}")

@@ -8,19 +8,19 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.regex.licenses
+(ns lice-comb.impl.license-regexes
   "License (and license exception) regex related functionality. Note: this
   namespace is not part of the public API of lice-comb and may change without
   notice."
-  (:require [clojure.string                          :as s]
-            [clojure.math.combinatorics              :as combo]
-            [spdx.identifiers                        :as si]
-            [wreck.api                               :as re]
-            [lice-comb.impl.faux-parse               :as faux]
-            [lice-comb.impl.version-series           :as verser]
-            [lice-comb.impl.regex.fragments          :as ref]
-            [lice-comb.impl.regex.version-expression :as verexp]
-            [lice-comb.impl.utils                    :as lciu]))
+  (:require [clojure.string                    :as s]
+            [clojure.math.combinatorics        :as combo]
+            [spdx.identifiers                  :as si]
+            [wreck.api                         :as re]
+            [lice-comb.impl.faux-parse         :as faux]
+            [lice-comb.impl.regex-fragments    :as ref]
+            [lice-comb.impl.version-series     :as verser]
+            [lice-comb.impl.version-expression :as verexp]
+            [lice-comb.impl.utils              :as lciu]))
 
 (def ^:private re-placeholder-ver  (re/join ref/ows (re/esc verser/placeholder-ver)))
 (def ^:private re-placeholder-oool (re/join ref/ows (re/esc verser/placeholder-oool)))
@@ -221,6 +221,14 @@
 (defmethod regexes nil
   [_]
   nil)
+
+(defn regexes-for-id
+  "Convenience function for testing the regexes for a specific SPDX identifier or
+  version series id.  This is not used by lice-comb anywhere."
+  [id-or-version-series-id]
+  (if-let [vs (get (:version-series (verser/version-series)) id-or-version-series-id)]
+    (regexes vs)
+    (regexes id-or-version-series-id)))
 
 
 ;; Functions for processing matches from a regex produced by [[regexes]].

@@ -16,12 +16,12 @@
 ; SPDX-License-Identifier: Apache-2.0
 ;
 
-(ns lice-comb.impl.regex.version-number-test
-  (:require [clojure.test                        :refer [deftest testing is use-fixtures]]
-            [clojure.string                      :as s]
-            [wreck.api                           :as re]
-            [lice-comb.test-boilerplate          :refer [fixture]]
-            [lice-comb.impl.regex.version-number :refer [canonicalise metadata exact-regex range-regex]]))
+(ns lice-comb.impl.version-number-test
+  (:require [clojure.test                  :refer [deftest testing is use-fixtures]]
+            [clojure.string                :as s]
+            [wreck.api                     :as re]
+            [lice-comb.test-boilerplate    :refer [fixture]]
+            [lice-comb.impl.version-number :refer [canonicalise metadata exact-regex range-regex]]))
 
 (use-fixtures :once fixture)
 

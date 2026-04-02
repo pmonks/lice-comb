@@ -13,13 +13,13 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [clojure.string                      :as s]
-            [wreck.api                           :as re]
-            [spdx.identifiers                    :as si]
-            [lice-comb.impl.spdx                 :as lcis]
-            [lice-comb.impl.regex.version-number :as vernum]
-            [lice-comb.impl.version-series       :as verser]
-            [lice-comb.impl.regex.licenses       :as rel]))
+  (:require [clojure.string                 :as s]
+            [wreck.api                      :as re]
+            [spdx.identifiers               :as si]
+            [lice-comb.impl.spdx            :as lcis]
+            [lice-comb.impl.version-number  :as vernum]
+            [lice-comb.impl.version-series  :as verser]
+            [lice-comb.impl.license-regexes :as licre]))
 
 (def ^:private re-placeholder-ver  (re-pattern (re/esc verser/placeholder-ver)))
 (def ^:private re-placeholder-oool (re-pattern (re/esc verser/placeholder-oool)))
@@ -28,7 +28,7 @@
   "Returns a tuple of `or-later?` (a `boolean`) and `confidence-explanation` (a
   `set`, possibly `nil`) found in match `m`."
   [m]
-  (case [(rel/match->or-later? m) (rel/match->only? m)]
+  (case [(licre/match->or-later? m) (licre/match->only? m)]
     [false false] [false]
     [false true]  [false]
     [true  false] [true]
@@ -52,7 +52,7 @@
      `version-series`
   2. a set of confidence explanations (which may be `nil`)"
   [version-series m]
-  (if-let [versions (rel/match->versions m)]
+  (if-let [versions (licre/match->versions m)]
     (let [[or-later? confidence-explanations] (or-later-with-explanation m)
           canonicalised-versions              (seq (distinct (map (partial vernum/canonicalise (:version-type version-series)) versions)))
           confidence-explanations             (some-> (if (> (count canonicalised-versions) 1)

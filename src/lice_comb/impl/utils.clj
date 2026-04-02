@@ -16,8 +16,7 @@
             [clojure.java.io          :as io]
             [clj-base62.core          :as base62]
             [embroidery.api           :as e]
-            [rencg.api                :as ncg]
-            [lice-comb.impl.3rd-party :as lci3]))
+            [rencg.api                :as ncg]))
 
 (defn mapfonk
   "Returns a new map where f has been applied to all of the keys of m."
@@ -190,13 +189,6 @@
   elements in the result."
   [^CharSequence s ^java.util.regex.Pattern re]
   (replacing-split s re #(get % :match)))   ; Can't use :match literally here, since `(fn? :keyword)` is always false
-
-;####TODO: REMOVE - SUPERCEDED BY lice-comb.impl.faux-parse/replace-in-strings
-;(defn replace-in-coll
-;  "For each `String` in `coll`, replaces any matches with `re` with
-;  `replacement`, as per [replacing-split]. Returns a new coll."
-;  [coll re replacement]
-;  (mapcat-str #(replacing-split % re replacement) coll))
 
 (defn digit-name-to-number
   "Converts the English name of a single digit (a `String`) to that number (as a
