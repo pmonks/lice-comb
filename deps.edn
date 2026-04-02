@@ -10,17 +10,17 @@
 
 {:deps
    {org.clojure/tools.logging             {:mvn/version "1.3.1"}
-    org.clojure/core.cache                {:mvn/version "1.1.234"}
-    commons-validator/commons-validator   {:mvn/version "1.10.1"}
     org.clojure/data.xml                  {:mvn/version "0.2.0-alpha10"}
+    org.clojure/math.combinatorics        {:mvn/version "0.3.2"}
+    commons-validator/commons-validator   {:mvn/version "1.10.1"}
     clj-xml-validation/clj-xml-validation {:mvn/version "1.0.2"}
     tolitius/xml-in                       {:mvn/version "0.1.1"}
     hato/hato                             {:mvn/version "1.0.0"}
     dev.weavejester/medley                {:mvn/version "1.9.0"}
     miikka/clj-base62                     {:mvn/version "0.1.1"}
     com.github.reefersleep/thread-until   {:mvn/version "1.0.0"}
-    com.github.pmonks/clj-spdx            {:mvn/version "1.0.286"}
-    com.github.pmonks/rencg               {:mvn/version "1.0.64"}
+    com.github.pmonks/clj-spdx            {:mvn/version "1.0.337"}
+    com.github.pmonks/rencg               {:mvn/version "1.0.90"}
     com.github.pmonks/wreck               {:mvn/version "1.0.151"}
     com.github.pmonks/embroidery          {:mvn/version "1.0.44"}}
  :aliases
