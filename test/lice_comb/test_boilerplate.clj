@@ -9,18 +9,18 @@
 ;
 
 (ns lice-comb.test-boilerplate
-  (:require [clojure.string     :as s]
-            [clojure.java.io    :as io]
-            [clojure.reflect    :as cr]
-            [clojure.edn        :as edn]
-            [clojure.spec.alpha :as spec]
-            [spdx.licenses      :as slic]
-            [spdx.exceptions    :as sexc]
-            [spdx.expressions   :as sexp]))
+  (:require [clojure.string                :as s]
+            [clojure.java.io               :as io]
+            [clojure.reflect               :as cr]
+            [clojure.edn                   :as edn]
+            [clojure.spec.alpha            :as spec]
+            [spdx.identifiers              :as si]
+            [spdx.expressions              :as sexp]
+            [lice-comb.impl.version-series :as verser]))
 
 (println "\n☔️ Running tests on Clojure" (clojure-version)
          "/ JVM" (System/getProperty "java.version") (str "(" (System/getProperty "java.vm.name") " " (System/getProperty "java.vm.version") ")")
-         "/ SPDX License List" (slic/version))
+         "/ SPDX License List" (si/version))
 
 (def test-data-path "./test/lice_comb/data")
 
@@ -40,17 +40,21 @@
   @global-setup
   (f))
 
-(def lic-ids-d (delay (slic/ids)))
-(def exc-ids-d (delay (sexc/ids)))
+(def ids-d (delay (si/ids)))
 
-(def license-list-d   (delay (map slic/id->info @lic-ids-d)))
-(def exception-list-d (delay (map sexc/id->info @exc-ids-d)))
+;(def lic-ids-d (delay (slic/ids)))
+;(def exc-ids-d (delay (sexc/ids)))
 
-(def non-deprecated-license-list-d   (delay (filter #(not (:deprecated? %)) @license-list-d)))
-(def non-deprecated-exception-list-d (delay (filter #(not (:deprecated? %)) @exception-list-d)))
+;(def license-list-d   (delay (map slic/id->info @lic-ids-d)))
+;(def exception-list-d (delay (map sexc/id->info @exc-ids-d)))
 
-(def non-deprecated-lic-ids-d (delay (set (map :id @non-deprecated-license-list-d))))
-(def non-deprecated-exc-ids-d (delay (set (map :id @non-deprecated-exception-list-d))))
+;(def non-deprecated-license-list-d   (delay (filter #(not (:deprecated? %)) @license-list-d)))
+;(def non-deprecated-exception-list-d (delay (filter #(not (:deprecated? %)) @exception-list-d)))
+
+;(def non-deprecated-lic-ids-d (delay (set (map :id @non-deprecated-license-list-d))))
+;(def non-deprecated-exc-ids-d (delay (set (map :id @non-deprecated-exception-list-d))))
+
+(def all-version-series-d (delay (verser/version-series)))
 
 (def not-nil? (complement nil?))
 

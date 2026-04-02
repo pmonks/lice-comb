@@ -10,197 +10,317 @@
 
 (ns lice-comb.impl.version-series
   "Functionality related to 'version series' of licenses. A 'version series' is
-  a group of licenses that share the same base identifier, with one or more
-  versions.
+  a group of licenses or exceptions that share the same base identifier, with
+  one or more versions comprising some kind of linear history.
 
   Notes:
 
-  * this is _not_ an official SPDX concept, though see [[https://github.com/spdx/license-list-XML/issues/2805]]
+  * this is _not_ an official SPDX concept (yet; see [[https://github.com/spdx/spdx-3-model/issues/1182]]
+    which would make this namespace superfluous)
   * this namespace is not part of the public API of lice-comb and may change
-    without notice
-  * GPL id variants are not supported - the assumption being that this
-    functionality is not used with them, thanks to lice-comb.impl.substitutions.gnu"
-  (:require [clojure.string         :as s]
-            [spdx.identifiers       :as si]
-            [wreck.api              :as re]
-            [rencg.api              :as rencg]
-;####TODO: CONSIDER RATIONALISING VERSION MATCHING REGEXES?
-            [lice-comb.impl.regexes :as lcir]
-            [lice-comb.impl.utils   :as lciu]))
+    without notice"
+  (:require [clojure.string                          :as s]
+            [spdx.identifiers                        :as si]
+            [wreck.api                               :as re]
+            [rencg.api                               :as ncg]
+            [lice-comb.impl.spdx                     :as lcis]
+            [lice-comb.impl.regex.fragments          :as ref]
+            [lice-comb.impl.regex.version-number     :as vernum]
+            [lice-comb.impl.regex.version-expression :as verexp]))
 
-(def ^:private re-version-group   (re/ncg "version" #"\d{8}|\d{4}|\d{2}|\d+\.\d+(?:\.\d+)*\w?"))
+; These are public because lice-comb.impl.regex.licenses and lice-comb.impl.id-detection.default depend on knowing what these values are
+(def placeholder-ver  "${VER}")
+(def placeholder-oool "${OOOL}")
 
-(def ^:private re-version-in-id   (re/join #"(?<=-)" re-version-group))
-(def ^:private re-oool-in-id      (re/flags-grp "i" #"(?<=-)(?:\+|or-later|only)\z"))
+; Regexes for matching consecutive version and OOOL placeholders
+(def ^:private re-ver-oool      (re/join (re/esc placeholder-ver) #"[\s\-]*" (re/esc placeholder-oool)))
+(def ^:private re-word-then-ver (re/join (re/+lb #"\w") (re/esc placeholder-ver)))
 
-(def ^:private re-version-series  (re/join (re/ncg "prefix" #".*?")
-                                           re-version-in-id
-                                           (re/opt (re/alt-grp (re/esc "+") (re/grp (re/esc "-") (re/ncg "suffix" #".*"))))))
+; We have our own versions of these regex fragments here, because these elements in the SPDX license list are more carefully controlled than the many variations that exist out in the real world
+(def ^:private re-version-group     (re/ncg "version" (re/alt-grp #"\d{4}\-?\d{2}\-?\d{2}" #"\d{4}" #"\d{2}" #"\d+\.\d+(?:\.\d+)*") #"\w?"))
+(def ^:private re-oool-in-id        (re/fgrp "i" #"(?:\+|or-later|only)"))
+(def ^:private re-oool-in-name      (re/fgrp "i" #"(?<!\w)(?:\+| or later| only)(?!\w)"))
+(def ^:private re-version-series    (re/join #"(?<prefix>.*?)-" re-version-group #"(?:\+|(?:-(?<suffix>.*)))?"))
+(def ^:private re-opt-version-label (re/opt-grp verexp/re-version-label ref/ows))
 
-(def ^:private re-version-label   (re/flags-grp "i" #"(?<!\w)(?:(v|ver|versions?)?\s*)?"))
-(def ^:private re-version-in-name (re/flags-grp "i" #"(?<!\w)(?:(v|ver|versions?)?\s*)?(?<version>\d{8}|\d{4}|\d{2}|\d+\.\d+(?:\.\d+)*\w?)"))
-(def ^:private re-oool-in-name    (re/flags-grp "i" #"(?<!\w)(?:\+|or later|only)(?!\w)"))
-
-
-(def ^:private re-version-series  #"(?<prefix>.*?)-(?<version>\d{8}|\d{4}|\d{2}|\d+\.\d+(?:\.\d+)*\w?)(?:\+|(?:-(?<suffix>.*)))?")
-
-;####TODO: consider whether having a configurable `not-versioned` value is helpful
-;####TODO: consider making private
+; Only public for the unit tests
 (defn id->version-series
-  "Returns the 'version-series' of `id` (an SPDX license or exception
-  identifier), or `not-versioned` (default: `nil`) if it doesn't belong to a
-  version series."
-  ([^String id] (id->version-series nil id))
-  ([not-versioned ^String id]
-   (when-not (s/blank? id)
-     (cond
-       ; Special cases
-       (s/starts-with? id "LZMA-SDK-")                                      not-versioned  ; Has a version range in one of the ids, which is a pain to process in the regex
-       (s/starts-with? id "BSD")                                            not-versioned  ; e.g. to properly handle BSD-3-Clause-No-Nuclear-License-2014
-       (and (s/starts-with? id "GPL-3.0-")  (s/ends-with? id "-exception")) not-versioned  ; e.g. GPL-3.0-389-ds-base-exception
-       (and (s/starts-with? id "LGPL-3.0-") (s/ends-with? id "-exception")) not-versioned  ; e.g. LGPL-3.0-linking-exception
-       (= id "Autoconf-exception-generic-3.0")                              not-versioned  ; See the name for why
-       ; Default regex based version series identification
-       :else
-         (if-let [m (rencg/re-matches-ncg re-version-series id)]
-           (let [prefix (get m "prefix")
-                 suffix (-> (get m "suffix" "")    ; Strip off `or-later` and `only` at the end of the suffix
-                            (s/replace #"\-?only\z" "")
-                            (s/replace #"\-?or-later\z" ""))]
-             (if (s/blank? suffix)
-               prefix
-               (str prefix "/" suffix)))
-           not-versioned)))))
+  "Returns the 'version-series' (a `String`) of `id` (an SPDX license or
+  exception identifier), or `nil` if it doesn't belong to a version series."
+  [^String id]
+  (when-not (s/blank? id)
+    (cond
+      ; Special cases - licenses
+      (= id "W3C")                                                         "W3C"       ; Id doesn't include a version, even though its name does!
+      (= id "Libpng")                                                      "libpng"    ; Id doesn't include a version and has different case to other members of the version series
+      (s/starts-with? id "AGPL-1.0")                                       "Affero"    ; Unrelated to AGPL-3.0 (despite having the same ID pattern)
+      (s/starts-with? id "BSD-")                                           nil         ; e.g. to properly handle BSD-3-Clause-No-Nuclear-License-2014 (2014 is detected as a version number)
+      (s/starts-with? id "LZMA-SDK-")                                      "LZMA-SDK"  ; Has multiple versions in one of the ids
+      ; Special cases - exceptions
+      (= id "Autoconf-exception-generic-3.0")                              nil         ; Name clarifies that this is NOT a version number: "Autoconf generic exception for GPL-3.0"
+      (and (s/starts-with? id "GPL-3.0-")  (s/ends-with? id "-exception")) nil         ; e.g. GPL-3.0-389-ds-base-exception, GPL-3.0-interface-exception, GPL-3.0-linking-exception, etc.
+      (and (s/starts-with? id "LGPL-3.0-") (s/ends-with? id "-exception")) nil         ; e.g. LGPL-3.0-linking-exception
+      (and (s/starts-with? id "QPL-1.0-")  (s/ends-with? id "-exception")) nil         ; e.g. QPL-1.0-INRIA-2004-exception
+      ; Default regex based version series identification
+      :else
+        (when-let [m (ncg/re-matches re-version-series id)]
+          (let [prefix (get m "prefix")
+                suffix (-> (get m "suffix" "")    ; Strip off `or-later` and `only` at the end of the suffix
+                           (s/replace #"\-?only\z"     "")
+                           (s/replace #"\-?or-later\z" ""))]
+            (if (s/blank? suffix)
+              prefix
+              (str prefix "/" suffix)))))))
 
-;####TODO: consider making private
-(defn version-series-member?
-  "Is `id` a member of a version series?
+;####TODO: CONSIDER MOVING THIS FN AND id-sorter TO lice-comb.impl.spdx AND MAKE PUBLIC
+(defn- parse-suffix-from-id
+  "Parses `id` into a thruple containing:
+
+  1. the base id
+  2. the exact suffix (-or-later, +, -only) - may be `nil`
+  3. a suffix type (:or-later, :only) - may be `nil`"
+  [^String id]
+  (let [id-without-suffix    (s/replace id #"(?:\-or\-later|\+|\-only)\z" "")
+        [suffix suffix-type] (cond
+                               (s/ends-with? id "-or-later") ["-or-later" :or-later]
+                               (s/ends-with? id "-only")     ["-only"     :only]
+                               (s/ends-with? id "+")         ["+"         :or-later])]
+    [id-without-suffix suffix suffix-type]))
+
+(defn- id-sorter
+  "A comparator for sorting SPDX identifiers.
 
   Notes:
 
-  * returns `true` even for singleton version series' (e.g. `Hippocratic-2.1`)."
-  [^String id]
-  (boolean (id->version-series id)))
+  * identifiers are sorted case _in_sensitively
+  * takes suffixes of the same identifier into account, putting `-or-later`/`+`
+    first, then unadorned identifier, then `-only`
+  * does _not_ differentiate between license ids and exceptions ids, which is
+    important for correctly handling identifiers that have changed type (e.g.
+    `SHL`)"
+  [^String a ^String b]
+  (let [a                                         (s/lower-case (if (= "W3C" a) "W3C-20021231" a))  ; Special case for the (highly irregular) W3C identifier
+        b                                         (s/lower-case (if (= "W3C" b) "W3C-20021231" b))  ; Ditto
+        [a-without-suffix a-suffix a-suffix-type] (parse-suffix-from-id a)
+        [b-without-suffix b-suffix b-suffix-type] (parse-suffix-from-id b)]
+    (cond
+      (not= a-without-suffix b-without-suffix) (compare a b)  ; Unrelated ids (not in the same version series), so naive compare is fine
+      (= a-suffix b-suffix)                    0
+      (= a-suffix-type :only)                  1
+      (= b-suffix-type :only)                  -1
+      (= a-suffix-type :or-later)              (if (= b-suffix "-or-later") 1 -1)     ; This is to ensure -or-later vs + are sorted correctly
+      (= b-suffix-type :or-later)              (if (= a-suffix "-or-later") -1 1))))  ; Ditto
 
-;####TODO: consider whether having configurable grouping behaviour for non-version-series ids is helpful
-;####TODO: possibly redundant
-(defn ids->version-series
-  "Turns `ids` into a map of 'version series', where each key is a version
-  series name (`String`) as defined by [[id->version-series]], and each value is
-  a sequence of SPDX identifiers in that version series, in ascending order
-  (oldest version first).
+(defn- defaults
+  "Returns a tuple containing:
 
-  Ids that don't belong to a version series are included in the result, with
-  `group-unversioned-ids?` (default: `true`) controlling whether they're grouped
-  under the key `nil`, or stored separately with themselves as the key."
-  ([ids] (ids->version-series true ids))
-  ([group-unversioned-ids? ids]
-   (when (seq ids)
-     (let [result (lciu/mapfonv sort (group-by #(id->version-series (if group-unversioned-ids? nil %) %) ids))]
-       (when-not (empty? result)
-         result)))))
-
-;####TODO: consider whether having configurable grouping behaviour for non-version-series ids is helpful
-;####TODO: possibly redundant
-(defn id-infos->version-series
-  "Turns `id-infos` (a sequence of id-info maps) into a map of 'version series',
-  where each key is a version series name (`String`) and each value is a
-  sequence of id-info maps in that version series, in ascending order (oldest
-  version first).
-
-  id-infos that don't belong to a version series are included in the result,
-  with `group-unversioned-ids?` (default: `true`) controlling whether they're
-  grouped under the key `nil`, or stored separately with themselves as the key."
-  ([id-infos] (id-infos->version-series true id-infos))
-  ([group-unversioned-ids? id-infos]
-   (when (seq id-infos)
-     (let [result (lciu/mapfonv (partial sort-by :id) (group-by #(id->version-series (if group-unversioned-ids? nil (:id %)) (:id %)) id-infos))]
-       (when-not (empty? result)
-         result)))))
-
-(defn- default-fn
-  "Returns a function for finding the default value for the given series-id.
-  The returned function assumes it's executed against a sorted sequence of
-  values (versions, ids, etc.)."
+  1. a function that can be used to find the default id, version, etc. within
+     the given version series. This function assumes it's executed against a
+     sorted sequence of values (ids, versions, etc.), sorted using [[id-sorter]].
+  2. an or-later? flag, which indicates whether the default version or id should
+     have an or later suffix."
   [series-id]
   (case series-id
-    "GPL"  first
-    "LGPL" first
-    "AGPL" first
-    last))        ; Most version series default to latest version
+    "GPL"                [first true]
+    "LGPL"               [first true]
+    "AGPL"               [first true]
+    "GFDL"               [first true]
+    "GFDL/invariants"    [first true]
+    "GFDL/no-invariants" [first true]
+    [last false]))        ; Most version series default to latest version
 
-;####TODO: FIND A BETTER NAME!!!!
+;####TODO: BETTER NAME?
+(defn best-id
+  "Returns the canonicalised 'best' id in sequence `ids` within the version
+  series identifier by `series-id`.  Notably, this function works with subsets
+  of all of the ids in that version series; for example:
+  `(best-id [\"Apache-1.0\" \"Apache-1.1\"])` would return `\"Apache-1.1\"`."
+  [series-id ids]
+  (let [[default or-later?] (defaults series-id)]
+    (lcis/canonicalise-id (default ids) or-later?)))
+
+(defn- id-formats
+  "Returns a set of unique id formats in the given version series (identified
+  by `ids-in-series`, a sequence of license identifiers that MUST be in the same
+  version series).  The result is a sequence of the id format(s) for the series
+  (usually a singleton, though there are a very few version series that have
+  more than one id format).  Returns `nil` if `ids-in-series` is `nil` or empty."
+  [ids-in-series]
+  (some->> (seq ids-in-series)
+           (map (fn [id]
+                  (if-let [id-version (get (ncg/re-matches re-version-series id) "version")]
+                    ; Id has a version, so replace version elements with placeholders
+                    (-> id
+                        (s/replace-first (vernum/exact-regex id-version) (s/re-quote-replacement placeholder-ver))   ; The license's version
+                        (s/replace       re-oool-in-id                   (s/re-quote-replacement placeholder-oool))  ; "only" or "or later"
+                        (s/replace       re-ver-oool                     (s/re-quote-replacement placeholder-ver)))  ; Collapse consecutive version and OOOL
+                    ; Id has no versions in it (e.g. Libpng, W3C), so return it verbatim
+                    id)))
+           distinct))
+
+(defn irregular-ids
+  "Returns a summary of version series' that have 'irregular' ids (i.e. ids that
+  are not consistent across all versions of the series), using the provided set
+  of SPDX listed `ids` (default: all SPDX listed identifiers).
+
+  The result is a map where the keys are series' ids, and the values are a
+  sequence of 'id formats' in that series.
+
+  Notes:
+
+  * This function is not used by lice-comb itself, but is useful for maintenance
+    purposes, especially as new versions of the SPDX license list are released
+    that may include new irregular ids."
+  ([] (irregular-ids (si/ids)))
+  ([ids]
+   (when (seq ids)
+     (let [groups (dissoc (group-by id->version-series ids) nil)]
+       (apply merge
+         (filter
+           identity
+           (map
+             #(let [series-id  (key %)
+                    series-ids (sort id-sorter (val %))
+                    id-formats (id-formats series-ids)]
+                (when (> (count id-formats) 1)
+                  {series-id id-formats}))
+             groups)))))))
+
+(defn- name-formats
+  "Returns a set of unique name formats in the given version series (identified
+  by `ids-in-series`, a sequence of license identifiers that MUST be in the same
+  version series).  The result is a sequence of the name format(s) for the
+  series (usually a singleton, though there are a very few version series that
+  have more than one name pattern).  Returns `nil` if `ids-in-series` is `nil`
+  or empty."
+  [ids-in-series]
+  (some->> (seq ids-in-series)
+           (map (fn [id]
+             (let [nm         (:name (si/id->info id))
+                   id-version (if (= id "W3C")
+                                "20021231"  ; Special case for the (highly irregular) W3C identifier
+                                (get (ncg/re-matches re-version-series id) "version"))]
+               (if id-version
+                 (let [re-exact-version-and-label (when id-version (re/fgrp "i" (re/-lb #"\A\d{0,4}") #"[,\s]*" re-opt-version-label (vernum/exact-regex id-version)))]
+                    ; Name has a version, so replace version elements with placeholders
+                   (-> nm
+                       (s/replace-first re-exact-version-and-label (s/re-quote-replacement placeholder-ver))            ; The license's version
+                       (s/replace       re-word-then-ver           (s/re-quote-replacement (str " " placeholder-ver)))  ; Part of the comma / whitespace handling for SHL-0.51
+                       (s/replace       re-oool-in-name            (s/re-quote-replacement placeholder-oool))           ; "only" or "or later"
+                       (s/replace       re-ver-oool                (s/re-quote-replacement placeholder-ver))))          ; Collapse consecutive version and OOOL
+                 ; Name has no versions in it (e.g. name of Libpng), so return it verbatim
+                 nm))))
+           distinct))
+
+(defn irregular-names
+  "Returns a summary of version series' that have 'irregular' names (i.e. names
+  that are not consistent across all versions of the series), using the provided
+  set of SPDX listed `ids` (default: all SPDX listed identifiers).
+
+  The result is a map where the keys are series' ids, and the values are a
+  sequence of 'name patterns' in that series.
+
+  Notes:
+
+  * This function is not used by lice-comb itself, but is useful for maintenance
+    purposes, especially as new versions of the SPDX license list are released
+    that may include new irregular names."
+  ([] (irregular-names (si/ids)))
+  ([ids]
+   (when (seq ids)
+     (let [groups (dissoc (group-by id->version-series ids) nil)]
+       (apply merge
+         (filter
+           identity
+           (map
+             #(let [series-id    (key %)
+                    series-ids   (sort id-sorter (val %))
+                    name-formats (name-formats series-ids)]
+                (when (> (count name-formats) 1)
+                  {series-id name-formats}))
+             groups)))))))
+
+(defn mixed-type-version-series
+  "Returns a summary of version series' that contain 'mixed' identifiers (i.e. a
+  mix of license and exception identifiers), using the provided set of SPDX
+  listed `ids` (default: all SPDX listed identifiers).
+
+  The result is a map where the keys are series' ids, and the values are a
+  sequence of identifiers in that series.
+
+  Notes:
+
+  * This function is not used by lice-comb itself, but is useful for maintenance
+    purposes, especially as new versions of the SPDX license list are released
+    that may include new irregular names."
+  ([] (mixed-type-version-series (si/ids)))
+  ([ids]
+   (when (seq ids)
+     (let [groups (dissoc (group-by id->version-series ids) nil)]
+       (apply merge
+         (filter
+           identity
+           (map
+             #(let [series-id  (key %)
+                    series-ids (sort id-sorter (val %))
+                    id-types   (map (fn [id] (:type (si/id->info id))) series-ids)]
+                (when (> (count (distinct id-types)) 1)
+                  {series-id (map (fn [id id-type] [id id-type]) series-ids id-types)}))
+             groups)))))))
+
 (defn version-series
-  "Splits `ids` into two sequences and returns them as a tuple of:
+  "Processes `ids` (default: all SPDX listed identifiers) and returns a map
+  with these keys (both optional):
 
-  1. A sequence of version sequence maps (may be nil)
-  2. A sequence of ids that are not members of a version series (may be nil)
+  * `:version-series` - a map of the version series' identified in `ids`
+  * `:unversioned-ids` - a set of ids that are not members of a version series
 
-  Each version sequence map has all of these keys:
+  The version series' map is keyed by the version series id, and each value is
+  also a map that represents that specific version series, containing these
+  keys:
 
-  * `:id` - an identifier (`String`) for the series (not an SPDX identifier)
+  * `:series-id` - an identifier for this series (note: not an official SPDX
+    concept)
+  * `:ids` - sequence of ids (`String`s) in the series, from oldest to newest
+  * `:names` - sequence of names (`String`s) in the series, from oldest to
+    newest
   * `:versions` - a sequence of versions (`String`s) in the series, from oldest
     to newest
-  * `:ids` - sequence of ids (`String`s) in the series, from oldest to newest
-  * `:id-template` - a template identifier for the series, with `${version}`
-    where the version was
-  * `:name-template` - a template name for the series, with `${version}` where
-    the version was"
-  [ids]
-  (when (seq ids)
-    (let [groups          (group-by id->version-series ids)
-          unversioned-ids (get groups nil)
-          groups          (dissoc groups nil)]
-      [(seq
-         (map
-           #(let [series-id       (key %)
-                  default         (default-fn series-id)
-                  series-ids      (sort (val %))
-                  series-versions (distinct (map (fn [id] (get (rencg/re-matches-ncg re-version-series id) "version")) series-ids))
-                  series-names    (distinct (filter identity (map (fn [id] (:name (si/id->info id))) series-ids)))
-                  default-id      (default series-ids)
-                  default-version (default series-versions)
-                  default-name    (default series-names)
-;                  default-version (default-version series-id series-versions)
-                  id-template     (-> default-id
-                                      (s/replace re-version-in-id (s/re-quote-replacement "$VER"))
-                                      (s/replace re-oool-in-id    (s/re-quote-replacement "$OOOL")))
-                  name-template   (-> default-name
-                                      (s/replace (re/join re-version-label (lcir/version-number->re default-version true)) (s/re-quote-replacement "$VER"))
-                                      (s/replace re-oool-in-name                                                           (s/re-quote-replacement "$OOOL")))]
-              {:id              series-id
-               :versions        series-versions
-;####TODO: REMOVE THIS IF UNUSED
-;               :default-version default-version
-               :default-id      default-id
-               :ids             series-ids
-               :id-template     id-template
-               :name-template   name-template})
-         groups))
-       unversioned-ids])))
+  * `:default-id` - the default identifier in the series (a `String`),
+    canonicalised
+  * `:id-formats` - a sequence of [clojure.core/format] strings for constructing
+    identifiers in this version series. The format string will contain a single
+    `%s` entry where the version number (as a `String`) will go.
+  * `:id-formats` - a sequence of identifier format `String`s for the series,
+    with version element(s) replaced with placeholders
+  * `:name-formats` - a sequence of name format `String`s for the series, with
+    with version element(s) replaced with placeholders
+  * `:version-type` - a keyword representing the type of versioning used in this
+    version series; one of: :semver, :year2, :year4, :date
+  * `:version-suffix?` - a boolean indicating whether the version numbers in
+    this version series can have a single letter suffix
 
-
-;;####TODO: CONSIDER MOVING THIS TO lice-comb.impl.regexes
-;(defn version-series-id-template->re
-;  [id-template]
-;  (when-not (s/blank? id-template)
-;    (-> [#"(?<!\w)" (s/trim id-template) #"(?!\w)"]
-;        ; Version series placeholders
-;        (lciu/replace-in-coll #"\s*\$OOOL" "")
-;        (lciu/replace-in-coll #"\s*\$VER"  )
-;        ; Special cases for some double and/or weird version components
-;        (lciu/replace-in-coll #"9.11-to-9.20"                         #"0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20")
-;        ; Special cases for certain licenses
-;        (lciu/replace-in-coll #"(?i)(?<!\w)MIT(?!\w)"                 #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)X11(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)ISC(?!\w)"                 #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"    #"(?<!zlib/[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)")
-;        (lciu/replace-in-coll #"(?i)(?<!\w)SGI-B(?!\w)"               #"SGI(?:[\s\-–—]+B)?")
-;        (lciu/replace-in-coll #"(?i)\-(?<versionNumber>\d+\.\d+(?:\.\d+)*)(?:(?<only>-only)|(?<orLater>\+|-or-later))?(?=(-|\z))"
-;                              (partial re-version-replacement "versionNumberId" "onlyId" "orLaterId"))
-;        ; Character equivalents
-;        (lciu/replace-in-coll #"[\s\-]+"                              #"[\s\-–—]+")  ; Note: hyphen, en-dash, em-dash
-;        ; Cleanup and combine into a single pattern
-;        (->> (filter #(or (not (string? %)) (not (s/blank? %))))   ; Remove empty strings
-;             (lciu/mapcat-str #(vector (re/esc %)))
-;             (apply (partial re/flags-grp "iuU"))))))
+  Returns `nil` if `ids` is `nil` or empty."
+  ([] (version-series (si/ids)))
+  ([ids]
+   (when (seq ids)
+     (let [groups          (group-by id->version-series ids)
+           unversioned-ids (seq (get groups nil))
+           version-series  (into {}
+                             (map
+                               #(let [series-id           (key %)
+                                      [default or-later?] (defaults series-id)
+                                      series-ids          (sort id-sorter (val %))
+                                      series-versions     (distinct (filter identity (map (fn [id] (get (ncg/re-matches re-version-series id) "version")) series-ids)))
+                                      series-names        (map (comp :name si/id->info) series-ids)]
+                                  [series-id (merge {:series-id    series-id
+                                                     :ids          series-ids
+                                                     :names        series-names
+                                                     :default-id   (lcis/canonicalise-id (default series-ids) or-later?)
+                                                     :versions     series-versions
+                                                     :id-formats   (id-formats series-ids)
+                                                     :name-formats (name-formats series-ids)}
+                                                    (vernum/metadata series-versions))])
+                               (dissoc groups nil)))]  ; Ignore ids that aren't in a version series
+       (merge (when     unversioned-ids         {:unversioned-ids (set unversioned-ids)})
+              (when-not (empty? version-series) {:version-series  version-series}))))))

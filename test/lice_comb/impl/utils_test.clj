@@ -12,51 +12,9 @@
   (:require [clojure.test               :refer [deftest testing is use-fixtures]]
             [clojure.java.io            :as io]
             [lice-comb.test-boilerplate :refer [fixture test-data-path]]
-            [lice-comb.impl.utils       :refer [canonicalise-version-number simplify-uri filepath filename html->text]]))
+            [lice-comb.impl.utils       :refer [simplify-uri filepath filename html->text]]))
 
 (use-fixtures :once fixture)
-
-(deftest canonicalise-version-number-tests
-  (testing "Nil, blank, etc."
-    (is (nil? (canonicalise-version-number nil)))
-    (is (nil? (canonicalise-version-number "")))
-    (is (nil? (canonicalise-version-number "  "))))
-  (testing "Invalid version numbers"
-    (is (nil? (canonicalise-version-number "foo")))
-    (is (nil? (canonicalise-version-number ".")))
-    (is (nil? (canonicalise-version-number ".2")))
-    (is (nil? (canonicalise-version-number "2.")))
-    (is (nil? (canonicalise-version-number "-2"))))
-  (testing "Valid version numbers - semver"
-    (is (= {:components [0]    :type :semver}              (canonicalise-version-number "0")))
-    (is (= {:components [2]    :type :semver}              (canonicalise-version-number "2")))
-    (is (= {:components [2]    :type :semver}              (canonicalise-version-number "02")))
-    (is (= {:components [2]    :type :semver}              (canonicalise-version-number "2.0")))
-    (is (= {:components [2]    :type :semver}              (canonicalise-version-number "2.0.0")))
-    (is (= {:components [2]    :type :semver}              (canonicalise-version-number "00000002.000000000000.00000000000")))
-    (is (= {:components [2 1]  :type :semver}              (canonicalise-version-number "2.1")))
-    (is (= {:components [2 1]  :type :semver}              (canonicalise-version-number "2.01")))
-    (is (= {:components [2 1]  :type :semver}              (canonicalise-version-number "02.01.00")))
-    (is (= {:components [86]   :type :semver}              (canonicalise-version-number "86.0")))
-    (is (= {:components [0 99] :type :semver}              (canonicalise-version-number "0.99")))
-    (is (= {:components [1 2 3 4 5 6 7 8 9] :type :semver} (canonicalise-version-number "1.02.003.0004.00005.000006.0000007.00000008.000000009"))))
-  (testing "Valid version numbers - years / dates"
-    (is (= {:components [86]       :type :year2} (canonicalise-version-number "86")))
-    (is (= {:components [86]       :type :year2} (canonicalise-version-number "0086")))
-    (is (= {:components [2006]     :type :year4} (canonicalise-version-number "2006")))
-    (is (= {:components [2006]     :type :year4} (canonicalise-version-number "02006")))
-    (is (= {:components [19980720] :type :date}  (canonicalise-version-number "19980720")))
-    (is (= {:components [19980720] :type :date}  (canonicalise-version-number "0000000000019980720")))
-    (is (= {:components [20150513] :type :date}  (canonicalise-version-number "20150513"))))
-  (testing "Valid version numbers - suffix"
-    (is (= {:components [0]        :type :semver :suffix "a"} (canonicalise-version-number "0a")))
-    (is (= {:components [1]        :type :semver :suffix "c"} (canonicalise-version-number "1.0c")))
-    (is (= {:components [1]        :type :semver :suffix "X"} (canonicalise-version-number "1.0.0.0X")))
-    (is (= {:components [99 3]     :type :semver :suffix "a"} (canonicalise-version-number "0099.03a")))
-    (is (= {:components [89]       :type :year2  :suffix "a"} (canonicalise-version-number "89a")))
-    (is (= {:components [1986]     :type :year4  :suffix "D"} (canonicalise-version-number "1986D")))
-    (is (= {:components [1986]     :type :year4  :suffix "D"} (canonicalise-version-number "001986D")))
-    (is (= {:components [19980720] :type :date   :suffix "g"} (canonicalise-version-number "19980720g")))))
 
 (def simplified-apache2-uri "http://apache.org/license/license-2.0")
 (def local-mpl2-html        (str test-data-path "/MPL-2.0/LICENSE.html"))

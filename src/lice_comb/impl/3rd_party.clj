@@ -58,15 +58,15 @@
   (if (pred? value) (then value) value))
 
 
-;; by, ascending, and descending are copyright © Reddit user u/fredoverflow 2022
+;; by, ascending, and descending are copyright © fredoverflow 2022
 ;;
-;; Obtained from https://www.reddit.com/r/Clojure/comments/ufa8e0/comment/i6s7zt5/,
-;; and with no license information explicitly listed, they fall back on being
-;; licensed under Reddit's Public Content Policy:
+;; Obtained from https://www.reddit.com/r/Clojure/comments/ufa8e0/comment/i6s7zt5/ /
+;; https://youtu.be/bihh8nPGixo?si=XwMwKZL16jMokn1B, where the author states:
 ;;
-;; https://support.reddithelp.com/hc/en-us/articles/26410290525844-Public-Content-Policy
+;; "I don't care about the code. Feel free to use and evolve it for any purpose,
+;; including commercial. No attribution required."
 ;;
-;; SPDX-License-Identifier: LicenseRef-lice-comb-PROPRIETARY-COMMERCIAL
+;; SPDX-License-Identifier: LicenseRef-lice-comb-PUBLIC-DOMAIN
 ;;
 (defn by
   "For use with `clojure.core/sort` to provide composite sorts.
@@ -77,8 +77,8 @@
   ```"
   [& keys-orderings]
   (fn [a b]
-    (loop [[key ordering & keys-orderings] keys-orderings]
-      (let [order (ordering (key a) (key b))]
+    (loop [[key-fn ordering & keys-orderings] keys-orderings]
+      (let [order (ordering (key-fn a) (key-fn b))]
         (if (and (zero? order) keys-orderings)
           (recur keys-orderings)
           order)))))

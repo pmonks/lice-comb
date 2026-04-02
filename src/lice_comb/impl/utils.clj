@@ -16,7 +16,7 @@
             [clojure.java.io          :as io]
             [clj-base62.core          :as base62]
             [embroidery.api           :as e]
-            [rencg.api                :as rencg]
+            [rencg.api                :as ncg]
             [lice-comb.impl.3rd-party :as lci3]))
 
 (defn mapfonk
@@ -141,13 +141,13 @@
   * only supports a function as the third argument (for obvious reasons...)"
   [^CharSequence s ^java.util.regex.Pattern re replacement-fn]
   (let [m    (re-matcher re s)
-        ncgs (rencg/re-named-groups re)]
+        ncgs (ncg/re-named-groups re)]
     (if (.find m)
       (let [buffer (StringBuffer. (.length s))]
         (loop [found true]
           (if found
             (do
-              (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement (replacement-fn (rencg/re-groups-ncg m ncgs))))
+              (.appendReplacement m buffer (java.util.regex.Matcher/quoteReplacement (replacement-fn (ncg/re-groups m ncgs))))
               (recur (.find m)))
             (do
               (.appendTail m buffer)
@@ -169,12 +169,12 @@
   [^CharSequence s ^java.util.regex.Pattern re replacement]
   (let [replacement-fn (if (fn? replacement) replacement (constantly replacement))
         m              (re-matcher re s)
-        ncgs           (rencg/re-named-groups re)]
+        ncgs           (ncg/re-named-groups re)]
     (loop [result []
            index  0
            f      (.find m)]
       (if f
-        (let [match       (rencg/re-groups-ncg m ncgs)
+        (let [match       (ncg/re-groups m ncgs)
               match-start (long (:start match))
               match-end   (long (:end   match))
               rep         (replacement-fn match)]
@@ -191,11 +191,12 @@
   [^CharSequence s ^java.util.regex.Pattern re]
   (replacing-split s re #(get % :match)))   ; Can't use :match literally here, since `(fn? :keyword)` is always false
 
-(defn replace-in-coll
-  "For each `String` in `coll`, replaces any matches with `re` with
-  `replacement`, as per [replacing-split]. Returns a new coll."
-  [coll re replacement]
-  (mapcat-str #(replacing-split % re replacement) coll))
+;####TODO: REMOVE - SUPERCEDED BY lice-comb.impl.faux-parse/replace-in-strings
+;(defn replace-in-coll
+;  "For each `String` in `coll`, replaces any matches with `re` with
+;  `replacement`, as per [replacing-split]. Returns a new coll."
+;  [coll re replacement]
+;  (mapcat-str #(replacing-split % re replacement) coll))
 
 (defn digit-name-to-number
   "Converts the English name of a single digit (a `String`) to that number (as a
@@ -215,50 +216,6 @@
       "eight" 8
       "nine"  9
       nil)))
-
-(defn canonicalise-version-number
-  "Canonicalises `version-number` (a `String`), returning either `nil` if
-  `version-number` isn't recognised as a version number, or a map with these
-  keys:
-
-  * `:components` - a sequence of the numeric components in the version number,
-                    as ints. Always has at least one element.
-  * `:type`       - a keyword describing the type of the version number; one of:
-                    `:semver`, `:year2`, `:year4`, `:date`.  Not present if the
-                    type can't be determined
-  * `:suffix`     - a `String` containing a single letter, if `version-number`
-                    had a single letter suffix (e.g. `\"c\"` for `1.3c`)
-
-  Supports these formats for `version-number`:
-
-  * Semver-esque e.g. `1`, `1.0`, `1.2.3`, `1.2.3.4`, `0002`, etc.
-  * Year / date e.g. `86`, `2006`, `20150513`
-  * Any of the above with a single letter suffix e.g. `1.3c`
-
-  Canonicalisation involves:
-
-  * Stripping off any leading zeros from all version number components
-  * Dropping all trailing '.0' components"
-  [version-number]
-  (when-not (s/blank? version-number)
-    (when-let [m (rencg/re-matches-ncg #"(?<versionFirst>\d+)(?<versionRest>(?:\.\d+)+)?(?<suffix>\w)?" (s/trim version-number))]
-      (let [version-first (parse-lng (get m "versionFirst"))
-            version-rest  (when-let [vr (get m "versionRest")]
-                            (subs vr 1))  ; Strip leading . character
-            suffix        (get m "suffix")
-            components    (concat [version-first]
-                                  (when version-rest (lci3/rdrop-while zero? (map parse-lng (s/split version-rest #"\.")))))
-            version-type  (if-not (nil? version-rest)
-                            :semver
-                            (case (count (str version-first))
-                              1 :semver
-                              2 :year2
-                              4 :year4
-                              8 :date
-                              nil))]
-        (merge {:components components}
-               (when version-type {:type version-type})
-               (when suffix       {:suffix suffix}))))))
 
 (def ^java.nio.charset.Charset utf8-charset java.nio.charset.StandardCharsets/UTF_8)
 

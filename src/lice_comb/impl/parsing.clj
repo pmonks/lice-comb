@@ -23,23 +23,26 @@
             [lice-comb.impl.expressions-info             :as lciei]
             [lice-comb.impl.http                         :as lcihttp]
             [lice-comb.impl.correction                   :as lcic]
+            [lice-comb.impl.faux-parse                   :as faux]
             [lice-comb.impl.utils                        :as lciu]
             [lice-comb.impl.parsing-utils                :as lcipu]
             [lice-comb.impl.3rd-party                    :as lci3]
-            [lice-comb.impl.substitutions.cursed         :as cursed]
-            [lice-comb.impl.substitutions.bsd            :as bsd]
-            [lice-comb.impl.substitutions.cc             :as cc]
-            [lice-comb.impl.substitutions.cddl           :as cddl]
-            [lice-comb.impl.substitutions.cpe            :as cpe]
-            [lice-comb.impl.substitutions.epl            :as epl]
-            [lice-comb.impl.substitutions.gnu            :as gnu]
-            [lice-comb.impl.substitutions.gnu-exceptions :as gnuexc]
-            [lice-comb.impl.substitutions.hippocratic    :as hippocratic]
-            [lice-comb.impl.substitutions.mpl            :as mpl]
-            [lice-comb.impl.substitutions.refs           :as refs]
-            [lice-comb.impl.substitutions.wtf            :as wtf]
-            [lice-comb.impl.substitutions.custom         :as custom]
-            [lice-comb.impl.substitutions.generic        :as generic]))
+            [lice-comb.impl.license-detection.default    :as default]
+;            [lice-comb.impl.substitutions.cursed         :as cursed]
+;            [lice-comb.impl.substitutions.bsd            :as bsd]
+;            [lice-comb.impl.substitutions.cc             :as cc]
+;            [lice-comb.impl.substitutions.cddl           :as cddl]
+;            [lice-comb.impl.substitutions.cpe            :as cpe]
+;            [lice-comb.impl.substitutions.epl            :as epl]
+;            [lice-comb.impl.substitutions.gnu            :as gnu]
+;            [lice-comb.impl.substitutions.gnu-exceptions :as gnuexc]
+;            [lice-comb.impl.substitutions.hippocratic    :as hippocratic]
+;            [lice-comb.impl.substitutions.mpl            :as mpl]
+;            [lice-comb.impl.substitutions.refs           :as refs]
+;            [lice-comb.impl.substitutions.wtf            :as wtf]
+;            [lice-comb.impl.substitutions.custom         :as custom]
+;            [lice-comb.impl.substitutions.generic        :as generic]
+))
 
 ;####TODO: REMOVE ME!!!!
 (require '[clojure.pprint :as pp])
@@ -59,16 +62,17 @@
   coll)
 
 (defmulti match-text
-  "Returns an expressions-info map for the given license text, or nil if no
-  matches are found."
+  "Returns an expressions-info map for `text` (a `String`, or something that can
+  be read), or `nil` if no matches are found or `text` is `nil`."
   {:arglists '([text])}
   class)
+
+(def ^:private num-cpus (.availableProcessors (Runtime/getRuntime)))
 
 (defmethod match-text java.lang.String
   [s]
   ; clj-spdx's *-within-text APIs are *expensive* but support batching, so we check batches of ids in parallel
-  (let [num-cpus             (.availableProcessors (Runtime/getRuntime))
-        license-id-batches   (partition num-cpus @lcis/license-ids-d)
+  (let [license-id-batches   (partition num-cpus @lcis/license-ids-d)
         exception-id-batches (partition num-cpus @lcis/exception-ids-d)
         license-ids-found    (apply set/union (e/pmap* #(sm/licenses-within-text   s %) license-id-batches))
         exception-ids-found  (apply set/union (e/pmap* #(sm/exceptions-within-text s %) exception-id-batches))
@@ -126,14 +130,14 @@
 
 ; An approximately correct regex for finding http URIs in larger texts - loosely based on https://www.rfc-editor.org/rfc/rfc3986#appendix-B
 ; Note: not all matches this regex finds are valid as per RFC-3986 - if that's needed, use lciu/valid-http-uri?
-(def ^:private approximate-uri-re (re/flags-grp "i"
-                                                #"(?<!\w)"
-                                                #"(?<scheme>https?)://"
-                                                #"(?<address>[^/?#\s]+)"
-                                                #"(?<path>\/[^?#\s]*)?"
-                                                #"(?:\?(?<queryString>[^#\s]*))?"
-                                                #"(?:#(?<fragment>[^\s]*))?"
-                                                #"(?!\w)"))
+(def ^:private approximate-uri-re (re/fgrp "i"
+                                           (re/-lb     #"\w")
+                                           (re/grp     (re/ncg "scheme" #"https?") #"://")
+                                           (re/ncg     "address" #"[^/?#\s]+")
+                                           (re/opt-ncg "path"    #"\/[^?#\s]*")
+                                           (re/opt-grp #"\?" (re/opt-ncg "queryString" #"[^#\s]*"))
+                                           (re/opt-grp #"#"  (re/opt-ncg "fragment"    #"[^\s]*"))
+                                           (re/-la     #"\w")))
 
 (defn- sub-uris
   "Substitutes any uris in the Strings in `coll` with an expression info map.
@@ -141,7 +145,7 @@
   on [[parse-uri]]."
   [coll]
   (flatten  ; In some cases a single URI results in multiple ids/expression infos, so we flatten them here
-    (lciu/replace-in-coll
+    (faux/replace-in-strings
       coll
       approximate-uri-re
       #(let [uri (:match %)]
@@ -149,16 +153,16 @@
            (vals ei)                   ; Unwrap all expressions info maps, and return them as nested sequences (which gets flattened up top)
            (make-unidentified-ei uri))))))
 
-(def ^:private operator-re (re/flags-grp "i"
-                                         #"\s*"
-                                         (re/alt #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
-                                                 #"(?<!\w)(?<and>and)(?!\w)"
-                                                 #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
-                                                 #"(?<!\w)(?<with>with(?!\w)|w/)"
-                                                 #"(?<ampersand>&+)"
-                                                 #"(?<forwardSlash>/+)"
-                                                 #"(?<backSlash>\\+)")
-                                         #"\s*"))
+(def ^:private operator-re (re/fgrp "i"
+                                    #"\s*"
+                                    (re/alt #"(?<!\w)(?<andOr>and[\s/\\\-]+or)(?!\w)"
+                                            #"(?<!\w)(?<and>and)(?!\w)"
+                                            #"(?<!\w)(?<or>or)(?![\s-]lat[eo]r)(?!\w)"  ;####TODO: the -later negative lookahead is likely redundant
+                                            #"(?<!\w)(?<with>with(?!\w)|w/)"
+                                            #"(?<ampersand>&+)"
+                                            #"(?<forwardSlash>/+)"
+                                            #"(?<backSlash>\\+)")
+                                    #"\s*"))
 
 (defn- sub-operators
   "Substitutes operators in `String` values in `coll`, replacing each one with a
@@ -166,16 +170,16 @@
   `:and`, `:or`, and `:with`."
   [coll]
   (filter lciu/not-blank-string?
-          (lciu/replace-in-coll coll
-                                operator-re
-                                (fn [m]
-                                  (cond
-                                    (get m "and")       :and
-                                    (get m "ampersand") :and
-                                    (get m "or")        :or
-                                    (get m "andOr")     :or   ; We assume the least restrictive interpretation
-                                    (get m "with")      :with
-                                    :else               nil)))))
+          (faux/replace-in-strings coll
+                                   operator-re
+                                   (fn [m]
+                                     (cond
+                                       (get m "and")       :and
+                                       (get m "ampersand") :and
+                                       (get m "or")        :or
+                                       (get m "andOr")     :or   ; We assume the least restrictive interpretation
+                                       (get m "with")      :with
+                                       :else               nil)))))
 
 (defn- remove-extraneous-fragments
   "Removes 'extraneous' fragments from `coll`."
@@ -361,21 +365,24 @@
                         ; Substitutions, with short circuiting of steps if we're done early
                         ; The order of these steps is important
                         (tu/until-> lcipu/done-parsing?
-                                    refs/sub
+                                    default/detect)
+
+
+;                                    refs/sub
                                     sub-uris         ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
-                                    cursed/sub
-                                    bsd/sub
-                                    cc/sub
-                                    cddl/sub
-                                    cpe/sub
-                                    gnuexc/sub
-                                    epl/sub
-                                    hippocratic/sub
-                                    wtf/sub
-                                    generic/sub      ; This handles all other SPDX license and exceptions in a generic fashion
-                                    custom/sub       ; This has to go after the others, since it matches things like "NCBI Public Domain Notice"
-                                    mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
-                                    gnu/sub)         ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
+;                                    cursed/sub
+;                                    bsd/sub
+;                                    cc/sub
+;                                    cddl/sub
+;                                    cpe/sub
+;                                    gnuexc/sub
+;                                    epl/sub
+;                                    hippocratic/sub
+;                                    wtf/sub
+;                                    generic/sub      ; This handles all other SPDX license and exceptions in a generic fashion
+;                                    custom/sub       ; This has to go after the others, since it matches things like "NCBI Public Domain Notice"
+;                                    mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
+;                                    gnu/sub)         ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
                         ; At this point we've identified all of the licenses we possibly can
 ;####TODO: to fix things like "Eclipse Public License 2.0 (EPL)", though perhaps not necessary??
 ;                        deduplicate-identifiers
@@ -400,7 +407,7 @@
   [n]
   (when-not (s/blank? n)
     (let [n (s/trim n)]
-      ; 1. If it's an SPDX expression, return the canonicalised rendition of it - this should be replaced if/when https://github.com/pmonks/clj-spdx/issues/66 is addressed
+      ; 1. If it's an SPDX expression, return the canonicalised rendition of it - in the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should be updated to use that mechanism
       (if-let [parse-tree (sexp/parse n)]
         (let [canonicalised-expression (sexp/unparse parse-tree)]
           {canonicalised-expression (list {:type     :declared

@@ -17,8 +17,6 @@
             [spdx.licenses                 :as sl]
             [spdx.exceptions               :as se]
             [spdx.expressions              :as sexp]
-            [lice-comb.impl.version-series :as lcivs]
-            [lice-comb.impl.3rd-party      :refer [by ascending descending] :as lc3]
             [lice-comb.impl.utils          :as lciu]))
 
 ;####TODO: THESE TWO MAY BE REDUNDANT!!!!
@@ -28,7 +26,6 @@
 
 ; The subset of SPDX exception identifiers that we use, as an unordered set
 (def exception-ids-d (delay (se/ids)))
-
 
 (defn id-position
   "Returns the 'position' (expressed as `:license-position` or
@@ -42,85 +39,31 @@
       :exception-id :exception-position
       :addition-ref :exception-position)))
 
-;####TODO: SUPERCEDED BY spdx.identifiers/id->info ??
-(defn id->info
-  "Returns the associated SPDX list info for `id`, which can be either a license
-  identifier or an exception identifier, or `nil` if `id` is not a valid SPDX
-  listed identifier.
-
-  Notes:
-
-  * does _not_ include large text values in the result
-  * assocs a `:type` element with either the value `:license` or the value
-    `:exception`"
-  [^String id]
-  (if-let [license-entry (sl/id->info id {:include-large-text-values? false})]
-    (assoc license-entry :type :license)
-    (when-let [exception-entry (se/id->info id {:include-large-text-values? false})]
-      (assoc exception-entry :type :exception))))
-
-;###TODO: NOT SURE THESE ARE NEEDED ANYMORE
-(defn- sort-id-infos
-  "Sorts the given id info maps according to lice-comb's preferred sort order:
-
-  1. non-deprecated before deprecated
-  2. licenses before exceptions
-  3. 'families' of identifiers grouped together
-  4. longer names before shorter names, based on the newest identifier in each
-     family
-  5. by id (newest version first)"
-  [id-infos]
-  (let [; Split non-deprecated and deprecated, then identify version series' in each
-        non-deprecated-families (lcivs/id-infos->version-series false (filter (complement :deprecated?) id-infos))
-        deprecated-families     (lcivs/id-infos->version-series false (filter :deprecated? id-infos))
-        ; Sorter function
-        sorter                  (by #(:type (last (val %)))         descending  ; licenses first, exceptions second
-                                    #(count (:name (last (val %)))) descending
-                                    #(:id (last (val %)))           ascending)]
-    (concat
-      (mapcat #(reverse (second %)) (sort sorter non-deprecated-families))
-      (mapcat #(reverse (second %)) (sort sorter deprecated-families)))))
-
-(defn- sort-ids->id-infos
-  "Sorts the given SPDX listed ids according to lice-comb's preferred sort
-  order, returning a sequence of id info maps for each one. The sort order is:
-
-  1. non-deprecated before deprecated
-  2. licenses before exceptions
-  3. 'families' of identifiers grouped together
-  4. longer names before shorter names, based on the newest identifier in each
-     family
-  5. by id (newest version first)"
-  [ids]
-  (sort-id-infos (map id->info ids)))
-
-(defn sort-ids
-  "Sorts the given SPDX listed ids according to lice-comb's preferred sort
-  order:
-
-  1. non-deprecated before deprecated
-  2. licenses before exceptions
-  3. 'families' of identifiers grouped together
-  4. longer names before shorter names, based on the newest identifier in each
-     family
-  5. by id (newest version first)"
-  [ids]
-  (map :id (sort-ids->id-infos ids)))
+(defn canonicalise-id
+  "Canonicalises `id`, possibly into an SPDX expression. Returns `nil` if id
+  cannot be canonicalised (i.e. is not a listed SPDX identifier or a valid ref)."
+  ([^String id] (canonicalise-id id false))
+  ([^String id or-later?]
+   (when id
+     (if-let [canonical-expression (sexp/canonicalise (str id (when or-later? "+")))]  ; Try to expression canonicalise first
+       canonical-expression
+       (when-let [canonical-id (si/canonicalise id)]  ; Then id canonicalise second - mostly to handle raw exception ids / AdditionRefs (which don't parse as an expression)
+         (str canonical-id (when or-later? "+")))))))
 
 ;####TODO: ARE THESE STILL NEEDED??
 ; The license and exception lists, in the order they should be processed
-(def license-list-d   (delay (sort-ids->id-infos @license-ids-d)))
-(def exception-list-d (delay (sort-ids->id-infos @exception-ids-d)))
+(def license-list-d   (delay (map sl/info @license-ids-d)))
+(def exception-list-d (delay (map sl/info @exception-ids-d)))
 
-; The license refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
-(def ^:private lice-comb-license-ref-prefix       "LicenseRef-lice-comb")
-(def ^:private public-domain-license-ref          (str lice-comb-license-ref-prefix "-PUBLIC-DOMAIN"))
-(def ^:private proprietary-commercial-license-ref (str lice-comb-license-ref-prefix "-PROPRIETARY-COMMERCIAL"))
-(def ^:private unidentified-license-ref-prefix    (str lice-comb-license-ref-prefix "-UNIDENTIFIED"))
-
-; The addition refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
-(def ^:private lice-comb-addition-ref-prefix      "AdditionRef-lice-comb")
-(def ^:private unidentified-addition-ref-prefix   (str lice-comb-addition-ref-prefix "-UNIDENTIFIED"))
+; Custom license and addition refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
+(def ^:private lice-comb-document-ref             "DocumentRef-lice-comb:")
+(def ^:private lice-comb-license-ref-prefix       (str lice-comb-document-ref "LicenseRef-"))
+(def ^:private lice-comb-addition-ref-prefix      (str lice-comb-document-ref "AdditionRef-"))
+(def ^:private public-domain-license-ref          (str lice-comb-license-ref-prefix "PUBLIC-DOMAIN"))
+(def ^:private proprietary-commercial-license-ref (str lice-comb-license-ref-prefix "PROPRIETARY-COMMERCIAL"))
+(def ^:private unidentified-ref-suffix            "UNIDENTIFIED")
+(def ^:private unidentified-license-ref-prefix    (str lice-comb-license-ref-prefix unidentified-ref-suffix))
+(def ^:private unidentified-addition-ref-prefix   (str lice-comb-addition-ref-prefix unidentified-ref-suffix))
 
 (defn- best-identifier
   "Finds the 'best' identifier in `ids`, a `set` of license or exceptions
