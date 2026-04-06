@@ -270,10 +270,23 @@
       (is (not (re-matches regex "20050101")))))
   ; 4 digit year
   (let [regex (range-regex ["1997" "2005"])]
-    (testing "4 digit year range regexes match other values of the same pattern"
+    (testing "4 digit year range regexes match other values of the same pattern - 20th century"
+      (is (re-matches regex "1992"))
+      (is (re-matches regex "01992"))
+      (is (re-matches regex "92"))
+      (is (re-matches regex "00092")))
+    (testing "4 digit year range regexes do NOT match unrelated values - 20th century"
+      (is (not (re-matches regex "1")))
+      (is (not (re-matches regex "1.0")))
+      (is (not (re-matches regex "99a")))
+      (is (not (re-matches regex "12345")))
+      (is (not (re-matches regex "20050101")))))
+  ; 4 digit year, none in the 20th century
+  (let [regex (range-regex ["2001" "2006"])]
+    (testing "4 digit year range regexes match other values of the same pattern - no 20th century"
       (is (re-matches regex "1992"))
       (is (re-matches regex "01992")))
-    (testing "4 digit year range regexes do NOT match unrelated values"
+    (testing "4 digit year range regexes do NOT match unrelated values - 20th century"
       (is (not (re-matches regex "1")))
       (is (not (re-matches regex "1.0")))
       (is (not (re-matches regex "92")))
@@ -283,16 +296,31 @@
       (is (not (re-matches regex "20050101")))))
   ; 4 digit year + suffix
   (let [regex (range-regex ["1997v" "2005"])]
-    (testing "4 digit year+suffix range regexes match other values of the same pattern"
+    (testing "4 digit year+suffix range regexes match other values of the same pattern - 20th century"
       (is (re-matches regex "1992"))
       (is (re-matches regex "1992a"))
-      (is (re-matches regex "01992"))
+      (is (re-matches regex "92"))
+      (is (re-matches regex "92a"))
+      (is (re-matches regex "00092y"))
+      (is (re-matches regex "99a"))
       (is (re-matches regex "01992X")))
-    (testing "4 digit year+suffix range regexes do NOT match unrelated values"
+    (testing "4 digit year+suffix range regexes do NOT match unrelated values - 20th century"
+      (is (not (re-matches regex "1")))
+      (is (not (re-matches regex "1.0")))
+      (is (not (re-matches regex "12345")))
+      (is (not (re-matches regex "20050101")))))
+  ; 4 digit year + suffix, none in the 20th century
+  (let [regex (range-regex ["2001a" "2001b"])]
+    (testing "4 digit year+suffix range regexes match other values of the same pattern - no 20th century"
+      (is (re-matches regex "1992"))
+      (is (re-matches regex "1992a"))
+      (is (re-matches regex "01992X")))
+    (testing "4 digit year+suffix range regexes do NOT match unrelated values - no 20th century"
       (is (not (re-matches regex "1")))
       (is (not (re-matches regex "1.0")))
       (is (not (re-matches regex "92")))
-      (is (not (re-matches regex "00092")))
+      (is (not (re-matches regex "92a")))
+      (is (not (re-matches regex "00092y")))
       (is (not (re-matches regex "99a")))
       (is (not (re-matches regex "12345")))
       (is (not (re-matches regex "20050101")))))

@@ -213,10 +213,10 @@
      (let [{version-type :version-type suffix? :version-suffix?} (metadata version-numbers)]
        (re/join (case version-type
                   :year2  #"0*(?:19)?\d{2}"
-                  :year4  (if (some (partial re-matches #"\A19\d\d") version-numbers)
+                  :year4  (if (some (partial re-matches #"\A19\d\d\p{Alpha}?") version-numbers)
                             ; version-numbers includes some dates from the 20th century, so accept 2 digit variations (e.g. "86")
-                            #"0*(?:\d{2}|[1-9]\d{3})"
-                            ; version-numbers is only outside the 20th century, so only accept 4 digits
+                            #"0*(?:[1-9]\d{3}|\d{2})"
+                            ; version-numbers are all outside the 20th century, so only accept 4 digits
                             #"0*[1-9]\d{3}")  ; Note: we ignore dates before the year 1000
                   :date   (let [separator  (if strict-separators? (re/esc ".") (re/chcl (re/esc "-–—_")))]
                             (re/join #"0*[1-9]\d{3}" (re/opt-grp separator #"0*") #"\d{2}" (re/opt-grp separator #"0*") #"\d{2}"))  ; Note: we ignore dates before the year 1000
