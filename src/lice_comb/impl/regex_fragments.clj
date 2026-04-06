@@ -31,7 +31,7 @@
 (def ^:private raw-hyphens #"\p{Pd}")
 (def ^:private raw-ws      (re/join #"\p{IsWhitespace}" raw-hyphens (re/esc "_,.()")))  ; Character classes etc. that we consider to be whitespace
 (def ^:private raw-slashes (re-pattern (re/esc "\\/")))
-(def ^:private raw-quotes  (re/join (re/esc "\"'`") #"\p{Pi}\p{Pf}"))
+(def ^:private raw-quotes  (re/join (re/esc "\"'`") #"\p{Pi}\p{Pf}"))  ; Note: " ' ` not considered initial (\p{Pi}) or final (\p{Pf}) punctuation in Unicode
 
 (def ws                    (re/chcl raw-ws))
 (def ows                   (re/zom ws))
@@ -41,6 +41,7 @@
 (def slashes               (re/chcl raw-slashes))
 
 (def qots                  (re/chcl raw-quotes))
+(def single-qots           (re/chcl (re/esc "'`‛’‘‚❜❛＇")))  ; Note: these are are different Unicode characters, despite appearances
 
 (def ws+hyphens            (re/chcl raw-ws raw-hyphens))
 (def ws+slashes            (re/chcl raw-ws raw-slashes))

@@ -33,17 +33,18 @@
 ;; Functions involved in license regex construction.
 
 (defn- common-replacements
-  "Performs replacements common to both identifiers and names, in `template` (a
-  sequence), including replacing version information placeholders in a version
-  series."
-  [template ^String ncg-prefix versions]
-  (when (seq template)
-    (let [template-without-placeholders (if (seq versions)
-                                          (faux/parse template
-                                                      re-placeholder-ver   (re/opt-grp ref/ows (verexp/expression-regex ncg-prefix versions))
-                                                      re-placeholder-oool  (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing))))
-                                          template)]
-      (faux/parse template-without-placeholders
+  "Performs replacements common to both identifiers and names, in `s` (a
+  `String), returning a sequence."
+  [^String s ^String ncg-prefix versions]
+  (when-not (s/blank? s)
+    (let [re-vers  (re/opt-grp ref/ows (re/opt-grp ref/single-qots) (verexp/expression-regex ncg-prefix versions))
+          re-oool  (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing)))
+          template (if (re-find re-placeholder-ver s)
+                     (lciu/replacing-split s re-placeholder-ver re-vers)
+                     [s re-vers])]  ; Always add a version matching component on the end, to handle cases where the version doesn't appear in the name (e.g. Adobe-2006, Arphic-1999)
+      (faux/parse template
+                  ; only or or-later suffix
+                  re-placeholder-oool                   re-oool
                   ; Name alternatives
                   #"(?i:(?<!\w)Apache(?!\w))"           (re/inline (re/alt-grp (re/join "Apache" (re/opt-grp ref/mws (re/alt-grp "Software" "SW"))) "ASL"))
                   #"(?i:(?<!\w)Beerware(?!\w))"         (re/inline (re/join "Beer" ref/ows "ware"))
@@ -72,6 +73,56 @@
                   ; Numbers that aren't part of a version
                   (re/inline (re/ncg "number" #"\d+"))  (fn [m] (let [number (get m "number")] (re/join #"0*" number)))))))
 
+;####TODO: REMOVE ONCE TESTED!!!!
+;  (when (seq template)
+;    (let [template-without-placeholders (if (seq versions)
+;                                          (let [re-vers (re/opt-grp ref/ows (verexp/expression-regex ncg-prefix versions))
+;                                                re-oool (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing)))]
+;                                            (->> template)
+;                                                 (lciu/mapcat-str #(if (re-find re-placeholder-ver %)
+;                                                                     (lciu/replacing-split % re-placeholder-ver re-vers)
+;                                                                     [% re-vers]))
+;                                                 (lciu/mapcat-str #(if (re-find re-placeholder-oool %)
+;                                                                     (lciu/replacing-split % re-placeholder-oool re-oool)
+;                                                                     [% re-oool])))
+;                                          template)]
+
+;####TODO: REMOVE ONCE TESTED!!!!
+;                                          (faux/parse template
+;                                                      re-placeholder-ver   (re/opt-grp ref/ows (verexp/expression-regex ncg-prefix versions))
+;                                                      re-placeholder-oool  (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing))))
+;                                          template)]
+
+;####TODO: REMOVE ONCE TESTED!!!!
+;      (faux/parse template-without-placeholders
+;                  ; Name alternatives
+;                  #"(?i:(?<!\w)Apache(?!\w))"           (re/inline (re/alt-grp (re/join "Apache" (re/opt-grp ref/mws (re/alt-grp "Software" "SW"))) "ASL"))
+;                  #"(?i:(?<!\w)Beerware(?!\w))"         (re/inline (re/join "Beer" ref/ows "ware"))
+;                  ; MIT/X11/ISC overlaps
+;                  #"(?i:(?<!\w)MIT(?!\w))"              (re/inline (let [x11-or-isc (re/alt-grp "X11" "ISC")
+;                                                                         separator  (re/n2m 1 4 ref/ws+slashes)]
+;                                                                     (re/join (re/-lb x11-or-isc separator)
+;                                                                              "MIT"
+;                                                                              (re/-la separator x11-or-isc))))
+;                  #"(?i:(?<!\w)X11(?!\w))"              (re/inline (let [mit       "MIT"
+;                                                                         separator (re/n2m 1 4 ref/ws+slashes)]
+;                                                                     (re/join (re/opt-grp mit separator)
+;                                                                              "X11"
+;                                                                              (re/opt-grp separator mit))))
+;                  #"(?i:(?<!\w)ISC(?!\w))"              (re/inline (let [mit       "MIT"
+;                                                                         separator (re/n2m 1 4 ref/ws+slashes)]
+;                                                                     (re/join (re/opt-grp mit separator)
+;                                                                              "ISC"
+;                                                                              (re/opt-grp separator mit))))
+;                  ; zlib/libpng overlaps
+;                  #"(?i:(?<!\w)(?<!zlib/)libpng(?!\w))" (re/inline (let [zlib      "zlib"
+;                                                                         separator (re/n2m 1 4 ref/ws+slashes)]
+;                                                                     (re/join (re/-lb zlib separator)
+;                                                                              "libpng"
+;                                                                              (re/-la separator zlib))))
+;                  ; Numbers that aren't part of a version
+;                  (re/inline (re/ncg "number" #"\d+"))  (fn [m] (let [number (get m "number")] (re/join #"0*" number)))))))
+
 ;####TODO: MAKE PRIVATE ONCE TESTED!!!!
 (defn id->regex
 ;(defn- id->regex
@@ -84,8 +135,7 @@
   * Callers are expected to add word boundary fragments at the start and end of
     these regexes, if separate word matching is required"
   [version-series id]
-  (some-> [id]
-          (common-replacements ncg-prefix-id (:versions version-series))
+  (some-> (common-replacements id ncg-prefix-id (:versions version-series))
           (faux/parse ; Special cases for SGI-B without the -B
                       #"(?i:(?<!\w)SGI-B(?!\w))" (re/inline (re/join "SGI" (re/opt-grp ref/mws "B"))))
           ; Remove empty strings
@@ -101,9 +151,8 @@
 (defn name->regex
 ;(defn- name->regex
   [version-series name]
-  ;####TODO: FIX THESE REGEXES TO USE FRAGMENTS FROM ref
-  (some-> [name]
-          (common-replacements ncg-prefix-name (:versions version-series))
+;####TODO: FIX THESE REGEXES TO USE FRAGMENTS FROM ref NS
+  (some-> (common-replacements name ncg-prefix-name (:versions version-series))
           (faux/parse ; Special case for some double and/or weird version components
 ;                      #"(?i)\(versions 9\.11 to 9\.20\)"                                          #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20\)?"
 ;                      #"(?i)\(versions 9\.22 and beyond\)"                                        #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*22[\s\-–—]*(\+|(?:and|&)[\s\-–—]*beyond)\)?"
@@ -126,6 +175,10 @@
                       #"(?<!\w)(?i:Plexus\s+Classworlds\s+Licen[cs]e)(?!\w)"                      #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))"
 ;                      #"(?i)(?<!\w)(?<!Microsoft[\s\-–—]+)Reciprocal\s+Public\s+Licen[cs]e(?!\w)" #"(?<!Microsoft[\s\-–—]+)Reciprocal(?:[\s\-–—]+Pub?lic)?[\s\-–—]+Licen[cs]e"
                       ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
+
+;####TODO: UPDATE THIS TO FEWER REGEXES THAT HANDLE ALL VARIANTS OF "Licen[cs]e|Lizenz" PREFIXED WITH "Open|Open Source|Public|Software"
+; BUT WATCH OUT FOR THE "Open Software License" (OSL-x.y) VERSION SERIES!!!!
+
                       #"(?i)\s+licen[cs]e[\s\-]agreement(?!\w)"                                   #"(?:[\s\-–—]+Licen?[cs]e)?(?:[\s\-–—]+agreement)?"
                       #"(?i)\s+licen[cs]e(?!\w)"                                                  #"(?:[\s\-–—]+Licen?[cs]e)?"  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
                       #"(?i)licen[cs]e(?!\w)"                                                     #"(?:Licen?[cs]e)?"
@@ -153,8 +206,9 @@
                       #"(?i)\s+Netherlands(?!\w)"                                                 #"[\s\-–—]+(?:Netherlands|NL)"
                       #"(?i)(?<!\w)(United Kingdom|UK)(?!\w)"                                     #"(?:United[\s\-–—]+Kingdom|GB|UK)"
                       #"(?i)\s+(USA?|United States)(?!\w)"                                        #"[\s\-–—]+(?:United[\s\-–—]+States(?:[\s\-–—]+of[\s\-–—]+America)?|USA?)"
+                      #"(?i)(?<!\w)(European Union|EU)(?!\w)"                                     #"(?:European[\s\-–—]+Union|EU)"
                       #"(?i)\s+University of California(?!\w)"                                    #"[\s\-–—]+(?:University[\s\-–—]+of[\s\-–—]+(?:California|CA)|UC|Cal)"
-                      #"(?i)(?<!\w)acknowledge?ment(?!\w)"                                        #"Acknowledge?ment"  ; No trailing \b, to handle plurals etc.
+                      #"(?i)(?<!\w)acknowledge?ments?(?!\w)"                                      #"Acknowledge?ments?"
                       #"(?i)(?<!\w)merchant[ai]bility(?!\w)"                                      #"Merchant[ai]bility"
                       #"(?i)(?<!\w)non-?commercial(?!\w)"                                         #"Non[-–—]?commercial"  ; Note: hyphen, en-dash, em-dash
                       ; Common conjunctions etc.

@@ -79,13 +79,15 @@
               (cond
                 (or (= version-type :year2)
                     (and (nil? version-type) (contains? m "year2")))
-                  {:type       :year2
-                   :components (list (lciu/parse-lng (get m "year2")))}
+                  (let [year (get m "year2" (get m "year4"))]  ; Handle the case where version-type is provided but version-number has 4 digits
+                    {:type       :year2
+                     :components (list (lciu/parse-lng year))})
 
                 (or (= version-type :year4)
                     (and (nil? version-type) (contains? m "year4")))
-                  {:type       :year4
-                   :components (list (lciu/parse-lng (get m "year4")))}
+                  (let [year (get m "year4" (get m "year2"))]  ; Handle the case where version-type is provided but version-number has 2 digits
+                    {:type       :year4
+                     :components (list (lciu/parse-lng year))})
 
                 (or (= version-type :date)
                     (and (nil? version-type) (contains? m "date")))
@@ -109,7 +111,11 @@
   (str (case version-type
          :semver (let [r (s/join "." (lci3/rdrop-while zero? (rest components)))]
                    (str (first components) "." (if (s/blank? r) "0" r)))
-         :year2  (prefix-zero-pad 2 (str (first components)))
+         :year2  (let [year (str (first components))
+                       year (if (and (= 4 (count year)) (s/starts-with? year "19"))  ; For year2 with 4 digits starting with "19", remove the "19"
+                              (subs year 2)
+                              year)]
+                   (prefix-zero-pad 2 year))
          :year4  (prefix-zero-pad 4 (str (first components)))
          :date   (str (prefix-zero-pad 4 (first components)) "-" (prefix-zero-pad 2 (second components)) "-" (prefix-zero-pad 2 (third components))))
        (when-not (s/blank? suffix) suffix)))
@@ -121,10 +127,10 @@
   number when `version-type` is not provided."
   ([^String version-number] (canonicalise nil version-number))
   ([version-type ^String version-number]
-  (when-let [{components   :components
-              suffix       :suffix
-              version-type :type} (parse version-type version-number)]
-    (canonicalise-components version-type components suffix))))
+   (when-let [{components   :components
+               suffix       :suffix
+               version-type :type} (parse version-type version-number)]
+     (canonicalise-components version-type components suffix))))
 
 (defn canonical?
   "Is `version-number` (a `String`) in canonical form?  Returns `nil` when
@@ -163,7 +169,7 @@
                               separator  (if strict-separators? (re/esc ".") re-separators-semver)]
                           (re/join (s/join separator (map #(str "0*" %) components))               ; Allow any number of 0s at the start of each component
                                    (when (= version-type :semver) (re/zom-grp separator "0+")))))  ; Allow any number of ".0" to appear at the end of a semver version
-              (when suffix (re/fgrp "i" suffix))))))                    ; Match suffix case-insensitively
+              (when suffix (re/fgrp "i" suffix))))))  ; Match suffix (if there is one) case-insensitively
 
 (defn metadata
   "Metadata about `version-numbers` (a sequence), represented as a map that may
@@ -207,7 +213,11 @@
      (let [{version-type :version-type suffix? :version-suffix?} (metadata version-numbers)]
        (re/join (case version-type
                   :year2  #"0*(?:19)?\d{2}"
-                  :year4  #"0*[1-9]\d{3}"  ; Note: we ignore dates before the year 1000
+                  :year4  (if (some (partial re-matches #"\A19\d\d") version-numbers)
+                            ; version-numbers includes some dates from the 20th century, so accept 2 digit variations (e.g. "86")
+                            #"0*(?:\d{2}|[1-9]\d{3})"
+                            ; version-numbers is only outside the 20th century, so only accept 4 digits
+                            #"0*[1-9]\d{3}")  ; Note: we ignore dates before the year 1000
                   :date   (let [separator  (if strict-separators? (re/esc ".") (re/chcl (re/esc "-–—_")))]
                             (re/join #"0*[1-9]\d{3}" (re/opt-grp separator #"0*") #"\d{2}" (re/opt-grp separator #"0*") #"\d{2}"))  ; Note: we ignore dates before the year 1000
                   :semver (let [separator (if strict-separators? (re/esc ".") (re/chcl (re/esc "-–—_,.")))]

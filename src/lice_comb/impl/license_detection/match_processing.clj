@@ -35,13 +35,16 @@
     [true  true]  [true #{:contradictory-version-suffixes}]))
 
 (defn- ids-from-versions
-  "Returns a sequence "
+  "Returns a sequence of valid and canonicalised SPDX identifiers (or
+  expressions) from the given versions.  Versions that don't result in a valid
+  identifier will not appear in the result.  Returns `nil` if none of the
+  versions result in a valid SPDX identifier."
   [id-formats or-later? versions]
   (when (and (seq id-formats) (seq versions))
     (seq
       (map #(lcis/canonicalise-id % or-later?)
-           (distinct (filter si/listed? (for [version   versions
-                                              id-format id-formats]
+           (distinct (filter si/listed? (for [id-format id-formats
+                                              version   versions]
                                           (when (re-find re-placeholder-ver id-format)  ; Ignore id formats that happen to not have a version number (e.g. "W3C")
                                             (s/replace id-format re-placeholder-ver version)))))))))  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
 
@@ -53,6 +56,7 @@
   2. a set of confidence explanations (which may be `nil`)"
   [version-series m]
   (if-let [versions (licre/match->versions m)]
+    ; The match includes a version number, so try and determine which identifier in the series
     (let [[or-later? confidence-explanations] (or-later-with-explanation m)
           canonicalised-versions              (seq (distinct (map (partial vernum/canonicalise (:version-type version-series)) versions)))
           confidence-explanations             (some-> (if (> (count canonicalised-versions) 1)
@@ -68,7 +72,21 @@
         (let [ids (ids-from-versions (:id-formats version-series) or-later? canonicalised-versions)]
           (if (pos? (count ids))
             [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]
-            [(:default-id version-series)                     (set (conj confidence-explanations :invalid-version))]))))
+            ; Finally, try some year4 / date specific variations
+            (if-let [result (case (:version-type version-series)
+                              ; For year4, try adding "19" to the start of versions that only had 2 digits
+                              :year4 (let [expanded-versions (map #(str "19" (subs % 2)) (filter #(and (= 4 (count %)) (s/starts-with? % "00")) canonicalised-versions))]
+                                       (when-let [ids (ids-from-versions (:id-formats version-series) or-later? expanded-versions)]
+                                         [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]))
+                              ; For date, try with and without separators
+                              :date  (let [de-hyphenated-versions (map #(s/replace % "-" "") canonicalised-versions)]
+                                       (when-let [ids (ids-from-versions (:id-formats version-series) or-later? de-hyphenated-versions)]
+                                         [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]))
+                              nil)]
+              result
+              ; No faffing about with the matched version numbers resulted in any valid SPDX identifiers, so give up and return the default identifier in the version series
+              [(:default-id version-series) (set (conj confidence-explanations :invalid-version))])))))
+    ; No version number was found in the match
     [(:default-id version-series) #{:missing-version}]))
 
 (defn- strategy-from-matched-text
@@ -97,10 +115,12 @@
   :missing-version                :low     ; Version is missing completely
   :invalid-version                :low     ; Version is invalid (e.g. "Apache 2.1")
   :version-near-match             :medium  ; Version is a near match (e.g. "Apache 2", "Apache 2.0.0")
-  :inconsistent-versions          :medium  ; Multiple versions found, but they don't match (e.g. "Apache License 1.1 (Apache-2.0)")
-  :extraneous-version-component   :high    ; Extraneous version component (e.g. "Apache 2.0.0")
-  :contradictory-version-suffixes :medium  ; Contradictory version suffix (e.g. "GPL 2.0 only+")
-  :multiple-ids-found             :low})   ; Multiple different identifiers were found  ;####TODO: CONFIRM THAT THIS ONE MAKES SENSE
+  :inconsistent-versions          :medium  ; Multiple valid versions found, but they don't match (e.g. "Apache License 1.1 (Apache-2.0)")
+;####TODO: UNUSED?
+;  :extraneous-version-component   :high    ; Extraneous version component (e.g. "Apache 2.0.0")
+;  :contradictory-version-suffixes :medium  ; Contradictory version suffix (e.g. "GPL 2.0 only+")
+;  :multiple-ids-found             :low   ; Multiple different identifiers were found  ;####TODO: CONFIRM THAT THIS ONE MAKES SENSE
+})
 
 (defn- matching-confidence
   "Determines the overall confidence level from a sequence of
