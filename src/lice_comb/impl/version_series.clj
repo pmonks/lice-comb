@@ -129,12 +129,11 @@
     "GFDL/no-invariants" [first true]
     [last false]))        ; Most version series default to latest version
 
-;####TODO: BETTER NAME?
 (defn best-id
-  "Returns the canonicalised 'best' id in sequence `ids` within the version
-  series identifier by `series-id`.  Notably, this function works with subsets
+  "Returns the 'best' id, canonicalised, in sequence `ids` within the version
+  series identified by `series-id`.  Notably, this function works with subsets
   of all of the ids in that version series; for example:
-  `(best-id [\"Apache-1.0\" \"Apache-1.1\"])` would return `\"Apache-1.1\"`."
+  `(best-id \"Apache\" [\"Apache-1.0\" \"Apache-1.1\"])` would return `\"Apache-1.1\"`."
   [series-id ids]
   (let [[default or-later?] (defaults series-id)]
     (lcis/canonicalise-id (default ids) or-later?)))

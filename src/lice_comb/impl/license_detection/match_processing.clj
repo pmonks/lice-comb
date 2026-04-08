@@ -34,6 +34,14 @@
     [true  false] [true]
     [true  true]  [true #{:contradictory-version-suffixes}]))
 
+(defn- ids-from-versions-special-cases
+  "Because SPDX has a few bonkers identifiers... 🙄"
+  [id-format version]
+  (case id-format
+    "W3C" (when (or (= "20021231" version) (= "2002-12-31"  version))
+            "W3C")
+    nil))
+
 (defn- ids-from-versions
   "Returns a sequence of valid and canonicalised SPDX identifiers (or
   expressions) from the given versions.  Versions that don't result in a valid
@@ -45,8 +53,9 @@
       (map #(lcis/canonicalise-id % or-later?)
            (distinct (filter si/listed? (for [id-format id-formats
                                               version   versions]
-                                          (when (re-find re-placeholder-ver id-format)  ; Ignore id formats that happen to not have a version number (e.g. "W3C")
-                                            (s/replace id-format re-placeholder-ver version)))))))))  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
+                                          (if (re-find re-placeholder-ver id-format)
+                                            (s/replace id-format re-placeholder-ver version)  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
+                                            (ids-from-versions-special-cases id-format version)))))))))  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
 
 (defn- best-id-from-match
   "Returns a tuple made up of:
@@ -73,17 +82,16 @@
           (if (pos? (count ids))
             [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]
             ; Finally, try some year4 / date specific variations
-            (if-let [result (case (:version-type version-series)
-                              ; For year4, try adding "19" to the start of versions that only had 2 digits
-                              :year4 (let [expanded-versions (map #(str "19" (subs % 2)) (filter #(and (= 4 (count %)) (s/starts-with? % "00")) canonicalised-versions))]
-                                       (when-let [ids (ids-from-versions (:id-formats version-series) or-later? expanded-versions)]
-                                         [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]))
-                              ; For date, try with and without separators
-                              :date  (let [de-hyphenated-versions (map #(s/replace % "-" "") canonicalised-versions)]
-                                       (when-let [ids (ids-from-versions (:id-formats version-series) or-later? de-hyphenated-versions)]
-                                         [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]))
-                              nil)]
-              result
+            (case (:version-type version-series)
+              ; For year4, try adding "19" to the start of versions that only had 2 digits
+              :year4 (let [expanded-versions (map #(str "19" (subs % 2)) (filter #(and (= 4 (count %)) (s/starts-with? % "00")) canonicalised-versions))]
+                       (when-let [ids (ids-from-versions (:id-formats version-series) or-later? expanded-versions)]
+                         [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]))
+              ; For date, try without separators
+              :date  (let [de-hyphenated-versions (map #(s/replace % "-" "") canonicalised-versions)]
+                       (if-let [ids (ids-from-versions (:id-formats version-series) or-later? de-hyphenated-versions)]
+                         [(verser/best-id (:series-id version-series) ids) (set (conj confidence-explanations :version-near-match))]
+                         [(:default-id version-series) (set (conj confidence-explanations :invalid-version))]))
               ; No faffing about with the matched version numbers resulted in any valid SPDX identifiers, so give up and return the default identifier in the version series
               [(:default-id version-series) (set (conj confidence-explanations :invalid-version))])))))
     ; No version number was found in the match
