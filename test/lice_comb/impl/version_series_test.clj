@@ -237,7 +237,7 @@
               :id-formats      ["Spencer-${VER}"]
               :name-formats    ["Spencer License ${VER}"]}
              (get version-series "Spencer"))))
-    (testing "Version series - 2 digit year + suffix")  ; DOESN'T EXIST AS OF SPDX LICENSE LIST v3.27.0
+    (testing "Version series - 2 digit year + suffix")  ; DOESN'T EXIST AS OF SPDX LICENSE LIST v3.28.0
     (testing "Version series - 4 digit year"
       (is (= {:series-id       "Unicode-DFS"
               :default-id      "Unicode-DFS-2016"
@@ -249,10 +249,10 @@
               :id-formats      ["Unicode-DFS-${VER}"]
               :name-formats    ["Unicode License Agreement - Data Files and Software (${VER})"]}
              (get version-series "Unicode-DFS"))))
-    (testing "Version series - 4 digit year + suffix")  ; DOESN'T EXIST AS OF SPDX LICENSE LIST v3.27.0
+    (testing "Version series - 4 digit year + suffix")  ; DOESN'T EXIST AS OF SPDX LICENSE LIST v3.28.0
     (testing "Version series - full date"
       (is (= {:series-id       "W3C"
-              :default-id      "W3C-20150513"
+              :default-id      "W3C"  ; Version-less default id
               :version-type    :date
               :version-suffix? false
               :versions        ["19980720" "20150513"]
@@ -261,7 +261,7 @@
               :id-formats      ["W3C-${VER}" "W3C"]
               :name-formats    ["W3C Software Notice and License (${VER})" "W3C Software Notice and Document License (${VER})"]}
              (get version-series "W3C"))))
-    (testing "Version series - full date + suffix")  ; DOESN'T EXIST AS OF SPDX LICENSE LIST v3.27.0
+    (testing "Version series - full date + suffix")  ; DOESN'T EXIST AS OF SPDX LICENSE LIST v3.28.0
     (testing "Irregular version series - these have multiple ids and/or names"
       (let [irregular-version-series-ids (set/union (set (keys (irregular-ids))) (set (keys (irregular-names))))
             irregular-version-series     (map (partial get version-series) irregular-version-series-ids)]
@@ -283,9 +283,9 @@
               :id-formats      ["LZMA-SDK-${VER}-to-9.20" "LZMA-SDK-${VER}"]
               :name-formats    ["LZMA SDK License (${VER} to 9.20)" "LZMA SDK License (${VER} and beyond)"]}
              (get version-series "LZMA-SDK")))
-      ; libpng has both irregular ids and names
+      ; libpng has both irregular ids and names, and a version-less default id
       (is (= {:series-id       "libpng"
-              :default-id      "libpng-2.0"
+              :default-id      "Libpng"
               :version-type    :semver
               :version-suffix? false
               :versions        ["1.6.35" "2.0"]

@@ -42,12 +42,13 @@
           template (if (re-find re-placeholder-ver s)
                      (lciu/replacing-split s re-placeholder-ver re-vers)
                      [s re-vers])]  ; Always add a version matching component on the end, to handle cases where the version doesn't appear in the name (e.g. Adobe-2006, Arphic-1999)
-      (faux/parse template
+      (faux/parse (concat [(re/opt-grp #"The" ref/mws)] template)
                   ; only or or-later suffix
                   re-placeholder-oool                   re-oool
                   ; Name alternatives
                   #"(?i:(?<!\w)Apache(?!\w))"           (re/inline (re/alt-grp (re/join "Apache" (re/opt-grp ref/mws (re/alt-grp "Software" "SW"))) "ASL"))
                   #"(?i:(?<!\w)Beerware(?!\w))"         (re/inline (re/join "Beer" ref/ows "ware"))
+                  #"(?i:(?<!\w)Classpath\s+exception(?!\w))" (re/inline (re/join (re/opt-grp "GNU" ref/ows) (re/alt-grp "CPE" (re/join "Classpath" ref/ows "exception"))))
                   ; MIT/X11/ISC overlaps
                   #"(?i:(?<!\w)MIT(?!\w))"              (re/inline (let [x11-or-isc (re/alt-grp "X11" "ISC")
                                                                          separator  (re/n2m 1 4 ref/ws+slashes)]
@@ -173,6 +174,9 @@
                       #"(?<!\w)(?i:Microsoft)(?!\w)"                                              (re/inline (re/alt-grp "Microsoft" "MS"))
                       #"(?<!\w)(?i:End[\s\-]user licen[cs]e agreement|EULA)(?!\w)"                (re/inline (re/alt-grp (re/join "End" ref/mws "User" ref/mws #"Licen?[cs]e" ref/mws "Agreement") "EULA"))
                       #"(?<!\w)(?i:Plexus\s+Classworlds\s+Licen[cs]e)(?!\w)"                      #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))"
+                      #"\A(?i:Open\s+Software\s+Licen[cs]e)(?!\w)"                                (re/inline (re/join #"Open" ref/mws (re/alt-grp #"Software" #"SW") ref/mws #"Licen?[cs]e"))  ; OSL-x.y
+                      #"\A(?i:Open\s+Public\s+Licen[cs]e)(?!\w)"                                  (re/inline (re/join #"Open" ref/mws #"Pub?lic" ref/mws #"Licen?[cs]e"))  ; OPL-x.y
+                      #"(?<!\w)Unlicense(?!\w)"                                                   (re/inline (re/join #"Un" ref/ows #"licen?[cs]ed?"))
 ;                      #"(?i)(?<!\w)(?<!Microsoft[\s\-–—]+)Reciprocal\s+Public\s+Licen[cs]e(?!\w)" #"(?<!Microsoft[\s\-–—]+)Reciprocal(?:[\s\-–—]+Pub?lic)?[\s\-–—]+Licen[cs]e"
                       ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
 

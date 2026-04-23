@@ -12,6 +12,7 @@
   "Functionality related to 'faux parsing' (parsing a String to a heterogeneous
   sequence by successively performing replacements on the string fragments
   remaining after each prior replacement).
+
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string       :as s]

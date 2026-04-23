@@ -8,19 +8,22 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.license-detection.default
-  "Default license detection functionality, based on automatic processing of the
-  SPDX license and exception lists.
+(ns lice-comb.impl.license-detection.listed-licenses
+  "License detection functionality, based on automatic processing of the SPDX
+  license and exception lists.
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [clojure.string                                    :as s]
-            [wreck.api                                         :as re]
-            [spdx.identifiers                                  :as si]
-            [lice-comb.impl.version-series                     :as verser]
-            [lice-comb.impl.faux-parse                         :as faux]
-            [lice-comb.impl.license-regexes                    :as licre]
-            [lice-comb.impl.license-detection.match-processing :as mp]))
+  (:require [clojure.string                                       :as s]
+            [wreck.api                                            :as re]
+            [spdx.identifiers                                     :as si]
+            [lice-comb.impl.spdx                                  :as lcis]
+            [lice-comb.impl.version-series                        :as verser]
+            [lice-comb.impl.faux-parse                            :as faux]
+            [lice-comb.impl.license-regexes                       :as licre]
+            [lice-comb.impl.license-detection.match-processing    :as mp]
+;            [lice-comb.impl.license-detection.classpath-exception :as cpe]
+            ))
 
 ;####TODO: REMOVE ONCE UNNEEDED (duplicated in lice-comb.impl.license-detection.utils)
 (def ^:private re-placeholder-ver (re-pattern (re/esc verser/placeholder-ver)))
@@ -28,12 +31,9 @@
 ; Default license and exception ids i.e. those that don't need special case support
 (def ids-d
   (delay
-    (remove #(s/ends-with? % "+") (si/ids))
-;####TODO: IMPLEMENT ME!
-;    (apply disj (si/ids)
-;                (concat @bsd/ids-d @cc/ids-d @cddl/ids-d @cpe/ids-d @cursed/ids-d
-;                        @custom/ids-d @epl/ids-d @gnu/ids-d @gnuexc/ids-d
-;                        @hippocratic/ids-d @mpl/ids-d @refs/ids-d @wtf/ids-d))
+    (apply disj @lcis/ids-d
+;                (concat @cpe/ids-d  )  ;####TODO: ADD MORE HERE AS THEY'RE RE-ADDED!
+                 nil)  ;####TODO: REMOVE THIS ONCE THERE'S AT LEAST ONE SPECIALISED HANDLER
 ))
 
 
@@ -71,7 +71,7 @@
   "Builds a sequence of regex/fn pairs for every id in `ids`, sorted by longest
   name to shortest name."  ; ####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
   [ids]
-  (let [;####TODO: NEED TO SPLIT IDS INTO DEPRECATED AND NON-DEPRECATED, THEN SORT BY POPULARITY, THEN BY LENGTH!!!!
+  (let [;####TODO: NEED TO SPLIT IDS INTO DEPRECATED AND NON-DEPRECATED, THEN SORT BY LENGTH!!!!
         {raw-version-series :version-series
          unversioned-ids    :unversioned-ids} (verser/version-series ids)
         version-series (vals raw-version-series)

@@ -129,14 +129,27 @@
     "GFDL/no-invariants" [first true]
     [last false]))        ; Most version series default to latest version
 
+(defn- default-id
+  "Returns the default SPDX identifier within the version series identified by
+  `series-id`, using `series-ids`."
+  [series-id series-ids]
+  (case series-id
+    "W3C"    "W3C"
+    "libpng" "Libpng"
+    (let [[default or-later?] (defaults series-id)]
+      (lcis/canonicalise-id (default series-ids) or-later?))))
+
+;####TODO: MERGE THIS WITH default-id
 (defn best-id
   "Returns the 'best' id, canonicalised, in sequence `ids` within the version
   series identified by `series-id`.  Notably, this function works with subsets
   of all of the ids in that version series; for example:
   `(best-id \"Apache\" [\"Apache-1.0\" \"Apache-1.1\"])` would return `\"Apache-1.1\"`."
   [series-id ids]
-  (let [[default or-later?] (defaults series-id)]
-    (lcis/canonicalise-id (default ids) or-later?)))
+  (if (= 1 (count ids))
+    (first ids)
+    (let [[default or-later?] (defaults series-id)]
+      (lcis/canonicalise-id (default ids) or-later?))))
 
 (defn- id-formats
   "Returns a set of unique id formats in the given version series (identified
@@ -308,18 +321,17 @@
            version-series  (into {}
                              (map
                                #(let [series-id           (key %)
-                                      [default or-later?] (defaults series-id)
                                       series-ids          (sort id-sorter (val %))
                                       series-versions     (distinct (filter identity (map (fn [id] (get (ncg/re-matches re-version-series id) "version")) series-ids)))
                                       series-names        (map (comp :name si/id->info) series-ids)]
                                   [series-id (merge {:series-id    series-id
                                                      :ids          series-ids
                                                      :names        series-names
-                                                     :default-id   (lcis/canonicalise-id (default series-ids) or-later?)
+                                                     :default-id   (default-id series-id series-ids)
                                                      :versions     series-versions
                                                      :id-formats   (id-formats series-ids)
                                                      :name-formats (name-formats series-ids)}
                                                     (vernum/metadata series-versions))])
-                               (dissoc groups nil)))]  ; Ignore ids that aren't in a version series
+                               (dissoc groups nil)))]
        (merge (when     unversioned-ids         {:unversioned-ids (set unversioned-ids)})
               (when-not (empty? version-series) {:version-series  version-series}))))))

@@ -36,6 +36,8 @@
 (def ws                    (re/chcl raw-ws))
 (def ows                   (re/zom ws))
 (def mws                   (re/oom ws))
+(def bounded-ows           (re/n2m 0 4 ws))  ; Useful in look aheads / behinds on older JVM versions that don't support unbounded expressions there
+(def bounded-mws           (re/n2m 1 4 ws))
 
 (def hyphens               (re/chcl raw-hyphens))
 (def slashes               (re/chcl raw-slashes))

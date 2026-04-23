@@ -22,12 +22,12 @@
             [lice-comb.impl.3rd-party :as lci3]))
 
 (def ^:private re-version-number (re/join #"0*"
-                                          (re/alt-grp (re/ncg "year2"  (re/exn 2 #"\d"))                                                                ; year2
-                                                      (re/ncg "year4"  (re/exn 4 #"\d"))                                                                ; year4
-                                                      (re/ncg "date"   (re/ncg "dateYear"  (re/exn 4 #"\d")) #"\-?0*"                                   ; date
-                                                                       (re/ncg "dateMonth" (re/exn 2 #"\d")) #"\-?0*"
+                                          (re/alt-grp (re/ncg "year2"  (re/exn 2 #"\d"))                                                                  ; year2
+                                                      (re/ncg "year4"  (re/exn 4 #"\d"))                                                                  ; year4
+                                                      (re/ncg "date"   (re/ncg "dateYear"  (re/exn 4 #"\d")) #"[\-_]?0*"                                   ; date
+                                                                       (re/ncg "dateMonth" (re/exn 2 #"\d")) #"[\-_]?0*"
                                                                        (re/ncg "dateDay"   (re/exn 2 #"\d")))
-                                                      (re/ncg "semver" (re/ncg "semverFirst" #"\d+") (re/opt-ncg "semverRest" (re/zom-grp #"\.\d+"))))  ; semver (must come last)
+                                                      (re/ncg "semver" (re/ncg "semverFirst" #"\d+") (re/opt-ncg "semverRest" (re/zom-grp #"[\._]\d+"))))  ; semver (must come last)
                                           (re/opt-ncg "suffix" #"\p{Alpha}")))
 
 ; Public because they're used during id detection
@@ -99,9 +99,9 @@
                   (let [version-first (lciu/parse-lng (get m "semverFirst"))
                         version-rest  (let [vr (get m "semverRest")]
                                          (when-not (s/blank? vr)
-                                           (subs vr 1)))  ; Strip leading . character
+                                           (subs vr 1)))  ; Strip leading separator character
                          components    (concat [version-first]
-                                               (when version-rest (seq (map lciu/parse-lng (s/split version-rest #"\.")))))]
+                                               (when version-rest (seq (map lciu/parse-lng (s/split version-rest #"[\._]")))))]
                      {:type       :semver
                       :components components})))))))
 

@@ -33,9 +33,9 @@ This library leverages, and is inspired by, the *excellent* [SPDX project](https
 
 ### API Documentation
 
-[API documentation is available here](https://pmonks.github.io/lice-comb/), or [here on cljdoc](https://cljdoc.org/d/com.github.pmonks/lice-comb/).
+[API documentation is available here](https://pmonks.github.io/lice-comb/), or [here on cljdoc](https://cljdoc.org/d/com.github.pmonks/lice-comb/), and [an FAQ is available here](https://github.com/pmonks/lice-comb/wiki/FAQ).
 
-[An FAQ is available here](https://github.com/pmonks/lice-comb/wiki/FAQ).
+I'm also active on [the Clojure Discord server](https://discord.gg/discljord) if you'd like to chat.
 
 ## Upgrading
 

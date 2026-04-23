@@ -51,7 +51,8 @@
     (is (= "1.1"         (canonicalise "01.01")))
     (is (= "1.1"         (canonicalise "1.1.0")))
     (is (= "1.0.1"       (canonicalise "000000001.0000000.000000001")))
-    (is (= "1.0.1x"      (canonicalise "000000001.0000000.000000001x"))))
+    (is (= "1.0.1x"      (canonicalise "000000001.0000000.000000001x")))
+    (is (= "2.1"         (canonicalise "2_1"))))  ; e.g. from things like lgpl_v2_1
   (testing "year2 - no change"
     (is (= "89"          (canonicalise "89")))
     (is (= "96"          (canonicalise "96")))
@@ -75,6 +76,7 @@
   (testing "date - canonicalised"
     (is (= "1998-07-20"  (canonicalise "19980720")))
     (is (= "2017-10-02"  (canonicalise "20171002")))
+    (is (= "2017-10-02"  (canonicalise "2017_10_02")))
     (is (= "2015-05-13"  (canonicalise "0020150513")))
     (is (= "2015-05-13"  (canonicalise "002015-0005-0013")))
     (is (= "2015-05-13k" (canonicalise "0020150513k")))))
@@ -199,6 +201,7 @@
       (is (re-matches regex "1.2"))
       (is (re-matches regex "2.0"))
       (is (re-matches regex "3.1.1"))
+      (is (re-matches regex "2_1"))
       (is (re-matches regex "000002.000002"))
       (is (re-matches regex "99"))
       (is (re-matches regex "1999"))

@@ -16,6 +16,7 @@
   (:require [clojure.string                 :as s]
             [wreck.api                      :as re]
             [spdx.identifiers               :as si]
+            [lice-comb.impl.utils           :as lciu]
             [lice-comb.impl.spdx            :as lcis]
             [lice-comb.impl.version-number  :as vernum]
             [lice-comb.impl.version-series  :as verser]
@@ -38,9 +39,8 @@
   "Because SPDX has a few bonkers identifiers... 🙄"
   [id-format version]
   (case id-format
-    "W3C" (when (or (= "20021231" version) (= "2002-12-31"  version))
-            "W3C")
-    nil))
+    "W3C" (when (some #{version} ["20021231" "2002-12-31"]) "W3C")
+    (throw (ex-info "Internal logic error: unhandled special case" {:id-format id-format :version version}))))
 
 (defn- ids-from-versions
   "Returns a sequence of valid and canonicalised SPDX identifiers (or
@@ -49,13 +49,14 @@
   versions result in a valid SPDX identifier."
   [id-formats or-later? versions]
   (when (and (seq id-formats) (seq versions))
-    (seq
-      (map #(lcis/canonicalise-id % or-later?)
-           (distinct (filter si/listed? (for [id-format id-formats
-                                              version   versions]
-                                          (if (re-find re-placeholder-ver id-format)
-                                            (s/replace id-format re-placeholder-ver version)  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
-                                            (ids-from-versions-special-cases id-format version)))))))))  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
+    (let [ids (seq
+                (map #(lcis/canonicalise-id % or-later?)
+                     (distinct (filter si/listed? (for [id-format id-formats
+                                                        version   versions]
+                                                    (if (re-find re-placeholder-ver id-format)
+                                                      (s/replace id-format re-placeholder-ver version)  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
+                                                      (ids-from-versions-special-cases id-format version)))))))]  ;####TODO: NEED TO REPLACE TRAILING OOOL AS WELL (test case: GFDL/invariants etc.)!!!
+      ids)))
 
 (defn- best-id-from-match
   "Returns a tuple made up of:
@@ -108,7 +109,8 @@
       (some #{(s/lower-case matched-text)} (map s/lower-case names)) :spdx-listed-name-case-insensitive-match
       :else                                                          (case regex-type
                                                                        :id-regex   :spdx-listed-identifier-near-match
-                                                                       :name-regex :spdx-listed-name-near-match))))
+                                                                       :name-regex :spdx-listed-name-near-match
+                                                                       :regex-match))))
 
 (defn- matching-type
   "Determines the matching type (`:declared` or `:concluded`) from a `strategy`
@@ -130,6 +132,7 @@
 ;  :multiple-ids-found             :low   ; Multiple different identifiers were found  ;####TODO: CONFIRM THAT THIS ONE MAKES SENSE
 })
 
+;####TODO: THIS PROBABLY NEEDS TO BE PUBLIC
 (defn- matching-confidence
   "Determines the overall confidence level from a sequence of
   `confidence-explanations`. Returns `:high` if there are no explanations."
@@ -146,18 +149,27 @@
   "Returns an expression info map for the unversioned (non-version-series)
   match `m`."
   [^String id regex-type m]
-  (when-let [matched-text (:match m)]
-    (let [{nm :name}             (si/id->info id)
-          canonical-id           (lcis/canonicalise-id id)
-          {canonical-name :name} (si/id->info canonical-id)  ; Note: may be null (e.g. canonical-id is an SPDX expression due to canonicalisation)
-          strategy               (strategy-from-matched-text [id canonical-id] [nm canonical-name] matched-text regex-type)
-          matching-type          (matching-type strategy)
-          confidence             (when (= :concluded matching-type) :high)]  ; Unversioned matches always have high confidence, since there's nothing "variable" in the match to take into account
-      (merge {:id       canonical-id
-              :strategy strategy
-              :source   (list matched-text)
-              :type     matching-type}
-             (when confidence {:confidence confidence})))))
+  (when-let [matched-text (lciu/strim (:match m))]
+    (case (si/id-type id)
+      (:license-id :exception-id)
+        (let [{nm :name}             (si/id->info id)
+              canonical-id           (lcis/canonicalise-id id)
+              {canonical-name :name} (si/id->info canonical-id)  ; Note: may be null (e.g. canonical-id is an SPDX expression due to canonicalisation)
+              strategy               (strategy-from-matched-text [id canonical-id] [nm canonical-name] matched-text regex-type)
+              matching-type          (matching-type strategy)
+              confidence             (when (= :concluded matching-type) :high)]  ; Unversioned matches always have high confidence, since there's nothing "variable" in the match to take into account
+          (merge {:id       (or canonical-id (throw (ex-info "Internal logic error: a nil identifier was produced" {:id id :regex-type regex-type :match m})))
+                  :strategy strategy
+                  :source   (list matched-text)
+                  :type     matching-type}
+                 (when confidence {:confidence confidence})))
+
+      (:license-ref :addition-ref)
+        {:id         id
+         :strategy   :regex-match
+         :source     (list matched-text)
+         :type       :concluded
+         :confidence :high})))
 
 (defn versioned-match->expression-info
   "Returns an expression info map based on the 'best' identifier in match m,
@@ -170,7 +182,7 @@
           strategy                     (strategy-from-matched-text (:ids version-series) (:names version-series) matched-text regex-type)
           matching-type                (matching-type strategy)
           confidence                   (when (= :concluded matching-type) (matching-confidence confidence-explanations))]
-      (merge {:id       id
+      (merge {:id       (or id (throw (ex-info "Internal logic error: a nil identifier was produced" {:version-series version-series :regex-type regex-type :match m})))
               :strategy strategy
               :source   (list matched-text)
               :type     matching-type}

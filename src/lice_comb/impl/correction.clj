@@ -17,7 +17,10 @@
 ;
 
 (ns lice-comb.impl.correction
-  "Corrects conceptually invalid/nonsensical combinations of license identifiers."
+  "Corrects conceptually invalid/nonsensical combinations of license identifiers.
+
+  Note: this namespace is not part of the public API of lice-comb and may change
+  without notice."
   (:require [spdx.licenses                   :as sl]
             [spdx.exceptions                 :as se]
             [lice-comb.impl.spdx             :as lcis]))

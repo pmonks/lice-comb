@@ -19,23 +19,25 @@
             [spdx.expressions              :as sexp]
             [lice-comb.impl.utils          :as lciu]))
 
-;####TODO: THESE TWO MAY BE REDUNDANT!!!!
-
-; The subset of SPDX license identifiers that we use, as an unordered set
-(def license-ids-d (delay (sl/ids)))
-
-; The subset of SPDX exception identifiers that we use, as an unordered set
-(def exception-ids-d (delay (se/ids)))
+; The subset of SPDX identifiers that we use, as an unordered set
+(def license-ids-d   (delay (some->> (sl/ids)
+                                     (filter #(not (s/ends-with? % "+")))                                         ; Remove deprecated "xGPL-y.z+" identifiers
+                                     (filter #(not (re-matches #"\AGPL-\d\.0-with-[\p{Alpha}]+-exception\z" %)))  ; Remove deprecated "GPL-x.0-with-xxx-exception" identifiers
+                                     seq
+                                     set)))
+(def exception-ids-d (delay (set (se/ids))))
+(def ids-d           (delay (set (concat @license-ids-d @exception-ids-d))))
 
 (defn id-position
   "Returns the 'position' (expressed as `:license-position` or
-  `:exception-position`) of `id` (a license, LicenseRef, exception, or
-  AdditionRef) in an SPDX expression, or `nil` if it's none of those things."
+  `:exception-position`) of `id` (a license, LicenseRef, exception, AdditionRef,
+  or special form) in an SPDX expression, or `nil` if it's none of those things."
   [^String id]
   (when-let [type (si/id-type id)]
     (case type
       :license-id   :license-position
       :license-ref  :license-position
+      :special-form :license-position
       :exception-id :exception-position
       :addition-ref :exception-position)))
 
@@ -44,73 +46,38 @@
   cannot be canonicalised (i.e. is not a listed SPDX identifier or a valid ref)."
   ([^String id] (canonicalise-id id false))
   ([^String id or-later?]
-   (when id
-     (if-let [canonical-expression (sexp/canonicalise (str id (when or-later? "+")))]  ; Try to expression canonicalise first
-       canonical-expression
-       (when-let [canonical-id (si/canonicalise id)]  ; Then id canonicalise second - mostly to handle raw exception ids / AdditionRefs (which don't parse as an expression)
-         (str canonical-id (when or-later? "+")))))))
-
-;####TODO: ARE THESE STILL NEEDED??
-; The license and exception lists, in the order they should be processed
-(def license-list-d   (delay (map sl/info @license-ids-d)))
-(def exception-list-d (delay (map sl/info @exception-ids-d)))
+   (case (si/id-type id)
+     (:license-ref :addition-ref) id
+     :license-id                  (let [has-or-later? (s/ends-with? id "+")
+                                        raw-id        (if has-or-later? (subs id 0 (dec (count id))) id)]
+                                    (if-let [canonical-expression (sexp/canonicalise (str raw-id (when (or has-or-later? or-later?) "+")))]
+                                      canonical-expression
+                                      (when-let [canonical-id (si/canonicalise raw-id)]
+                                        (str canonical-id (when (or has-or-later? or-later?) "+")))))
+     :exception-id                (si/canonicalise id)
+     nil)))
 
 ; Custom license and addition refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
-(def ^:private lice-comb-document-ref             "DocumentRef-lice-comb:")
-(def ^:private lice-comb-license-ref-prefix       (str lice-comb-document-ref "LicenseRef-"))
-(def ^:private lice-comb-addition-ref-prefix      (str lice-comb-document-ref "AdditionRef-"))
-(def ^:private public-domain-license-ref          (str lice-comb-license-ref-prefix "PUBLIC-DOMAIN"))
-(def ^:private proprietary-commercial-license-ref (str lice-comb-license-ref-prefix "PROPRIETARY-COMMERCIAL"))
-(def ^:private unidentified-ref-suffix            "UNIDENTIFIED")
-(def ^:private unidentified-license-ref-prefix    (str lice-comb-license-ref-prefix unidentified-ref-suffix))
-(def ^:private unidentified-addition-ref-prefix   (str lice-comb-addition-ref-prefix unidentified-ref-suffix))
+(def ^:private lice-comb-document-ref             "lice-comb")
 
-(defn- best-identifier
-  "Finds the 'best' identifier in `ids`, a `set` of license or exceptions
-  identifiers, `nil` if `ids` is empty. 'Best' is defined as the shortest
-  non-deprecated id (if any), or (if not) the shortest deprecated id."
-  [ids]
-  (if (<= (count ids) 1)
-    (first ids)
-    (if-let [non-deprecated-ids (seq (filter #(not (or (sl/deprecated-id? %) (se/deprecated-id? %))) ids))]
-      (first (sort-by count non-deprecated-ids))
-      (first (sort-by count ids)))))
-
-(defn- urls->id-tuples
-  "Extracts all urls for a given list (license or exception) entry."
-  [list-entry]
-  (let [id              (:id list-entry)
-        simplified-uris (map lciu/simplify-uri (filter (complement s/blank?) (concat (:see-also list-entry) (get-in list-entry [:cross-refs :url]))))]
-    (map #(vec [% id]) simplified-uris)))
-
-(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @license-list-d)))
-                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @exception-list-d))))))
-
-(defn near-match-uri
-  "Returns the id(s) (a set) for the given listed `uri`, or `nil` if no ids were
-  found. The result may include deprecated ids."
-  [uri]
-  (get @index-uri->id-d (lciu/simplify-uri uri)))
-
-; This is needed for pathological cases like "http://gnu.org/license/fdl-1.3" (which has 7 (!) ids associated with it)
-(defn best-near-match-uri
-  "Returns the 'best match' id (a `String`) for `uri`, or `nil` if no ids were
-  found.  A 'best match' is defined as the shortest non-deprecated id (if any),
-  or (worst case) the shortest deprecated id."
-  [uri]
-  (best-identifier (near-match-uri uri)))
+(def ^:private public-domain-license-ref          (sl/license-ref lice-comb-document-ref "PUBLIC-DOMAIN"))
+(def ^:private proprietary-commercial-license-ref (sl/license-ref lice-comb-document-ref "PROPRIETARY-COMMERCIAL"))
+(def ^:private hippocratic-30-license-ref         (sl/license-ref lice-comb-document-ref "Hippocratic-3.0"))  ; Only needed until https://github.com/spdx/license-list-XML/issues/2931 is resolved
+(def ^:private unidentified-ref-prefix            "UNIDENTIFIED")
 
 (defn lice-comb-license-ref?
   "Is `id` one of lice-comb's custom LicenseRefs?"
   [id]
-  (when id
-    (s/starts-with? (s/lower-case id) (s/lower-case lice-comb-license-ref-prefix))))
+  (boolean
+    (when-let [m (sl/string->license-ref-map id)]
+      (= lice-comb-document-ref (:document-ref m)))))
 
 (defn lice-comb-addition-ref?
   "Is `id` one of lice-comb's custom AdditionRefs?"
   [id]
-  (when id
-    (s/starts-with? (s/lower-case id) (s/lower-case lice-comb-addition-ref-prefix))))
+  (boolean
+    (when-let [m (se/string->addition-ref-map id)]
+      (= lice-comb-document-ref (:addition-document-ref m)))))
 
 (defn lice-comb-ref?
   "Is `id` a lice-comb custom LicenseRef or AdditionRef"
@@ -118,84 +85,100 @@
   (or (lice-comb-license-ref?  id)
       (lice-comb-addition-ref? id)))
 
-(defn public-domain?
-  "Is the given id lice-comb's custom 'public domain' LicenseRef?"
-  [id]
-  (= (s/lower-case id) (s/lower-case public-domain-license-ref)))
+(def ^{:doc "Is the given id lice-comb's custom 'public domain' LicenseRef?"
+       :arglists '([id])}
+   public-domain?
+   (partial sl/equivalent? public-domain-license-ref))
 
-(def ^{:doc "Constructs a valid SPDX id (a LicenseRef specific to lice-comb)
-  representing public domain."
+(def ^{:doc "Constructs a lice-comb specific LicenseRef representing public domain."
        :arglists '([])}
   public-domain
   (constantly public-domain-license-ref))
 
-(defn proprietary-commercial?
-  "Is the given id lice-comb's custom 'proprietary / commercial' LicenseRef?"
-  [id]
-  (when id
-    (= (s/lower-case id) (s/lower-case proprietary-commercial-license-ref))))
 
-(def ^{:doc "Constructs a valid SPDX id (a LicenseRef specific to lice-comb)
-  representing a proprietary / commercial license."
+(def ^{:doc "Is the given id lice-comb's custom 'proprietary / commercial' LicenseRef?"
+       :arglists '([id])}
+   proprietary-commercial?
+   (partial sl/equivalent? proprietary-commercial-license-ref))
+
+(def ^{:doc "Constructs a lice-comb specific LicenseRef representing a proprietary / commercial license."
        :arglists '([])}
   proprietary-commercial
   (constantly proprietary-commercial-license-ref))
 
+(def ^{:doc "Constructs a lice-comb specific LicenseRef representing the Hippocratic-3.0 license."
+       :arglists '([])}
+  hippocratic-30
+  (constantly hippocratic-30-license-ref))
+
 (defn unidentified-license-ref?
   "Is `id` a lice-comb custom 'unidentified' LicenseRef?"
   [id]
-  (when id
-    (s/starts-with? (s/lower-case id) (s/lower-case unidentified-license-ref-prefix))))
+  (boolean
+    (when-let [m (sl/string->license-ref-map id)]
+      (and (= lice-comb-document-ref (:document-ref m))
+           (s/starts-with? (:license-ref m) unidentified-ref-prefix)))))
 
 (defn unidentified-addition-ref?
   "Is `id` a lice-comb custom 'unidentified' AdditionRef?"
   [id]
-  (when id
-    (s/starts-with? (s/lower-case id) (s/lower-case unidentified-addition-ref-prefix))))
+  (boolean
+    (when-let [m (se/string->addition-ref-map id)]
+      (and (= lice-comb-document-ref (:addition-document-ref m))
+           (s/starts-with? (:addition-ref m) unidentified-ref-prefix)))))
 
 (defn unidentified?
   "Is `id` a lice-comb custom 'unidentified' LicenseRef or AdditionRef?"
   [id]
-  (or (unidentified-license-ref? id) (unidentified-addition-ref? id)))
+  (or (unidentified-license-ref? id)
+      (unidentified-addition-ref? id)))
 
 (defn name->unidentified-license-ref
   "Constructs a valid SPDX id (a LicenseRef specific to lice-comb) for an
   unidentified license, with the given name (if provided) appended as Base62
-  (since clj-spdx identifiers are limited to a small superset of Base62)."
+  (since the variable tag in an SPDX ref is limited to Base62)."
   ([] (name->unidentified-license-ref nil))
   ([name]
-   (str unidentified-license-ref-prefix (when-not (s/blank? name) (str "-" (lciu/base62-encode name))))))
+   (sl/license-ref lice-comb-document-ref
+                   (str unidentified-ref-prefix (when-not (s/blank? name)
+                                                  (str "-" (lciu/base62-encode name)))))))
 
 (defn name->unidentified-addition-ref
   "Constructs a valid SPDX id (an AdditionRef specific to lice-comb) for an
   unidentified license exception, with the given name (if provided) appended as
-  Base62 (since clj-spdx identifiers are limited to a small superset of Base62)."
+  (since the variable tag in an SPDX ref is limited to Base62)."
   ([] (name->unidentified-addition-ref nil))
   ([name]
-   (str unidentified-addition-ref-prefix (when-not (s/blank? name) (str "-" (lciu/base62-encode name))))))
+   (se/addition-ref lice-comb-document-ref
+                    (str unidentified-ref-prefix (when-not (s/blank? name)
+                                                   (str "-" (lciu/base62-encode name)))))))
 
 (defn unidentified-license-ref->name
   "Get the original name of the given unidentified license ref. Returns nil if
-  id is nil or is not a lice-comb unidentified LicenseRef."
+  id is nil or is not a lice-comb unidentified LicenseRef, or if the
+  unidentified LicenseRef did not have a name."
   [id]
   (when (unidentified-license-ref? id)
-    (if (> (count id) (count unidentified-license-ref-prefix))
-      (lciu/base62-decode (subs id (inc (count unidentified-license-ref-prefix))))
-      "")))
+    (let [m   (sl/string->license-ref-map id)
+          tag (:license-ref m)]
+      (when (s/starts-with? tag (str unidentified-ref-prefix "-"))
+        (lciu/base62-decode (subs id (inc (count unidentified-ref-prefix))))))))
 
 (defn unidentified-addition-ref->name
   "Get the original name of the given unidentified addition ref. Returns nil if
-  id is nil or is not a lice-comb unidentified AdditionRef."
+  id is nil or is not a lice-comb unidentified AdditionRef, or if the
+  unidentified AdditionRef did not have a name."
   [id]
   (when (unidentified-addition-ref? id)
-    (if (> (count id) (count unidentified-license-ref-prefix))
-      (lciu/base62-decode (subs id (inc (count unidentified-license-ref-prefix))))
-      "")))
+    (let [m   (se/string->addition-ref-map id)
+          tag (:addition-ref m)]
+      (when (s/starts-with? tag (str unidentified-ref-prefix "-"))
+        (lciu/base62-decode (subs id (inc (count unidentified-ref-prefix))))))))
 
 (defn unidentified->name
   "Get the original name of the given unidentified license ref or addition ref.
-  Returns nil if id is nil or is not a lice-comb unidentified LicenseRef or
-  AdditionRef."
+  Returns nil if id is nil or is not a lice-comb unidentified Ref, or if the
+  Ref did not have a name."
   [id]
   (cond
     (unidentified-license-ref?  id) (unidentified-license-ref->name id)
@@ -236,6 +219,46 @@
     (unidentified-license-ref?  id) (unidentified-license-ref->human-readable-name id)
     (unidentified-addition-ref? id) (unidentified-addition-ref->human-readable-name id)))
 
+(defn- best-identifier
+  "Finds the 'best' identifier in `ids`, a `set` of license or exceptions
+  identifiers, `nil` if `ids` is empty. 'Best' is defined as the shortest
+  non-deprecated id (if any), or (if not) the shortest deprecated id."
+  [ids]
+  (if (<= (count ids) 1)
+    (first ids)
+    (if-let [non-deprecated-ids (seq (filter #(not (or (sl/deprecated-id? %) (se/deprecated-id? %))) ids))]
+      (first (sort-by count non-deprecated-ids))
+      (first (sort-by count ids)))))
+
+(defn- urls->id-tuples
+  "Extracts all urls for a given list (license or exception) entry."
+  [list-entry]
+  (let [id              (:id list-entry)
+        simplified-uris (map lciu/simplify-uri (filter (complement s/blank?) (concat (:see-also list-entry) (get-in list-entry [:cross-refs :url]))))]
+    (map #(vec [% id]) simplified-uris)))
+
+(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples (map sl/info @license-ids-d))))
+                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples (map se/info @exception-ids-d)))))))
+
+;####TODO: REMOVE ONCE TESTED
+;(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @license-list-d)))
+;                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @exception-list-d))))))
+
+
+(defn near-match-uri
+  "Returns the id(s) (a set) for the given listed `uri`, or `nil` if no ids were
+  found. The result may include deprecated ids."
+  [uri]
+  (get @index-uri->id-d (lciu/simplify-uri uri)))
+
+; This is needed for pathological cases like "http://gnu.org/license/fdl-1.3" (which has 7 (!) ids associated with it)
+(defn best-near-match-uri
+  "Returns the 'best match' id (a `String`) for `uri`, or `nil` if no ids were
+  found.  A 'best match' is defined as the shortest non-deprecated id (if any),
+  or (worst case) the shortest deprecated id."
+  [uri]
+  (best-identifier (near-match-uri uri)))
+
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent
   calls), returning nil. Consumers of this namespace are not required to call
@@ -254,7 +277,5 @@
   ; Serially initialise this namespace's dependent state - they're all pretty fast (< 1s)
   @license-ids-d
   @exception-ids-d
-  @license-list-d
-  @exception-list-d
   @index-uri->id-d
   nil)

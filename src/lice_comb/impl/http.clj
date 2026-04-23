@@ -9,8 +9,10 @@
 ;
 
 (ns lice-comb.impl.http
-  "HTTP helper functionality. Note: this namespace is not part of
-  the public API of lice-comb and may change without notice."
+  "HTTP helper functionality.
+
+  Note: this namespace is not part of the public API of lice-comb and may change
+  without notice."
   (:require [clojure.string       :as s]
             [clojure.java.io      :as io]
             [hato.client          :as hc]

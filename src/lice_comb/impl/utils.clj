@@ -159,8 +159,11 @@
 
   Notes:
 
-  * replacement doesn't have to return a `String`, though not doing so will
-    result in a heterogeneous collection.
+  * replacement doesn't have to be (or return) a `String`, though not doing so
+    will result in a heterogeneous collection.
+  * if replacement is a list (but _not_ any other type of collection), its
+    contents will be expanded inline (as in mapcat). This allows a single find
+    to be replaced with multiple values.
   * uses [rencg](https://github.com/pmonks/rencg), so if `replacement` is a
     function it must accept a map, not a sequence.
   * does not support the `$1` syntax (as supported by Clojure and the JVM) - use
@@ -176,10 +179,13 @@
         (let [match       (ncg/re-groups m ncgs)
               match-start (long (:start match))
               match-end   (long (:end   match))
-              rep         (replacement-fn match)]
+              rep-as-list (when-let [r (replacement-fn match)]
+                            (if (list? r)
+                              r
+                              (list r)))]
           (if (= index match-start)
-            (recur (conj result rep) match-end (.find m))  ; Back-to-back matches
-            (recur (vec (concat result [(subs s index match-start) rep])) match-end (.find m))))
+            (recur (vec (concat result rep-as-list))                              match-end (.find m))  ; Back-to-back matches
+            (recur (vec (concat result [(subs s index match-start)] rep-as-list)) match-end (.find m))))
         (if (= index (count s))
           result  ; The last find consumed to the end of the input
           (conj result (subs s index (count s))))))))  ; There's some trailing text - make sure to preserve it
