@@ -1538,6 +1538,6 @@
     (is (valid= #{"GPL-2.0-or-later"}         (name->expressions "GNU General Public License (GPL) version 2, or any newer version")))   ; Ditto
     (is (valid= #{"UPL-1.0"}                  (name->expressions "Universal Permissive License, Version 1.0")))
     (is (valid= #{"CC0-1.0"}                  (name->expressions "Public Domain, per Creative Commons CC0")))
-    (is (valid= #{"LicenseRef-lice-comb-UNIDENTIFIED-210UC7nlCWUwBBse5ma6Ntey1j3a0v0J3kvJVbZ38z7UIQnaj"} (name->expressions "provided without support or warranty")))   ; A nasty corner case because of the "or"
+    (is (valid= #{(name->unidentified-license-ref "provided without support or warranty")} (name->expressions "provided without support or warranty")))   ; A nasty corner case because of the "or"
     (is (valid= #{(str "Apache-2.0 OR CC-BY-4.0 WITH " (name->unidentified-addition-ref "exception for binary distribution"))} (name->expressions "CC Attribution 4.0 International with exception for binary distribution or apache 2.0")))
     (is (valid= #{"CDDL-1.1" "GPL-2.0-only WITH Classpath-exception-2.0"} (name->expressions "CDDL/GPLv2+CE")))))
