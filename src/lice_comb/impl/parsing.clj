@@ -30,6 +30,7 @@
             [lice-comb.impl.parsing-utils                            :as lcipu]
             [lice-comb.impl.3rd-party                                :as lci3]
             [lice-comb.impl.license-detection.listed-licenses        :as listed-licenses]
+            [lice-comb.impl.license-detection.spdx-refs              :as spdx-refs]
             [lice-comb.impl.license-detection.bsd                    :as bsd]
             [lice-comb.impl.license-detection.cursed                 :as cursed]
             [lice-comb.impl.license-detection.mx4j                   :as mx4j]
@@ -343,7 +344,7 @@
 
 ;####TODO: CAN PROBABLY MOVE THIS INTO parse-name ONCE ITS WORKING!!!!
 (defn- parse-internal
-  "Parses the given license `n`ame, returning an an expressions-info map or
+  "Parses the given license `n`ame, returning an expressions-info map or
   `nil` if no expressions can be found."
   [n]
   (when-let [result (-> [n]
@@ -351,6 +352,7 @@
                         ; The order of these steps is important
                         (tu/until-> lcipu/done-parsing?
                                     cursed/detect
+                                    spdx-refs/detect
                                     bsd/detect
                                     mx4j/detect
                                     bouncy-castle/detect
@@ -358,10 +360,10 @@
                                     public-domain/detect
                                     proprietary-commercial/detect
                                     listed-licenses/detect
+                                    spdx-special-forms/detect  ; This should go later, since it's somewhat non-specific (i.e. matching "NONE")
 
 ;                                    refs/sub
                                     sub-uris         ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
-;                                    bsd/sub
 ;                                    cc/sub
 ;                                    cddl/sub
 ;                                    cpe/sub

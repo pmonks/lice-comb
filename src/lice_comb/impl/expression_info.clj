@@ -110,34 +110,34 @@
 })
 
 (defn expression-info
-  "Returns a fully populated and valid expression-info map, canonicalising
-  `detected-id` as appropriate (including into an SPDX expression, in some
-  cases).
+  "Returns a fully populated and validated expression-info map, canonicalising
+  `id` as appropriate (including into an SPDX expression, in some cases).
 
   Throws if any argument is invalid."
-  [id strategy match-type matched-text confidence-explanations]
-  (let [canonical-id (if-let [ci (lcis/canonicalise-id id)]
-                       ci
-                       (throw (ex-info "Internal logic error: an invalid identifier or expression was produced" {:invalid-id id :matched-text matched-text})))
-        _            (when-not (keyword? strategy)
-                       (throw (ex-info "Internal logic error: an invalid match strategy was produced" {:strategy strategy})))
-        _            (when-not (contains? #{:declared :concluded} match-type)
-                       (throw (ex-info "Internal logic error: an invalid match type was produced" {:type match-type})))
-        src          (if (s/blank? matched-text)
-                       (throw (ex-info "Internal logic error: matched text was blank" {:id id :matched-text matched-text}))
-                       (list (s/trim matched-text)))
-        confidence   (when (= :concluded match-type)
-                       (if (seq confidence-explanations)
-                         (let [confidences (set (map confidence-explanation->confidence confidence-explanations))]
-                           (if (contains? confidences nil)
-                             (throw (ex-info "Internal logic error: a confidence explanation is missing a confidence level" {:confidence-explanations confidence-explanations}))
-                             (lowest-confidence confidences)))
-                         :high))]  ; Default to :high when confidence-explanations is empty
-    (merge {:id       canonical-id
-            :strategy strategy
-            :type     match-type
-            :source   src}
-            (when confidence
-              {:confidence confidence})
-            (when (seq confidence-explanations)
-              {:confidence-explanations (set confidence-explanations)}))))
+  ([id strategy match-type matched-text] (expression-info id strategy match-type matched-text nil))
+  ([id strategy match-type matched-text confidence-explanations]
+   (let [canonical-id (if-let [ci (lcis/canonicalise-id id)]
+                        ci
+                        (throw (ex-info "Internal logic error: an invalid identifier or expression was produced" {:invalid-id id :matched-text matched-text})))
+         _            (when-not (keyword? strategy)
+                        (throw (ex-info "Internal logic error: an invalid match strategy was produced" {:strategy strategy})))
+         _            (when-not (contains? #{:declared :concluded} match-type)
+                        (throw (ex-info "Internal logic error: an invalid match type was produced" {:type match-type})))
+         src          (if (s/blank? matched-text)
+                        (throw (ex-info "Internal logic error: matched text was blank" {:id id :matched-text matched-text}))
+                        (list (s/trim matched-text)))
+         confidence   (when (= :concluded match-type)
+                        (if (seq confidence-explanations)
+                          (let [confidences (set (map confidence-explanation->confidence confidence-explanations))]
+                            (if (contains? confidences nil)
+                              (throw (ex-info "Internal logic error: a confidence explanation is missing a confidence level" {:confidence-explanations confidence-explanations}))
+                              (lowest-confidence confidences)))
+                          :high))]  ; Default to :high when confidence-explanations is empty
+     (merge {:id       canonical-id
+             :strategy strategy
+             :type     match-type
+             :source   src}
+             (when confidence
+               {:confidence confidence})
+             (when (seq confidence-explanations)
+               {:confidence-explanations (set confidence-explanations)})))))
