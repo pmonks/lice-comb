@@ -31,6 +31,7 @@
             [lice-comb.impl.3rd-party                                :as lci3]
             [lice-comb.impl.license-detection.listed-licenses        :as listed-licenses]
             [lice-comb.impl.license-detection.spdx-refs              :as spdx-refs]
+            [lice-comb.impl.license-detection.spdx-special-forms     :as spdx-special-forms]
             [lice-comb.impl.license-detection.bsd                    :as bsd]
             [lice-comb.impl.license-detection.cursed                 :as cursed]
             [lice-comb.impl.license-detection.mx4j                   :as mx4j]
