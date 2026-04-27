@@ -8,10 +8,10 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.expressions-info-test
-  (:require [clojure.test                    :refer [deftest testing is use-fixtures]]
-            [lice-comb.test-boilerplate      :refer [fixture]]
-            [lice-comb.impl.expressions-info :refer [prepend-source merge-maps]]))
+(ns lice-comb.impl.expression-info-test
+  (:require [clojure.test                   :refer [deftest testing is use-fixtures]]
+            [lice-comb.test-boilerplate     :refer [fixture]]
+            [lice-comb.impl.expression-info :refer [prepend-source merge-maps]]))
 
 (use-fixtures :once fixture)
 
