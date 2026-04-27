@@ -16,26 +16,26 @@
 
   * `GA` means groupId & artifactId
   * `GAV` means groupId, artifactId & version
-  
+
   In function calls where a version isn't required or provided, the library will
   determine and use the latest available version, as determined from (in order):
 
   1. your local Maven cache (usually ~/.m2/repository)
   2. remote Maven artifact repositories (e.g. Maven Central, CLojars)
-  
+
   Other/custom Maven artifact repositories are supported via the
   `set-local-maven-repo!` and `set-remote-maven-repos!` fns."
-  (:require [clojure.string                  :as s]
-            [clojure.java.io                 :as io]
-            [clojure.java.shell              :as sh]
-            [clojure.data.xml                :as xml]
-            [clojure.tools.logging           :as log]
-            [xml-in.core                     :as xi]
-            [lice-comb.matching              :as lcm]
-            [lice-comb.impl.correction       :as lcic]
-            [lice-comb.impl.expressions-info :as lciei]
-            [lice-comb.impl.http             :as lcihttp]
-            [lice-comb.impl.utils            :as lciu]))
+  (:require [clojure.string                 :as s]
+            [clojure.java.io                :as io]
+            [clojure.java.shell             :as sh]
+            [clojure.data.xml               :as xml]
+            [clojure.tools.logging          :as log]
+            [xml-in.core                    :as xi]
+            [lice-comb.matching             :as lcm]
+            [lice-comb.impl.correction      :as lcic]
+            [lice-comb.impl.expression-info :as ei]
+            [lice-comb.impl.http            :as lcihttp]
+            [lice-comb.impl.utils           :as lciu]))
 
 (def ^:private separator java.io.File/separator)
 
@@ -125,9 +125,9 @@
           (if (or (empty? uri-expressions)
                   (and (= 1 (count uri-expressions))
                        (lcm/unidentified? (first (keys uri-expressions)))))
-            (lciei/prepend-source "<licenses><license><name>" name-expressions)   ; Nothing useful found in URI, so revert to whatever we found in name (i.e. an unidentified license)
-            (lciei/prepend-source "<licenses><license><url>" uri-expressions)))
-        (lciei/prepend-source "<licenses><license><name>" name-expressions)))))
+            (ei/prepend-source "<licenses><license><name>" name-expressions)   ; Nothing useful found in URI, so revert to whatever we found in name (i.e. an unidentified license)
+            (ei/prepend-source "<licenses><license><url>" uri-expressions)))
+        (ei/prepend-source "<licenses><license><name>" name-expressions)))))
 
 (defn- xml-find-all-alts
   "As for xi/find-all, but supports an alternative fallback set of tags (to
@@ -272,11 +272,11 @@
   in `licenses`, using `op` (either :and or :or) as the operator."
   ([licenses] (create-single-expression :or licenses))
   ([op licenses]
-   (when-let [new-expression (lciei/join-maps-with-operator op licenses)]
+   (when-let [new-expression (ei/join-maps-with-operator op licenses)]
      (let [exp  (key (first new-expression))
            info (val (first new-expression))]
        (if (> (count licenses) 1)
-         {exp (concat (list {:type :concluded :confidence (lciei/calculate-confidence-for-expression info) :strategy :maven-pom-multi-license-rule}) info)}
+         {exp (concat (list {:type :concluded :confidence (ei/calculate-confidence-for-expression info) :strategy :maven-pom-multi-license-rule}) info)}
          {exp info})))))
 
 (defmulti pom->expressions-info
@@ -329,7 +329,7 @@
                                                                   :version     (lciu/strim (first (xi/find-first parent-no-ns [:version])))}))]
                       (when-not (empty? parent-gav)
                         (pom->expressions-info (gav->pom-uri parent-gav)))))]   ; Note: naive (stack consuming) recursion, which is fine here as pom hierarchies are rarely very deep
-      (lciei/prepend-source filepath result))
+      (ei/prepend-source filepath result))
   (catch javax.xml.stream.XMLStreamException xse
     (throw (javax.xml.stream.XMLStreamException. (str "XML error parsing " filepath) xse)))))
 
@@ -364,13 +364,13 @@
   * despite the name, will always return a singleton map, due to [Maven's rule
     about multi-licensed POMs](https://maven.apache.org/ref/3.9.7/maven-model/maven.html)
     (then search that page for 'licenses/license*')
-  * throws on XML parsing error"  
+  * throws on XML parsing error"
   ([group-id artifact-id] (gav->expressions-info group-id artifact-id nil))
   ([group-id artifact-id version]
    (when-let [version (or version (ga-latest-version group-id artifact-id))]
      (when-let [pom-uri (gav->pom-uri group-id artifact-id version)]
        (with-open [pom-is (io/input-stream pom-uri)]
-         (doall (lciei/prepend-source (str group-id "/" artifact-id "@" version) (pom->expressions-info pom-is (str pom-uri)))))))))
+         (doall (ei/prepend-source (str group-id "/" artifact-id "@" version) (pom->expressions-info pom-is (str pom-uri)))))))))
 
 (defn gav->expressions
   "Returns a set of SPDX expressions (`String`s) for the given GA and

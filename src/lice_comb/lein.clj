@@ -11,9 +11,9 @@
 (ns lice-comb.lein
   "Functionality related to combing Leiningen dependency sequences for license
   information."
-  (:require [lice-comb.deps                  :as lcd]
-            [lice-comb.impl.expressions-info :as lciei]
-            [lice-comb.impl.utils            :as lciu]))
+  (:require [lice-comb.deps                 :as lcd]
+            [lice-comb.impl.expression-info :as ei]
+            [lice-comb.impl.utils           :as lciu]))
 
 (defn- lein-dep->toolsdeps-dep
   "Converts a leiningen style dependency vector into a (partial) tools.deps style
@@ -29,7 +29,7 @@
   were found."
   [dep]
   (when-let [toolsdep-dep (lein-dep->toolsdeps-dep dep)]
-    (lciei/prepend-source (pr-str dep) (lcd/dep->expressions-info toolsdep-dep))))
+    (ei/prepend-source (pr-str dep) (lcd/dep->expressions-info toolsdep-dep))))
 
 (defn dep->expressions
   "Returns a set of SPDX expressions (`String`s) for `dep`. See
@@ -61,7 +61,7 @@
   this fn, as initialisation will occur implicitly anyway; it is provided to
   allow explicit control of the cost of initialisation to callers who need it.
 
-  Note: this method may have a substantial performance cost."  
+  Note: this method may have a substantial performance cost."
   []
   (lcd/init!)
   nil)

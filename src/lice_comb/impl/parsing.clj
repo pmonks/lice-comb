@@ -22,7 +22,7 @@
             [wreck.api                                               :as re]
             [lice-comb.impl.regex-fragments                          :as ref]
             [lice-comb.impl.spdx                                     :as lcis]
-            [lice-comb.impl.expressions-info                         :as lciei]
+            [lice-comb.impl.expression-info                          :as ei]
             [lice-comb.impl.http                                     :as lcihttp]
             [lice-comb.impl.correction                               :as lcic]
             [lice-comb.impl.faux-parse                               :as faux]
@@ -109,7 +109,7 @@
                         (when-let [license-text (lcihttp/get-text uri)]
                           (match-text license-text)))]
       ; We don't need to sexp/canonicalise the keys here, as we never detect an expression from a URI
-      (lciei/prepend-source uri (lcic/correct result)))))
+      (ei/prepend-source uri (lcic/correct result)))))
 
 (defn- make-unidentified-ei
   "Makes an expression-info map for the given license `n`ame, optionally
@@ -389,7 +389,7 @@
 ;(debug-print "PRIOR TO REBUILD")
                         ; Rebuild the final expression(s)
                         rebuild-expressions)]
-    (lciei/prepend-source n result)))
+    (ei/prepend-source n result)))
 
 (defn parse-name
   "Parses the given license `n`ame, returning an expressions-info map or `nil`

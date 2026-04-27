@@ -11,13 +11,13 @@
 (ns lice-comb.files
   "Functionality related to combing files, directories, and ZIP format archives
   for license information."
-  (:require [clojure.string                  :as s]
-            [clojure.java.io                 :as io]
-            [clojure.tools.logging           :as log]
-            [lice-comb.matching              :as lcm]
-            [lice-comb.maven                 :as lcmvn]
-            [lice-comb.impl.expressions-info :as lciei]
-            [lice-comb.impl.utils            :as lciu]))
+  (:require [clojure.string                 :as s]
+            [clojure.java.io                :as io]
+            [clojure.tools.logging          :as log]
+            [lice-comb.matching             :as lcm]
+            [lice-comb.maven                :as lcmvn]
+            [lice-comb.impl.expression-info :as ei]
+            [lice-comb.impl.utils           :as lciu]))
 
 (def ^:private probable-license-filenames #{"pom.xml" "license" "license.txt" "license.html" "copying" "unlicense"})
 
@@ -70,7 +70,7 @@
                             (s/ends-with? lfname ".htm")) (doall (lcm/text->expressions-info (lciu/html-file->text f)))
                         (instance? java.io.InputStream f) (doall (lcm/text->expressions-info f))
                         :else                             (with-open [is (io/input-stream f)] (doall (lcm/text->expressions-info is))))]  ; Default is to assume it's a plain text file containing license text(s)
-       (lciei/prepend-source filepath result)))))
+       (ei/prepend-source filepath result)))))
 
 (defn file->expressions
   "Returns a set of SPDX expressions (`String`s) for `f`. See
@@ -96,7 +96,7 @@
                  entry  (.getNextEntry zip-is)]
             (if-not entry
               ; Base case
-              (when-not (empty? result) (lciei/prepend-source (lciu/filepath zip-file) result))
+              (when-not (empty? result) (ei/prepend-source (lciu/filepath zip-file) result))
               ; Recursive case
               (if (probable-license-file? entry)
                 (if-let [expressions (try
@@ -169,8 +169,8 @@
                                                        (log/warn (str "Unexpected exception while processing " % " - ignoring") e)
                                                        nil))
                                                   (zip-compressed-files dir opts))))]
-           (lciei/prepend-source (lciu/filepath dir) (merge file-expressions zip-expressions)))
-         (lciei/prepend-source (lciu/filepath dir) file-expressions))))))
+           (ei/prepend-source (lciu/filepath dir) (merge file-expressions zip-expressions)))
+         (ei/prepend-source (lciu/filepath dir) file-expressions))))))
 
 (defn dir->expressions
   "Returns a set of SPDX expressions (`String`s) for `dir`. See
