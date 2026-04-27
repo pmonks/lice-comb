@@ -30,6 +30,7 @@
             [lice-comb.impl.parsing-utils                            :as lcipu]
             [lice-comb.impl.3rd-party                                :as lci3]
             [lice-comb.impl.license-detection.listed-licenses        :as listed-licenses]
+            [lice-comb.impl.license-detection.bsd                    :as bsd]
             [lice-comb.impl.license-detection.cursed                 :as cursed]
             [lice-comb.impl.license-detection.mx4j                   :as mx4j]
             [lice-comb.impl.license-detection.bouncy-castle          :as bouncy-castle]
@@ -350,6 +351,7 @@
                         ; The order of these steps is important
                         (tu/until-> lcipu/done-parsing?
                                     cursed/detect
+                                    bsd/detect
                                     mx4j/detect
                                     bouncy-castle/detect
                                     like-clojure/detect

@@ -24,17 +24,18 @@
   (re/fgrp "i"
            ref/nwb
            ref/ows
-           (re/opt-grp (re/join "Eclipse" "public" #"licen?[cs]e", ))
+           (re/opt-grp (re/alt-grp "EPL" (re/join "Eclipse" ref/mws "pub?lic" ref/mws #"licen?[cs]e"))
+                       ref/mws)
            (re/opt-grp (re/alt-grp (re/join (re/opt-grp "the" ref/mws) "same" ref/mws "as")
                                    (re/join (re/opt-grp "just" ref/mws) "like"))
-                       ref/ows)
+                       ref/mws)
            "Clojure"
            ref/ows
            ref/nwa))
 
 (defn detect
-  "Detects any proprietary/commercial identifiers found inside the `String`s in
-  `coll` and replaces them with an expression-info map in that location. Returns
-  other elements unchanged."
+  "Detects any 'like Clojure' values found inside the `String`s in `coll` and
+  replaces them with an expression-info map in that location. Returns other
+  elements unchanged."
   [coll]
   (faux/parse coll re-clojure (partial mp/unversioned-match->expression-info "EPL-1.0" :custom-regex)))

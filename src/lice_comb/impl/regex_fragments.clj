@@ -37,13 +37,15 @@
 (def ows                   (re/zom ws))
 (def mws                   (re/oom ws))
 (def bounded-ows           (re/n2m 0 4 ws))  ; Useful in look aheads / behinds on older JVM versions that don't support unbounded expressions there
-(def bounded-mws           (re/n2m 1 4 ws))
+(def bounded-mws           (re/n2m 1 4 ws))  ; Ditto
 
 (def hyphens               (re/chcl raw-hyphens))
 (def slashes               (re/chcl raw-slashes))
 
 (def qots                  (re/chcl raw-quotes))
-(def single-qots           (re/chcl (re/esc "'`‛’‘‚❜❛＇")))  ; Note: these are are different Unicode characters, despite appearances
+(def oqots                 (re/zom qots))
+(def mqots                 (re/oom qots))
+(def single-qots           (re/chcl (re/esc "'`‛’‘‚❜❛＇")))  ; Note: these are all different Unicode characters, despite appearances
 
 (def ws+hyphens            (re/chcl raw-ws raw-hyphens))
 (def ws+slashes            (re/chcl raw-ws raw-slashes))
@@ -60,4 +62,12 @@
                                     (re/alt-grp #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
                                     ; Numeric year (mandatory - either 2 or 4 digits)
                                     ows #"\d\d(?:\d\d)?" ows))
+
+; Common word variations
+
+(def ands                  (re/alt-grp "and" "&"))
+(def withs                 (re/alt-grp "with" "w/"))
+(def acknowledgement       #"Acknowledge?ment")
+(def license               #"licen?[cs]e")   ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
+(def public                #"pub?lic")       ; Note: the optional missing `b` is a known misspelling in a POM license name: https://repo.clojars.org/org/immutant/immutant-common/1.1.4/immutant-common-1.1.4.pom (there are others too)
 

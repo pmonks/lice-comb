@@ -182,6 +182,7 @@
 
 ;####TODO: UPDATE THIS TO FEWER REGEXES THAT HANDLE ALL VARIANTS OF "Licen[cs]e|Lizenz" PREFIXED WITH "Open|Open Source|Public|Software"
 ; BUT WATCH OUT FOR THE "Open Software License" (OSL-x.y) VERSION SERIES!!!!
+; ALSO USE ref/license, ref/public, ref/ackonwledgement, ETC.
 
                       #"(?i)\s+licen[cs]e[\s\-]agreement(?!\w)"                                   #"(?:[\s\-–—]+Licen?[cs]e)?(?:[\s\-–—]+agreement)?"
                       #"(?i)\s+licen[cs]e(?!\w)"                                                  #"(?:[\s\-–—]+Licen?[cs]e)?"  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom

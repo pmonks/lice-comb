@@ -28,6 +28,7 @@
 (def exception-ids-d (delay (set (se/ids))))
 (def ids-d           (delay (set (concat @license-ids-d @exception-ids-d))))
 
+;####TODO: IS THIS BETTER IN clj-spdx?
 (defn id-position
   "Returns the 'position' (expressed as `:license-position` or
   `:exception-position`) of `id` (a license, LicenseRef, exception, AdditionRef,
@@ -43,19 +44,26 @@
 
 (defn canonicalise-id
   "Canonicalises `id`, possibly into an SPDX expression. Returns `nil` if id
-  cannot be canonicalised (i.e. is not a listed SPDX identifier or a valid ref)."
+  cannot be canonicalised (i.e. is not a listed SPDX identifier, a valid ref, or
+  a special form).
+
+  `id` may include a trailing `+` character, in which case it will override the
+  value of `or-later?` (if that argument is provided).  For id types that don't
+  support an or-later suffix, a trailing `+` character will be removed (and the
+  `or-later?` flag, if `true` will be ignored)."
   ([^String id] (canonicalise-id id false))
   ([^String id or-later?]
-   (case (si/id-type id)
-     (:license-ref :addition-ref) id
-     :license-id                  (let [has-or-later? (s/ends-with? id "+")
-                                        raw-id        (if has-or-later? (subs id 0 (dec (count id))) id)]
-                                    (if-let [canonical-expression (sexp/canonicalise (str raw-id (when (or has-or-later? or-later?) "+")))]
-                                      canonical-expression
-                                      (when-let [canonical-id (si/canonicalise raw-id)]
-                                        (str canonical-id (when (or has-or-later? or-later?) "+")))))
-     :exception-id                (si/canonicalise id)
-     nil)))
+   (when-not (s/blank? id)
+     (let [has-or-later? (s/ends-with? id "+")
+           raw-id        (if has-or-later? (subs id 0 (dec (count id))) id)]
+       (case (si/id-type raw-id)
+         :license-id                   (if-let [canonical-expression (sexp/canonicalise (str raw-id (when (or has-or-later? or-later?) "+")))]
+                                         canonical-expression
+                                         (when-let [canonical-id (sl/canonicalise raw-id)]
+                                           (str canonical-id (when (or has-or-later? or-later?) "+"))))
+         (:license-ref :special-form)  (sl/canonicalise raw-id)
+         (:exception-id :addition-ref) (se/canonicalise raw-id)
+         nil)))))
 
 ; Custom license and addition refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
 (def ^:private lice-comb-document-ref             "lice-comb")

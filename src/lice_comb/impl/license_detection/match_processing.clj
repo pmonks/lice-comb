@@ -16,14 +16,35 @@
   (:require [clojure.string                 :as s]
             [wreck.api                      :as re]
             [spdx.identifiers               :as si]
-            [lice-comb.impl.utils           :as lciu]
             [lice-comb.impl.spdx            :as lcis]
+            [lice-comb.impl.expression-info :as ei]
             [lice-comb.impl.version-number  :as vernum]
             [lice-comb.impl.version-series  :as verser]
             [lice-comb.impl.license-regexes :as licre]))
 
 (def ^:private re-placeholder-ver  (re-pattern (re/esc verser/placeholder-ver)))
 (def ^:private re-placeholder-oool (re-pattern (re/esc verser/placeholder-oool)))
+
+
+;####TODO: COME UP WITH A BETTER NAME?
+(defn get-rencgs
+  "Retrieve a value ncgs in `m` (a Map, as produced by rencg), trying each of
+  the provided `names` in turn until a non-blank value is found.  Returns
+  `default` when no non-blank value is found (and which defaults to `nil` if not
+  provided). Trims and lower-cases the value, and normalises multiple whitespace
+  to a single space."
+  ([m names] (get-rencgs m names nil))
+  ([m names default]
+    (loop [[f & r] names]
+      (if f
+        (let [value (get m f)]
+          (if (s/blank? value)
+            (recur r)
+            (-> value
+                (s/trim)
+                (s/lower-case)
+                (s/replace #"\s+" " "))))
+        default))))
 
 (defn- or-later-with-explanation
   "Returns a tuple of `or-later?` (a `boolean`) and `confidence-explanation` (a
@@ -98,94 +119,38 @@
     ; No version number was found in the match
     [(:default-id version-series) #{:missing-version}]))
 
-(defn- strategy-from-matched-text
+(defn- matched-text->strategy
   "Determines the strategy from matched text."
-  [ids names ^String matched-text regex-type]
-  (let [ids   (filter identity ids)
-        names (filter identity names)]
-    (cond
-      (some #{(s/lower-case matched-text)} (map s/lower-case ids))   :spdx-listed-identifier
-      (some #{matched-text}                names)                    :spdx-listed-name-exact-match
-      (some #{(s/lower-case matched-text)} (map s/lower-case names)) :spdx-listed-name-case-insensitive-match
-      :else                                                          (case regex-type
-                                                                       :id-regex   :spdx-listed-identifier-near-match
-                                                                       :name-regex :spdx-listed-name-near-match
-                                                                       :regex-match))))
+  ([ids-checked matched-text] (matched-text->strategy ids-checked matched-text nil))
+  ([ids-checked ^String matched-text regex-type]
+   (let [ids   (seq (filter identity ids-checked))
+         names (seq (filter identity (map #(:name (si/id->info %)) ids)))]
+     (cond
+       (some #{(s/lower-case matched-text)} (map s/lower-case ids))   :spdx-listed-identifier
+       (some #{matched-text}                names)                    :spdx-listed-name-exact-match
+       (some #{(s/lower-case matched-text)} (map s/lower-case names)) :spdx-listed-name-case-insensitive-match
+       :else                                                          (case regex-type
+                                                                        :id-regex   :spdx-listed-identifier-near-match
+                                                                        :name-regex :spdx-listed-name-near-match
+                                                                        :regex-match)))))
 
-(defn- matching-type
-  "Determines the matching type (`:declared` or `:concluded`) from a `strategy`
-  keyword."
-  [strategy]
-  (if (= strategy :spdx-listed-identifier)
-    :declared
-    :concluded))
-
-; Map of confidence explanations to their associated confidence scores
-(def ^:private confidence-explanation->confidence {
-  :missing-version                :low     ; Version is missing completely
-  :invalid-version                :low     ; Version is invalid (e.g. "Apache 2.1")
-  :version-near-match             :medium  ; Version is a near match (e.g. "Apache 2", "Apache 2.0.0")
-  :inconsistent-versions          :medium  ; Multiple valid versions found, but they don't match (e.g. "Apache License 1.1 (Apache-2.0)")
-;####TODO: UNUSED?
-;  :extraneous-version-component   :high    ; Extraneous version component (e.g. "Apache 2.0.0")
-;  :contradictory-version-suffixes :medium  ; Contradictory version suffix (e.g. "GPL 2.0 only+")
-;  :multiple-ids-found             :low   ; Multiple different identifiers were found  ;####TODO: CONFIRM THAT THIS ONE MAKES SENSE
-})
-
-;####TODO: THIS PROBABLY NEEDS TO BE PUBLIC
-(defn- matching-confidence
-  "Determines the overall confidence level from a sequence of
-  `confidence-explanations`. Returns `:high` if there are no explanations."
-  [confidence-explanations]
-  (if (seq confidence-explanations)
-    (let [confidences (set (map confidence-explanation->confidence confidence-explanations))]
-      ; Internal logic check
-      (if (contains? confidences nil)
-        (throw (ex-info "Internal logic error: a confidence explanation is missing a confidence level" {:confidence-explanations confidence-explanations}))
-        (first (sort-by {:low 0 :medium 1 :high 2} confidences))))
-    :high))  ; Default to :high when confidence-explanations is empty
+(defn- expression-info
+  "Constructs a valid expression-info map from the given match information."
+  [ids-checked ^String detected-id regex-type ^String matched-text confidence-explanations]
+   (let [strategy   (matched-text->strategy ids-checked matched-text regex-type)
+         match-type (if (= strategy :spdx-listed-identifier) :declared :concluded)]
+     (ei/expression-info detected-id strategy match-type matched-text confidence-explanations)))
 
 (defn unversioned-match->expression-info
   "Returns an expression info map for the unversioned (non-version-series)
-  match `m`."
+  match `m`, which matched `id` via `regex-type`."
   [^String id regex-type m]
-  (when-let [matched-text (lciu/strim (:match m))]
-    (case (si/id-type id)
-      (:license-id :exception-id)
-        (let [{nm :name}             (si/id->info id)
-              canonical-id           (lcis/canonicalise-id id)
-              {canonical-name :name} (si/id->info canonical-id)  ; Note: may be null (e.g. canonical-id is an SPDX expression due to canonicalisation)
-              strategy               (strategy-from-matched-text [id canonical-id] [nm canonical-name] matched-text regex-type)
-              matching-type          (matching-type strategy)
-              confidence             (when (= :concluded matching-type) :high)]  ; Unversioned matches always have high confidence, since there's nothing "variable" in the match to take into account
-          (merge {:id       (or canonical-id (throw (ex-info "Internal logic error: a nil identifier was produced" {:id id :regex-type regex-type :match m})))
-                  :strategy strategy
-                  :source   (list matched-text)
-                  :type     matching-type}
-                 (when confidence {:confidence confidence})))
-
-      (:license-ref :addition-ref)
-        {:id         id
-         :strategy   :regex-match
-         :source     (list matched-text)
-         :type       :concluded
-         :confidence :high})))
+  (expression-info [id] id regex-type (:match m) nil))
 
 (defn versioned-match->expression-info
   "Returns an expression info map based on the 'best' identifier in match m,
   assumed to be within `version-series`.  Returns `nil` only if `m` is `nil`,
   otherwise _always_ returns a result."
   [version-series regex-type m]
-  (when m
-    (let [matched-text                 (:match m)
-          [id confidence-explanations] (best-id-from-match version-series m)
-          strategy                     (strategy-from-matched-text (:ids version-series) (:names version-series) matched-text regex-type)
-          matching-type                (matching-type strategy)
-          confidence                   (when (= :concluded matching-type) (matching-confidence confidence-explanations))]
-      (merge {:id       (or id (throw (ex-info "Internal logic error: a nil identifier was produced" {:version-series version-series :regex-type regex-type :match m})))
-              :strategy strategy
-              :source   (list matched-text)
-              :type     matching-type}
-             (when (= matching-type :concluded)
-               (merge {:confidence confidence}
-                      (when confidence-explanations {:confidence-explanations confidence-explanations})))))))
+  (let [[detected-id confidence-explanations] (best-id-from-match version-series m)]
+    (expression-info (:ids version-series) detected-id regex-type (:match m) confidence-explanations)))

@@ -61,7 +61,7 @@
     (is (valid= #{"Apache-2.0"} (name->expressions "ASL")))
     (is (valid= #{"Apache-2.0"} (name->expressions "ASL 2.0")))
     (is (valid= #{"AFL-3.0"} (name->expressions "Academic Free License 3.0")))
-    (is (valid= #{""} (name->expressions "Aduna BSD license")))
+    (is (valid= #{""} (name->expressions "Aduna BSD license")))  ;####TODO!!!!
     (is (valid= #{"AGPL-3.0-only"} (name->expressions "Affero GNU Public License v3")))
     (is (valid= #{"AGPL-1.0-or-later"} (name->expressions "Affero General Public License")))
     (is (valid= #{"AGPL-3.0-or-later"} (name->expressions "Affero General Public License v3 or later (at your option)")))
@@ -69,7 +69,7 @@
     (is (valid= #{"AGPL-1.0-or-later"} (name->expressions "Affero General Public License,")))
     (is (proprietary-only? (name->expressions "All Rights Reserved")))
     (is (proprietary-only? (name->expressions "All rights reserved")))
-    (is (valid= #{""} (name->expressions "Amazon Software License")))
+    (is (valid= #{""} (name->expressions "Amazon Software License")))  ;####TODO!!!!  See https://github.com/spdx/license-list-XML/issues/2973
     (is (valid= #{"Apache-2.0"} (name->expressions "Apache")))
     (is (valid= #{"Apache-2.0"} (name->expressions "Apache 2")))
     (is (valid= #{"Apache-2.0"} (name->expressions "Apache 2 License")))
@@ -274,7 +274,7 @@
     (is (valid= #{"EPL-1.0"} (name->expressions "Eclipse Public Licese - v 1.0")))
     (is (valid= #{"EPL-2.0" "MIT"} (name->expressions "Eclipse Public MIT")))
     (is (valid= #{"EPL-2.0"} (name->expressions "Eclipse Pulic License")))
-    (is (valid= #{"EPL-2.0"} (name->expressions "Eclipse public license, the same as Clojure")))
+    (is (valid= #{"EPL-1.0"} (name->expressions "Eclipse public license, the same as Clojure")))
     (is (valid= #{"EUPL-1.1"} (name->expressions "European Union Public Licence (EUPL v.1.1)")))
     (is (valid= #{"EUPL-1.2"} (name->expressions "European Union Public Licence v. 1.2")))
     (is (valid= #{"EUPL-1.2"} (name->expressions "European Union Public License")))

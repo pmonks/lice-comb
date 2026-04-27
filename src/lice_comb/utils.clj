@@ -12,6 +12,8 @@
   "Miscellaneous functionality."
   (:require [clojure.string :as s]))
 
+;####TODO: UPDATE THIS TO LATEST SET OF VALUES
+;####TODO: MOVE THIS TO lice-comb.impl.expressions-info?
 (def strategy->string
   "A map that turns a matching strategy keyword (as found in an expression-info
   map) into a human readable equivalent.  This is mostly intended for debugging
@@ -31,6 +33,7 @@
    :regex-matching                                "regular expression matching"
    :unidentified                                  "fallback to unidentified LicenseRef"})
 
+;####TODO: UPDATE THIS TO LATEST SET OF VALUES
 (defn expression-info-sort-by-keyfn
   "A [[clojure.core/sort-by]] keyfn for expression-info maps.  This is mostly
   intended for debugging / developer informational purposes, and the behaviour

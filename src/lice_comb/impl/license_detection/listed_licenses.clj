@@ -15,25 +15,22 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string                                       :as s]
-            [wreck.api                                            :as re]
             [spdx.identifiers                                     :as si]
             [lice-comb.impl.spdx                                  :as lcis]
             [lice-comb.impl.version-series                        :as verser]
             [lice-comb.impl.faux-parse                            :as faux]
             [lice-comb.impl.license-regexes                       :as licre]
             [lice-comb.impl.license-detection.match-processing    :as mp]
+            [lice-comb.impl.license-detection.bsd                 :as bsd]
 ;            [lice-comb.impl.license-detection.classpath-exception :as cpe]
             ))
-
-;####TODO: REMOVE ONCE UNNEEDED (duplicated in lice-comb.impl.license-detection.utils)
-(def ^:private re-placeholder-ver (re-pattern (re/esc verser/placeholder-ver)))
 
 ; Default license and exception ids i.e. those that don't need special case support
 (def ids-d
   (delay
     (apply disj @lcis/ids-d
-;                (concat @cpe/ids-d  )  ;####TODO: ADD MORE HERE AS THEY'RE RE-ADDED!
-                 nil)  ;####TODO: REMOVE THIS ONCE THERE'S AT LEAST ONE SPECIALISED HANDLER
+                (concat @bsd/ids-d  ))  ;####TODO: ADD MORE HERE AS THEY'RE RE-ADDED!
+;                 nil)  ;####TODO: REMOVE THIS ONCE THERE'S AT LEAST ONE SPECIALISED HANDLER
 ))
 
 
