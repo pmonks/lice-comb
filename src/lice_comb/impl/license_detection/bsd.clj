@@ -158,24 +158,26 @@
 
 ; Only public for ease of testing
 (def re (re/fgrp "ix"
+                 "\n\n#### Preamble ####\n"
                  ref/nwb
                  (re/opt-grp "The" ref/mws)
                  "\n\n#### Prefix ####\n"
                  (re/opt-grp prefix-clauses ref/mws)
-                 "\n\n#### Leading clause ####\n"
+                 "\n\n#### Leading clauses ####\n"
                  (re/opt-grp (re-bsd-any-clause "before") ref/ows)  ; We use optional ws here to catch values like "0BSD"
-                 "\n\n#### Matching word ####\n"
                  (re/opt (re/alt-grp (re/ncg "beforeFreeBSD" "Free")
                                      (re/ncg "beforeNetBSD"  "Net")))
+                 "\n\n#### Matching word ####\n"
                  "BSD"
-                 (re/opt-grp ref/ows (re/alt "style" "like"))
-                 "\n\n#### Trailing clause ####\n"
+                 "\n\n#### Trailing clauses ####\n"
+                 (re/zom-grp ref/ows (re/alt "style" "like"))
+                 (re/zom-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" before the after clause count
                  (re/opt-grp ref/mws (re-bsd-any-clause "after"))
                  "\n\n#### Suffix ####\n"
                  (re/opt-grp ref/mws suffix-clauses)
                  "\n\n#### Random dingleberries ####\n"
-                 (re/zom-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))
-;####TODO: REIMPLEMENT THIS IN TERMS OF THE NEW NAMESPACES
+                 (re/zom-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" after the after clause count
+;####TODO: REIMPLEMENT THIS IN TERMS OF THE NEW NAMESPACES - MAY NOT BE NEEDED?
 ;                 (re/opt-grp ref/ows (lcir/re-version))
                  "\n\n#### Coda ####\n"
                  ref/nwa))
@@ -209,8 +211,7 @@
 
 (defn- clause-based-identifier
   "Returns a tuple of [identifier confidence-explanations] if match
-  `m` represents a standard BSD N clause identifier (such as `BSD-4-Clause`).
-  Returns `nil` is `m` did not match a 'clause based identifier."
+  `m` represents a standard BSD N clause identifier (such as `BSD-4-Clause`)."
   [m]
   (let [clause-counts         (clause-counts m)
         invalid-clause-count? (boolean (mp/get-rencgs m ["beforeInvalidClauseCount" "afterInvalidClauseCount"]))
@@ -229,10 +230,10 @@
                             (if-let [valid-clause-counts (seq (filter valid-clause-count? clause-counts))]
                               [(apply min valid-clause-counts) #{:inconsistent-bsd-clause-counts :invalid-bsd-clause-count}]
                               [4                               #{:inconsistent-bsd-clause-counts :invalid-bsd-clause-count}]))))
-        id            (if (= 0  clause-count)
+        id            (if (= 0 clause-count)
                         "0BSD"
                         (str "BSD-" clause-count "-Clause"))]
-    [id confidence-explanations]))  ; We don't assert or canonicalise the identifier here, as that has to happen after we've appended any suffix
+    [id confidence-explanations]))
 
 (defn- suffix
   "Returns the suffix for the given match (including a leading hyphen) or `nil`
@@ -288,23 +289,23 @@
           (when (or (clause-counts m) (suffix m))
             #{:invalid-bsd-combination}))))
 
-(defn- match->ei
+(defn- bsd-match->expression-info
   "Turns a match from the BSD regex into an expression-info map."
   [m]
   (let [matched-text (:match m)
         [id confidence-explanations]
-                   (if-let [sbi (suffix-based-identifier m)]  ; First check if it's a suffix-based identifier
-                     sbi
-                     (let [[id con-exp] (clause-based-identifier m)
-                           suffix           (suffix m)
-                           id-and-suffix    (str id suffix)]
-                       (if (sl/listed-id? id-and-suffix)
-                         [id-and-suffix con-exp]
-                         [id            (set/union #{:invalid-bsd-combination} con-exp)])))]
+                     (if-let [sbi (suffix-based-identifier m)]  ; First check if it's a suffix-based identifier
+                       sbi
+                       (let [[id con-exp] (clause-based-identifier m)
+                             suffix           (suffix m)
+                             id-and-suffix    (str id suffix)]
+                         (if (sl/listed-id? id-and-suffix)
+                           [id-and-suffix con-exp]
+                           [id            (set/union #{:invalid-bsd-combination} con-exp)])))]
     (ei/expression-info id :regex-matching :concluded matched-text confidence-explanations)))
 
 (defn detect
   "Substitutes any BSD licenses found in the strings in `coll` with an
   expression-info map. Returns other elements unchanged."
   [coll]
-  (faux/parse coll re match->ei))
+  (faux/parse coll re bsd-match->expression-info))
