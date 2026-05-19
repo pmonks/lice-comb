@@ -22,8 +22,8 @@
                         "url": "https://github.com/dependency-check/DependencyCheck/"
         },
 
-        "end_time": "2026-05-05T05:41:17",
-                "start_time": "2026-05-05T05:41:17",
+        "end_time": "2026-05-19T07:15:50",
+                "start_time": "2026-05-19T07:15:50",
                 "status":  "success"  ,
                 "type": "dependency_scanning"
 
@@ -152,7 +152,7 @@
                         "package": {
                             "name": "org.clojure:clojure"
                         },
-                        "version": "1.12.4"
+                        "version": "1.12.5"
 
                                                                                                                     }
 ,                    {
