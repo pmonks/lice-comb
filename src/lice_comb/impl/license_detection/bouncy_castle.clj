@@ -25,11 +25,11 @@
            ref/nwb
            (re/opt-grp "The" ref/ows)
            "Bouncy" ref/ows "Castle"
-           (re/opt-grp ref/mws #"Licen?[cs]e")
+           (re/opt-grp ref/mws ref/license)
            ref/nwa))
 
 (defn detect
-  "Detects any proprietary/commercial identifiers found inside the `String`s in
+  "Detects any Bouncy Castle license declarations found inside the `String`s in
   `coll` and replaces them with an expression-info map in that location. Returns
   other elements unchanged."
   [coll]

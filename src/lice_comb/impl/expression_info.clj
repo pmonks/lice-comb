@@ -103,8 +103,8 @@
   ; BSD-specific confidence explanations
   :missing-bsd-clause-count       :low     ; BSD clause count is missing (e.g. "BSD")
   :invalid-bsd-clause-count       :low     ; BSD clause count is invalid (e.g. "BSD 99 Clause")
-  :inconsistent-bsd-clause-counts :medium  ; BSD clause counts are inconsistent (e.g. "2 Clause BSD 4 Clause")
-  :invalid-bsd-combination        :medium  ; Invalid combination of BSD clause counts and suffixes (e.g. "BSD 2 Clause No Nuclear License")
+  :inconsistent-bsd-clause-counts :low     ; BSD clause counts are inconsistent (e.g. "2 Clause BSD 4 Clause")
+  :invalid-bsd-combination        :low     ; Invalid combination of BSD clause counts and suffixes (e.g. "BSD 2 Clause No Nuclear License")
   ; CC-BY-specific confidence explanations
   :invalid-cc-suffix              :low
   ; GNU-specific confidence explanations

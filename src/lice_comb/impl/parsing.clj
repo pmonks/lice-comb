@@ -38,6 +38,7 @@
             [lice-comb.impl.license-detection.cursed                 :as cursed]
             [lice-comb.impl.license-detection.mx4j                   :as mx4j]
             [lice-comb.impl.license-detection.bouncy-castle          :as bouncy-castle]
+            [lice-comb.impl.license-detection.jdom                   :as jdom]
             [lice-comb.impl.license-detection.like-clojure           :as like-clojure]
             [lice-comb.impl.license-detection.public-domain          :as public-domain]
             [lice-comb.impl.license-detection.proprietary-commercial :as proprietary-commercial]
@@ -138,10 +139,11 @@
                                            (re/opt-grp #"#"  (re/opt-ncg "fragment"    #"[^\s]*"))
                                            ref/nwa))
 
-(defn- sub-uris
-  "Substitutes any uris in the Strings in `coll` with an expression info map.
-  We do that here instead of in a separate namespace because of the dependence
-  on [[parse-uri]]."
+;####TODO: IDEALLY THIS SHOULD BE IN ITS OWN NAMESPACE UNDER lice-comb.impl.license-detection
+(defn- detect-uris
+  "Detects any uris in the Strings in `coll` and replaces them with an
+  expression info map.  We do that here instead of in a separate namespace
+  because of the dependence on [[parse-uri]]."
   [coll]
   (flatten  ; In some cases a single URI results in multiple ids/expression infos, so we flatten them here
     (faux/replace-in-strings
@@ -152,7 +154,7 @@
            (vals ei)                   ; Unwrap all expressions info maps, and return them as nested sequences (which gets flattened up top)
            (make-unidentified-ei uri))))))
 
-(def ^:private operator-re (re/fgrp "i"
+(def ^:private re-operator (re/fgrp "i"
                                     ref/ows
                                     (re/alt (re/ncg "andOr"        ref/nwb #"and[\s/\\\-]+or" ref/nwa)
                                             (re/ncg "and"          ref/nwb #"and" ref/nwa)
@@ -163,14 +165,14 @@
                                             (re/ncg "backSlash"    (re/oom #"\\")))
                                     ref/ows))
 
-(defn- sub-operators
-  "Substitutes operators in `String` values in `coll`, replacing each one with a
+(defn- detect-operators
+  "Detects any operators in the Strings in `coll`, and replaces them with a
   keyword representing the detected operator. The possible keyword values are:
   `:and`, `:or`, and `:with`."
   [coll]
   (filter lciu/not-blank-string?
           (faux/replace-in-strings coll
-                                   operator-re
+                                   re-operator
                                    (fn [m]
                                      (cond
                                        (get m "and")       :and
@@ -361,30 +363,18 @@
                                     cc/detect
                                     mx4j/detect
                                     bouncy-castle/detect
+                                    jdom/detect
                                     like-clojure/detect
                                     public-domain/detect
                                     proprietary-commercial/detect
-                                    listed-licenses/detect
-                                    gnu/detect
+                                    listed-licenses/detect     ; This should go after most specific detections, since it's very broad (i.e. detects most of the license & exception lists)
+                                    gnu/detect                 ; Except this one, since it matches very liberally ("word salad" strategy)
                                     spdx-special-forms/detect  ; This should go later, since it's somewhat non-specific (i.e. matching "NONE")
-
-;                                    refs/sub
-                                    sub-uris         ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
-;                                    cc/sub
-;                                    cddl/sub
-;                                    cpe/sub
-;                                    gnuexc/sub
-;                                    epl/sub
-;                                    hippocratic/sub
-;                                    wtf/sub
-;                                    generic/sub      ; This handles all other SPDX license and exceptions in a generic fashion
-;                                    custom/sub       ; This has to go after the others, since it matches things like "NCBI Public Domain Notice"
-;                                    mpl/sub          ; This has to go after the others, since it matches things like "SimPL-2.0"
-;                                    gnu/sub          ; This must go last, due to the "word salad" matching approach, and the plethora of non-GNU licenses that have GPL-like names (e.g Nethack General Public License)
+                                    detect-uris                ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
                         )
                         ; At this point we've identified all of the licenses we possibly can
 ;                        deduplicate-identifiers
-                        sub-operators
+                        detect-operators
 ;####TEST!!!!
 ;(print-fragments n)
 ;####TEST!!!!
