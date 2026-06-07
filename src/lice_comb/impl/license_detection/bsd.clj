@@ -9,8 +9,8 @@
 ;
 
 (ns lice-comb.impl.license-detection.bsd
-  "Helper functionality related to substituting matches for the BSD family of
-  licenses.
+  "BSD family license detection.
+
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string                                    :as s]
@@ -20,7 +20,6 @@
             [lice-comb.impl.faux-parse                         :as faux]
             [lice-comb.impl.spdx                               :as lcis]
             [lice-comb.impl.regex-fragments                    :as ref]
-            [lice-comb.impl.expression-info                    :as ei]
             [lice-comb.impl.utils                              :as lciu]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
@@ -38,7 +37,7 @@
   3 "Three"
   4 "Four"})
 
-(defn- re-bsd-numeric-clause
+(defn- bsd-numeric-clause
   "Returns a regex that will match a numeric rendition of BSD `n` clause,
   including both the number itself ('1', '2', etc.) and also the English
   language equivalent ('One', 'Two', etc.), and with various prefixes and
@@ -46,7 +45,7 @@
 
   When `n` is `nil` or does not have a listed EnNglish language name,
   returns a regex that will match any digits."
-  ([] (re-bsd-numeric-clause nil))
+  ([] (bsd-numeric-clause nil))
   ([n]
    (re/grp (re/opt-grp (re/grp (re/alt #"C(?:lause)?" "Type")) ref/ows)
            (if-let [nm (number->name n)]
@@ -54,7 +53,7 @@
              #"\d+")
            (re/opt-grp ref/ows "Clause"))))
 
-(defn- re-bsd-textual-clause
+(defn- bsd-textual-clause
   "Returns a regex that will match the textual rendition of a BSD clause count,
   expressed as a sequence of clause count identifying names that aren't numbers
   (e.g. 'Simplified', 'New, 'Original', etc.)."
@@ -74,33 +73,35 @@
                   fre-names
                   ref/oqots))))))
 
-(defn- re-bsd-clause
+(defn- bsd-clause
   "Returns a regex that will match both numeric and textual renditions of a BSD
   clause count."
-  ([n] (re-bsd-clause n nil))
+  ([n] (bsd-clause n nil))
   ([n clause-names]
    (if (seq clause-names)
-     (re/or-grp (re-bsd-numeric-clause n) (re-bsd-textual-clause clause-names) ref/mws)
-     (re-bsd-numeric-clause n))))
+     (re/or-grp (bsd-numeric-clause n) (bsd-textual-clause clause-names) ref/mws)
+     (bsd-numeric-clause n))))
 
-(defn- re-bsd-any-clause
+(defn- bsd-any-clause
   "Returns a regex that will match any BSD clause clause, in either numeric or
   textual renditions. `prefix` is a prefix to use for each named capturing
   group, and will be followed by `#Clause` (where `#` is the clause count
   number - 0-4)."
   [prefix]
   (re/alt-grp
-    (re/ncg (str prefix "0Clause")            (re-bsd-clause 0))
-    (re/ncg (str prefix "1Clause")            (re-bsd-clause 1))
-    (re/ncg (str prefix "2Clause")            (re-bsd-clause 2 ["Simplified"]))
-    (re/ncg (str prefix "3Clause")            (re-bsd-clause 3 ["New" "Revised" "Modified" "Standard"]))  ; Note: "Standard" is unofficial, but used by e.g. https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
-    (re/ncg (str prefix "4Clause")            (re-bsd-clause 4 ["Original" "Old"]))
-    (re/ncg (str prefix "InvalidClauseCount") (re-bsd-numeric-clause))))  ; Catch-all for invalid clause counts (e.g. "BSD 999 clause")
+    (re/ncg (str prefix "0Clause")            (bsd-clause 0))
+    (re/ncg (str prefix "1Clause")            (bsd-clause 1))
+    (re/ncg (str prefix "2Clause")            (bsd-clause 2 ["Simplified"]))
+    (re/ncg (str prefix "3Clause")            (bsd-clause 3 ["New" "Revised" "Modified" "Standard"]))  ; Note: "Standard" is unofficial, but used by e.g. https://repo.clojars.org/org/cyverse/authy/3.0.1/authy-3.0.1.pom
+    (re/ncg (str prefix "4Clause")            (bsd-clause 4 ["Original" "Old"]))
+    (re/ncg (str prefix "InvalidClauseCount") (bsd-numeric-clause))))  ; Catch-all for invalid clause counts (e.g. "BSD 999 clause")
 
 (def ^:private ampas (re/alt "AMPAS" (re/join "Academy" ref/mws "of" ref/mws  "Motion" ref/mws "Picture" ref/mws "Arts" ref/mws ref/ands ref/mws "Sciences")))
 
-; Possible prefixes for BSD licenses
-(def ^:private prefix-clauses
+
+(defn- prefix-clauses
+  "Possible prefixes for BSD licenses"
+  []
   (re/alt-grp
     (re/ncg "beforeHP"        (re/alt "HP" (re/join "Hewlett" ref/mws "Packard")))
     (re/ncg "beforeLBNL"      (re/alt "LBNL" (re/join "Lawrence" ref/mws "Berkeley" ref/mws "National" ref/mws "Labs")))
@@ -108,8 +109,9 @@
     (re/ncg "beforeAMPAS"     ampas)
     (re/ncg "beforeAduna"     "Aduna")))  ; Not an official BSD prefix, but it appears in some license names and indicates BSD-3-Clause e.g. https://repo.clojars.org/art/uniroma2/it/org/openrdf/sesame/sesame-onejar/2.7.10/sesame-onejar-2.7.10.pom
 
-; Possible suffixes for BSD licenses
-(def ^:private suffix-clauses
+(defn- suffix-clauses
+  "Possible suffixes for BSD licenses"
+  []
   (re/alt-grp
     ; BSD 1-4 clause suffixes
     (re/ncg "darwin"               (re/opt-grp "Ian" ref/mws) "Darwin")
@@ -162,9 +164,9 @@
                  ref/nwb
                  (re/opt-grp "The" ref/mws)
                  "\n\n#### Prefix ####\n"
-                 (re/opt-grp prefix-clauses ref/mws)
+                 (re/opt-grp (prefix-clauses) ref/mws)
                  "\n\n#### Leading clauses ####\n"
-                 (re/opt-grp (re-bsd-any-clause "before") ref/ows)  ; We use optional ws here to catch values like "0BSD"
+                 (re/opt-grp (bsd-any-clause "before") ref/ows)  ; We use optional ws here to catch values like "0BSD"
                  (re/opt (re/alt-grp (re/ncg "beforeFreeBSD" "Free")
                                      (re/ncg "beforeNetBSD"  "Net")))
                  "\n\n#### Matching word ####\n"
@@ -172,14 +174,16 @@
                  "\n\n#### Trailing clauses ####\n"
                  (re/zom-grp ref/ows (re/alt "style" "like"))
                  (re/zom-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" before the after clause count
-                 (re/opt-grp ref/mws (re-bsd-any-clause "after"))
+                 (re/opt-grp ref/mws (bsd-any-clause "after"))
+                 (re/opt-grp ref/ows "BSD")  ; Accept BSD a second time (e.g. as in "3-clause BSD licence (Revised BSD licence)")
                  "\n\n#### Suffix ####\n"
-                 (re/opt-grp ref/mws suffix-clauses)
+                 (re/opt-grp ref/mws (suffix-clauses))
                  "\n\n#### Random dingleberries ####\n"
                  (re/zom-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" after the after clause count
 ;####TODO: REIMPLEMENT THIS IN TERMS OF THE NEW NAMESPACES - MAY NOT BE NEEDED?
 ;                 (re/opt-grp ref/ows (lcir/re-version))
                  "\n\n#### Coda ####\n"
+                 ref/ows
                  ref/nwa))
 
 
@@ -292,20 +296,21 @@
 (defn- bsd-match->expression-info
   "Turns a match from the BSD regex into an expression-info map."
   [m]
-  (let [matched-text (:match m)
-        [id confidence-explanations]
-                     (if-let [sbi (suffix-based-identifier m)]  ; First check if it's a suffix-based identifier
-                       sbi
-                       (let [[id con-exp] (clause-based-identifier m)
-                             suffix           (suffix m)
-                             id-and-suffix    (str id suffix)]
-                         (if (sl/listed-id? id-and-suffix)
-                           [id-and-suffix con-exp]
-                           [id            (set/union #{:invalid-bsd-combination} con-exp)])))]
-    (ei/expression-info id :regex-matching :concluded matched-text confidence-explanations)))
+  (let [[id confidence-explanations]
+          (if-let [sbi (suffix-based-identifier m)]
+            ; Suffix-based identifier
+            sbi
+            ; Clause-based identifier
+            (let [[id con-exp]  (clause-based-identifier m)
+                  suffix        (suffix m)
+                  id-and-suffix (str id suffix)]
+              (if (sl/listed-id? id-and-suffix)
+                [id-and-suffix con-exp]
+                [id            (set/union #{:invalid-bsd-combination} con-exp)])))]
+    (mp/listed-match->expression-info @ids-d id "BSD regex" confidence-explanations m)))
 
 (defn detect
-  "Substitutes any BSD licenses found in the strings in `coll` with an
-  expression-info map. Returns other elements unchanged."
+  "Detects any BSD licenses found in the strings in `coll`, and replaces them
+  with an expression-info map. Returns other elements unchanged."
   [coll]
   (faux/parse coll re bsd-match->expression-info))

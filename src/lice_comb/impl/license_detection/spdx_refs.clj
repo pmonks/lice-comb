@@ -14,20 +14,20 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [spdx.regexes                   :as sre]
-            [lice-comb.impl.faux-parse      :as faux]
-            [lice-comb.impl.expression-info :as ei]))
+  (:require [spdx.regexes                                      :as sre]
+            [lice-comb.impl.faux-parse                         :as faux]
+            [lice-comb.impl.license-detection.match-processing :as mp]))
 
-(defn- match->ei
+(defn- ref-match->ei
   "Turns a match from the ref regex into an expression info map."
   [strategy m]
-  (when-let [ref (:match m)]
-    (ei/expression-info ref strategy :declared ref nil)))
+  (mp/match->expression-info (:match m) strategy m))
+
 
 (defn detect
   "Detects any SPDX license or addition refs found in the `String`s in
   `coll` with an expression-info map. Returns other elements unchanged."
   [coll]
   (faux/parse coll
-              (sre/license-ref-re)  (partial match->ei :spdx-license-ref)
-              (sre/addition-ref-re) (partial match->ei :spdx-addition-ref)))
+              (sre/license-ref-re)  (partial ref-match->ei "SPDX LicenseRef")
+              (sre/addition-ref-re) (partial ref-match->ei "SPDX AdditionRef")))

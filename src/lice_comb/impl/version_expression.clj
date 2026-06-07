@@ -18,8 +18,7 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [clojure.string                 :as s]
-            [wreck.api                      :as re]
+  (:require [wreck.api                      :as re]
             [lice-comb.impl.regex-fragments :as ref]
             [lice-comb.impl.version-number  :as ver]))
 
@@ -54,7 +53,7 @@
       etc.)
    2. An only suffix (only, etc.)
 
-  If ncg-prefix is provided and is not blank, each of these elements will be
+  If ncg-prefix is provided and is not nil, each of these elements will be
   placed into an NCG whose name will be the value of `ncg-prefix` prefixed to
   one of these values:
 
@@ -62,7 +61,7 @@
   * `Only` - containing the matched 'only' text (item 2 above)"
   ([] (suffix-regex nil))
   ([^String ncg-prefix]
-   (if (s/blank? ncg-prefix)
+   (if (nil? ncg-prefix)
      re-oool-no-cgs
      (re/fgrp "i"
               (re/alt
@@ -80,11 +79,11 @@
      b. An or-later suffix (or later, or at your discretion any larer version,
         etc.)
 
-  If ncg-prefix is provided and is not blank, items 2 and 3 on this list will be
+  If ncg-prefix is provided and is not nil, items 2 and 3 on this list will be
   placed into an NCG whose name will be the value of `ncg-prefix` prefixed to
   one of these values:
 
-  * `Version` - containing the matched version number (item #2 above)
+  * `VersionNumber` - containing the matched version number (item #2 above)
   * `Only` - containing the matched 'only' text (item 3a above)
   * `OrLater` - containing the matched 'or later' text (item 3b above)
 
@@ -96,7 +95,7 @@
   ([version-numbers] (expression-regex nil version-numbers))
   ([ ^String ncg-prefix version-numbers]
    (when (seq version-numbers)
-     (let [version-number-regex (re/ncg (when-not (s/blank? ncg-prefix) (str ncg-prefix ncg-version-number)) (ver/range-regex version-numbers))
+     (let [version-number-regex (re/ncg (when-not (nil? ncg-prefix) (str ncg-prefix ncg-version-number)) (ver/range-regex version-numbers))
            suffix-regex         (suffix-regex ncg-prefix)]
        (re/join (re/opt-grp re-version-label ref/ows)
                 version-number-regex

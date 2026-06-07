@@ -14,14 +14,16 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [clojure.string                                       :as s]
-            [spdx.identifiers                                     :as si]
-            [lice-comb.impl.spdx                                  :as lcis]
-            [lice-comb.impl.version-series                        :as verser]
-            [lice-comb.impl.faux-parse                            :as faux]
-            [lice-comb.impl.license-regexes                       :as licre]
-            [lice-comb.impl.license-detection.match-processing    :as mp]
-            [lice-comb.impl.license-detection.bsd                 :as bsd]
+  (:require [wreck.api                                           :as re]
+            [lice-comb.impl.spdx                                 :as lcis]
+            [lice-comb.impl.version-series                       :as verser]
+            [lice-comb.impl.faux-parse                           :as faux]
+            [lice-comb.impl.license-regexes                      :as licre]
+            [lice-comb.impl.license-detection.match-processing   :as mp]
+            [lice-comb.impl.license-detection.bsd                :as bsd]
+            [lice-comb.impl.license-detection.cc                 :as cc]
+            [lice-comb.impl.license-detection.gnu                :as gnu]
+
 ;            [lice-comb.impl.license-detection.classpath-exception :as cpe]
             ))
 
@@ -29,8 +31,7 @@
 (def ids-d
   (delay
     (apply disj @lcis/ids-d
-                (concat @bsd/ids-d  ))  ;####TODO: ADD MORE HERE AS THEY'RE RE-ADDED!
-;                 nil)  ;####TODO: REMOVE THIS ONCE THERE'S AT LEAST ONE SPECIALISED HANDLER
+                (concat @bsd/ids-d @cc/ids-d @gnu/ids-d))  ;####TODO: ADD MORE HERE AS THEY'RE RE-ADDED!
 ))
 
 
@@ -72,13 +73,18 @@
         {raw-version-series :version-series
          unversioned-ids    :unversioned-ids} (verser/version-series ids)
         version-series (vals raw-version-series)
-        all-items      (sort-by (fn [x]    ;####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
-                                  (* -1  ; Sort in reverse order (longest to shortest)
-                                     (if (string? x)
-                                       (count (:name (si/id->info x)))
-                                       (apply max (map #(count %) (:name-formats x))))))  ; Only consider the longest name in each version series
-                                (concat unversioned-ids version-series))]
-    (mapcat build-regex-fn-pairs all-items)))
+        all-items      (concat unversioned-ids version-series)
+        re-fn-pairs    (mapcat build-regex-fn-pairs all-items)]
+    (reverse (sort-by #(count (re/str' (first %))) re-fn-pairs))))  ; Sort from longest regex to shortest
+
+;####TODO: DELETE ONCE TESTED!!!!
+;        all-items      (sort-by (fn [x]    ;####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
+;                                  (* -1  ; Sort in reverse order (longest to shortest)
+;                                     (if (string? x)
+;                                       (count (:name (si/id->info x)))
+;                                       (apply max (map #(count %) (:name-formats x))))))  ; Only consider the longest name in each version series
+;                                (concat unversioned-ids version-series))]
+;    (mapcat build-regex-fn-pairs all-items)))
 
 ; Pairs of regex/fn based on listed SPDX license and exception names and ids
 (def ^:private pairs-d (delay (build-regex-fn-pairs-for-ids @ids-d)))

@@ -23,13 +23,11 @@
 (def ^:private re-proprietary-commercial
   (re/fgrp "i"
            ref/nwb
-           (re/alt-grp (re/join #"Propriet[aoe]ry" (re/opt-grp (re/oom ref/ws+hyphens+slashes) "Commercial"))
-                       #"Commercial"
-                       (re/join (re/opt-grp #"Copyright" ref/mws (re/n2m 0 30 ".")) "All" ref/mws "Rights" ref/mws "Reserved")
-                       #"Private")
-           (re/opt-grp ref/mws #"Licen?[cs]e")
-;####TODO: CONFIRM WHETHER THIS IS NEEDED
-;           ref/ows
+           (re/alt-grp (re/join ref/proprietary (re/opt-grp (re/oom ref/ws+hyphens+slashes) "Commercial"))
+                       "Commercial"
+                       (re/join (re/opt-grp "Copyright" ref/mws (re/n2m 0 20 ".")) "All" ref/mws "Rights" ref/mws "Reserved")
+                       "Private")
+           (re/opt-grp ref/mws ref/license)
            ref/nwa))
 
 (defn detect
@@ -37,4 +35,4 @@
   `coll` and replaces them with an expression-info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-proprietary-commercial (partial mp/unversioned-match->expression-info (lcis/proprietary-commercial) :custom-regex)))
+  (faux/parse coll re-proprietary-commercial (partial mp/match->expression-info (lcis/proprietary-commercial) "Proprietary/commercial regex")))

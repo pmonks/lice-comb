@@ -45,7 +45,6 @@
     (is (= "1.1.1a"      (canonicalise "1.1.1a"))))
   (testing "semver - canonicalised"
     (is (= "1.0"         (canonicalise "1")))
-    (is (= "1.0"         (canonicalise "01")))
     (is (= "1.0"         (canonicalise "1.0.0")))
     (is (= "1.1"         (canonicalise "01.1")))
     (is (= "1.1"         (canonicalise "01.01")))
@@ -54,6 +53,7 @@
     (is (= "1.0.1x"      (canonicalise "000000001.0000000.000000001x")))
     (is (= "2.1"         (canonicalise "2_1"))))  ; e.g. from things like lgpl_v2_1
   (testing "year2 - no change"
+    (is (= "01"          (canonicalise "01")))
     (is (= "89"          (canonicalise "89")))
     (is (= "96"          (canonicalise "96")))
     (is (= "96b"         (canonicalise "96b"))))
@@ -108,30 +108,37 @@
     (is (re/regex? (exact-regex "1")))
     (is (re/regex? (exact-regex "1.0")))
     (is (re/regex? (exact-regex "1.1")))
+    (is (re/regex? (exact-regex "1.1a")))
     (is (re/regex? (exact-regex "1.1.0.1")))
     (is (re/regex? (exact-regex "0.0.0.0.0.1")))
+    (is (re/regex? (exact-regex "89")))
+    (is (re/regex? (exact-regex "89x")))
+    (is (re/regex? (exact-regex "1989")))
+    (is (re/regex? (exact-regex "1989t")))
+    (is (re/regex? (exact-regex "19890101")))
+    (is (re/regex? (exact-regex "19890101b")))
+    (is (re/regex? (exact-regex "1989-01-01")))
+    (is (re/regex? (exact-regex "1989-01-01v"))))
   (testing "Valid version numbers - semver (non-strict)"
-    (is (re/=' #"0*0(?:[\-–—_,\.]0+)*"                           (exact-regex "00")))
     (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (exact-regex "2")))
-    (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (exact-regex "02")))
     (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (exact-regex "2.0")))
     (is (re/=' #"0*2(?:[\-–—_,\.]0+)*"                           (exact-regex "2.0.0")))
     (is (re/=' #"0*2[\-–—_,\.]0*1(?:[\-–—_,\.]0+)*"              (exact-regex "2.1")))
     (is (re/=' #"0*2[\-–—_,\.]0*0[\-–—_,\.]0*1(?:[\-–—_,\.]0+)*" (exact-regex "2.0.1")))
     (is (re/=' #"0*99[\-–—_,\.]0*100(?:[\-–—_,\.]0+)*"           (exact-regex "000000099.00000100"))))
   (testing "Valid version numbers - semver (strict)"
-    (is (re/=' #"0*0(?:\.0+)*"           (exact-regex "00"    true)))
     (is (re/=' #"0*2(?:\.0+)*"           (exact-regex "2"     true)))
-    (is (re/=' #"0*2(?:\.0+)*"           (exact-regex "02"    true)))
     (is (re/=' #"0*2(?:\.0+)*"           (exact-regex "2.0"   true)))
     (is (re/=' #"0*2(?:\.0+)*"           (exact-regex "2.0.0" true)))
     (is (re/=' #"0*2\.0*1(?:\.0+)*"      (exact-regex "2.1"   true)))
     (is (re/=' #"0*2\.0*0\.0*1(?:\.0+)*" (exact-regex "2.0.1" true)))
     (is (re/=' #"0*99\.0*100(?:\.0+)*"   (exact-regex "000000099.00000100" true))))
   (testing "Valid version numbers - 2 digit year"
+    (is (re/=' #"0*(?:19)?00" (exact-regex "00")))
+    (is (re/=' #"0*(?:19)?02" (exact-regex "02")))
     (is (re/=' #"0*(?:19)?86" (exact-regex "86")))
     (is (re/=' #"0*(?:19)?86" (exact-regex "86" true)))  ; Strict separators flag has no impact on 2 digit years
-    (is (re/=' #"0*(?:19)?89" (exact-regex "0000089"))))
+    (is (re/=' #"0*(?:19)?89" (exact-regex "089"))))
   (testing "Valid version numbers - 4 digit year"
     (is (re/=' #"0*1986" (exact-regex "1986")))
     (is (re/=' #"0*1986" (exact-regex "1986" true)))  ; Strict separators flag has no impact on 4 digit years
@@ -144,10 +151,10 @@
     (is (re/=' #"0*2(?:[\-–—_,\.]0+)*(?i:a)"              (exact-regex "2a")))
     (is (re/=' #"0*1[\-–—_,\.]0*3(?:[\-–—_,\.]0+)*(?i:c)" (exact-regex "1.3c")))
     (is (re/=' #"0*1\.0*3(?:\.0+)*(?i:c)"                 (exact-regex "1.3c" true)))
-    (is (re/=' #"0*(?:19)?86(?i:b)"                       (exact-regex "86b")))                ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
-    (is (re/=' #"0*2006(?i:x)"                            (exact-regex "2006x")))              ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
-    (is (re/=' #"0*2015[\-–—_]?0*5[\-–—_]?0*13(?i:q)"     (exact-regex "0020150513q")))        ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
-    (is (re/=' #"0*2020\-?0*10\-?0*11(?i:v)"              (exact-regex "20201011v" true))))))  ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
+    (is (re/=' #"0*(?:19)?86(?i:b)"                       (exact-regex "86b")))               ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
+    (is (re/=' #"0*2006(?i:x)"                            (exact-regex "2006x")))             ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
+    (is (re/=' #"0*2015[\-–—_]?0*5[\-–—_]?0*13(?i:q)"     (exact-regex "0020150513q")))       ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
+    (is (re/=' #"0*2020\-?0*10\-?0*11(?i:v)"              (exact-regex "20201011v" true)))))  ; This case doesn't exist in the SPDX license list as of v3.28, but we test it anyway
 
 (defn range-regex-matches?
   "Turns the given `version-numbers` into a regex, then confirms that it matches

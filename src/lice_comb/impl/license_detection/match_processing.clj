@@ -71,7 +71,7 @@
   [id-formats or-later? versions]
   (when (and (seq id-formats) (seq versions))
     (let [ids (seq
-                (map #(lcis/canonicalise-id % or-later?)
+                (map #(lcis/canonicalise-id-or-expression (str % (when or-later? "+")))
                      (distinct (filter si/listed? (for [id-format id-formats
                                                         version   versions]
                                                     (if (re-find re-placeholder-ver id-format)
@@ -119,38 +119,38 @@
     ; No version number was found in the match
     [(:default-id version-series) #{:missing-version}]))
 
-(defn- matched-text->strategy
-  "Determines the strategy from matched text."
-  ([ids-checked matched-text] (matched-text->strategy ids-checked matched-text nil))
-  ([ids-checked ^String matched-text regex-type]
-   (let [ids   (seq (filter identity ids-checked))
-         names (seq (filter identity (map #(:name (si/id->info %)) ids)))]
-     (cond
-       (some #{(s/lower-case matched-text)} (map s/lower-case ids))   :spdx-listed-identifier
-       (some #{matched-text}                names)                    :spdx-listed-name-exact-match
-       (some #{(s/lower-case matched-text)} (map s/lower-case names)) :spdx-listed-name-case-insensitive-match
-       :else                                                          (case regex-type
-                                                                        :id-regex   :spdx-listed-identifier-near-match
-                                                                        :name-regex :spdx-listed-name-near-match
-                                                                        :regex-match)))))
-
-(defn- expression-info
+(defn match->expression-info
   "Constructs a valid expression-info map from the given match information."
-  [ids-checked ^String detected-id regex-type ^String matched-text confidence-explanations]
-   (let [strategy   (matched-text->strategy ids-checked matched-text regex-type)
-         match-type (if (= strategy :spdx-listed-identifier) :declared :concluded)]
-     (ei/expression-info detected-id strategy match-type matched-text confidence-explanations)))
+  ([^String detected-id ^String strategy ^java.util.Map m] (match->expression-info detected-id strategy nil m))
+  ([^String detected-id ^String strategy confidence-explanations ^java.util.Map m]
+   (ei/expression-info detected-id (:match m) strategy confidence-explanations)))
+
+(defn listed-match->expression-info
+  "Constructs a valid expression-info map from the given listed license match."
+  ([ids-checked ^String detected-id ^String default-strategy ^java.util.Map m] (listed-match->expression-info ids-checked detected-id default-strategy nil m))
+  ([ids-checked ^String detected-id ^String default-strategy confidence-explanations ^java.util.Map m]
+   (let [matched-text (:match m)
+         ids          (seq (filter identity ids-checked))
+         names        (seq (filter identity (map #(:name (si/id->info %)) ids)))
+         strategy     (cond
+                        (some #{(s/lower-case matched-text)} (map s/lower-case ids))   "SPDX identifier"
+                        (some #{matched-text}                names)                    "SPDX listed name exact match"
+                        (some #{(s/lower-case matched-text)} (map s/lower-case names)) "SPDX listed name case insensitive match"
+                        :else                                                          default-strategy)]
+   (ei/expression-info detected-id matched-text strategy confidence-explanations))))
 
 (defn unversioned-match->expression-info
   "Returns an expression info map for the unversioned (non-version-series)
   match `m`, which matched `id` via `regex-type`."
-  [^String id regex-type m]
-  (expression-info [id] id regex-type (:match m) nil))
+  [^String id regex-type ^java.util.Map m]
+  (let [default-strategy (str id " " (if (= regex-type :id-regex) "identifier" "name") " regex")]
+    (listed-match->expression-info [id] id default-strategy m)))
 
 (defn versioned-match->expression-info
   "Returns an expression info map based on the 'best' identifier in match m,
   assumed to be within `version-series`.  Returns `nil` only if `m` is `nil`,
   otherwise _always_ returns a result."
-  [version-series regex-type m]
-  (let [[detected-id confidence-explanations] (best-id-from-match version-series m)]
-    (expression-info (:ids version-series) detected-id regex-type (:match m) confidence-explanations)))
+  [^java.util.Map version-series regex-type ^java.util.Map m]
+  (let [[detected-id confidence-explanations] (best-id-from-match version-series m)
+        default-strategy                      (str (:series-id version-series) " " (if (= regex-type :id-regex) "identifier" "name") " regex")]
+    (listed-match->expression-info (:ids version-series) detected-id default-strategy confidence-explanations m)))

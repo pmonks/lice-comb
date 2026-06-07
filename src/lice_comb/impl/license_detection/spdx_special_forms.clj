@@ -14,19 +14,18 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [spdx.regexes                   :as sre]
-            [lice-comb.impl.faux-parse      :as faux]
-            [lice-comb.impl.expression-info :as ei]))
+  (:require [spdx.regexes                                      :as sre]
+            [lice-comb.impl.faux-parse                         :as faux]
+            [lice-comb.impl.license-detection.match-processing :as mp]))
 
-(defn- match->ei
+(defn- special-form-match->ei
   "Turns a match from the special form regex into an expression info map."
   [m]
-  (when-let [special-form (:match m)]
-    (ei/expression-info special-form :spdx-special-form :declared special-form nil)))
+  (mp/match->expression-info (:match m) "SPDX special form" m))
 
 (defn detect
   "Detects any SPDX license or addition refs found in the `String`s in
   `coll` with an expression-info map. Returns other elements unchanged."
   [coll]
   (faux/parse coll
-              (sre/special-form-re) match->ei))
+              (sre/special-form-re) special-form-match->ei))

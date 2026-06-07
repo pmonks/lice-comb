@@ -24,11 +24,9 @@
     (re/fgrp "i"
              ref/nwb
              (re/-lb re-cc0 ref/bounded-ows)  ; Old versions of the JVM don't support unbounded look behind groups
-             "Public" (re/zom ref/ws+hyphens+slashes) "Domain"
-             (re/opt-grp ref/mws #"Licen?[cs]e")
+             ref/public (re/zom ref/ws+hyphens+slashes) "Domain"
+             (re/opt-grp ref/mws ref/license)
              (re/-la ref/bounded-ows (re/opt-grp #"per" ref/bounded-ows) re-cc0)  ; Or unbounded look ahead groups
-;####TODO: CONFIRM WHETHER THIS IS NEEDED
-;             ref/ows
              ref/nwa)))
 
 (defn detect
@@ -36,4 +34,4 @@
   `coll` and replaces them with an expression-info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-public-domain (partial mp/unversioned-match->expression-info (lcis/public-domain) :custom-regex)))
+  (faux/parse coll re-public-domain (partial mp/match->expression-info (lcis/public-domain) "Public domain regex")))

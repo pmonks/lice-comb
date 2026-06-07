@@ -24,7 +24,7 @@
   (re/fgrp "i"
            ref/nwb
            ref/ows
-           (re/opt-grp (re/alt-grp "EPL" (re/join "Eclipse" ref/mws "pub?lic" ref/mws #"licen?[cs]e"))
+           (re/opt-grp (re/alt-grp "EPL" (re/join "Eclipse" (re/opt-grp ref/mws ref/public) ref/mws ref/license))
                        ref/mws)
            (re/opt-grp (re/alt-grp (re/join (re/opt-grp "the" ref/mws) "same" ref/mws "as")
                                    (re/join (re/opt-grp "just" ref/mws) "like"))
@@ -38,4 +38,4 @@
   replaces them with an expression-info map in that location. Returns other
   elements unchanged."
   [coll]
-  (faux/parse coll re-clojure (partial mp/unversioned-match->expression-info "EPL-1.0" :custom-regex)))
+  (faux/parse coll re-clojure (partial mp/match->expression-info "EPL-1.0" "'Like Clojure' regex")))

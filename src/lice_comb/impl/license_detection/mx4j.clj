@@ -26,8 +26,8 @@
            ref/nwb
            (re/opt-grp "The" ref/ows)
            "MX4J"
-           (re/opt-grp ref/mws #"Pub?lic")
-           (re/opt-grp ref/mws #"Licen?[cs]e")
+           (re/opt-grp ref/mws ref/public)
+           (re/opt-grp ref/mws ref/license)
            (re/opt-grp (verexp/expression-regex ["1.0"]))
            ref/nwa))
 
@@ -36,4 +36,4 @@
   `coll` and replaces them with an expression-info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-mx4j (partial mp/unversioned-match->expression-info "Apache-1.1" :custom-regex)))
+  (faux/parse coll re-mx4j (partial mp/match->expression-info "Apache-1.1" "MX4J regex")))

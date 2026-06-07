@@ -33,4 +33,4 @@
   `coll` and replaces them with an expression-info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-bouncy-castle (partial mp/unversioned-match->expression-info "MIT" :custom-regex)))
+  (faux/parse coll re-bouncy-castle (partial mp/match->expression-info "MIT" "Bouncy Castle regex")))

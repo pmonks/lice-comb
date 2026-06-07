@@ -9,8 +9,7 @@
 ;
 
 (ns lice-comb.impl.license-detection.cursed
-  "Helper functionality related to substituting matches for certain cursed
-  license names.
+  "'Cursed' license detection.
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
@@ -21,18 +20,14 @@
 ; Map of name values seen in the wild that are too ambiguous / cursed to support any reasonable form of automated parsing
 (def ^:private cursed-names {
   ; Seen in https://repo.maven.apache.org/maven2/com/sun/mail/all/1.4.7/all-1.4.7.pom and other javax.mail/javax.mail-api artifacts
-  "GPLv2+CE" '({:id "GPL-2.0-only"            :type :concluded :confidence :high :strategy :manual-verification :source ("GPLv2+CE" "GPLv2")}
+  "GPLv2+CE" '({:id "GPL-2.0-only"            :type :concluded :confidence :high :strategy "Manual verification" :source ("GPLv2+CE" "GPLv2")}
                :with
-               {:id "Classpath-exception-2.0" :type :concluded :confidence :high :strategy :manual-verification :source ("GPLv2+CE" "CE")})})
-
-(defn- cursed-re
-  "Builds a regex for the given cursed name `s`."
-  [s]
-  (when s
-    (re/fgrp "i" ref/nwb (re/esc s) ref/nwa)))
+               {:id "Classpath-exception-2.0" :type :concluded :confidence :high :strategy "Manual verification" :source ("GPLv2+CE" "CE")})})
 
 (def ^:private pairs
-  (map #(vector (cursed-re (key %)) (val %)) cursed-names))
+  (map #(vector (re/fgrp "i" ref/nwb (re/esc (key %)) ref/nwa)
+                (val %))
+       cursed-names))
 
 (defn detect
   "Detects any cursed expressions found inside the `String`s in `coll` and

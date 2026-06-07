@@ -137,7 +137,7 @@
     "W3C"    "W3C"
     "libpng" "Libpng"
     (let [[default or-later?] (defaults series-id)]
-      (lcis/canonicalise-id (default series-ids) or-later?))))
+      (lcis/canonicalise-id-or-expression (str (default series-ids) (when or-later? "+"))))))
 
 ;####TODO: MERGE THIS WITH default-id
 (defn best-id
@@ -149,7 +149,7 @@
   (if (= 1 (count ids))
     (first ids)
     (let [[default or-later?] (defaults series-id)]
-      (lcis/canonicalise-id (default ids) or-later?))))
+      (lcis/canonicalise-id-or-expression (str (default ids) (when or-later? "+"))))))
 
 (defn- id-formats
   "Returns a set of unique id formats in the given version series (identified

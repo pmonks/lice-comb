@@ -21,13 +21,12 @@
             [lice-comb.impl.utils     :as lciu]
             [lice-comb.impl.3rd-party :as lci3]))
 
-(def ^:private re-version-number (re/join #"0*"
-                                          (re/alt-grp (re/ncg "year2"  (re/exn 2 #"\d"))                                                                  ; year2
-                                                      (re/ncg "year4"  (re/exn 4 #"\d"))                                                                  ; year4
-                                                      (re/ncg "date"   (re/ncg "dateYear"  (re/exn 4 #"\d")) #"[\-_]?0*"                                   ; date
-                                                                       (re/ncg "dateMonth" (re/exn 2 #"\d")) #"[\-_]?0*"
-                                                                       (re/ncg "dateDay"   (re/exn 2 #"\d")))
-                                                      (re/ncg "semver" (re/ncg "semverFirst" #"\d+") (re/opt-ncg "semverRest" (re/zom-grp #"[\._]\d+"))))  ; semver (must come last)
+(def ^:private re-version-number (re/join (re/alt-grp (re/join #"0?" (re/ncg "year2"  (re/exn 2 #"\d")))                                                                  ; year2
+                                                      (re/join #"0*" (re/ncg "year4"  (re/exn 4 #"\d")))                                                                  ; year4
+                                                      (re/join #"0*" (re/ncg "date"   (re/ncg "dateYear"  (re/exn 4 #"\d")) #"[\-_]?0*"                                   ; date
+                                                                                      (re/ncg "dateMonth" (re/exn 2 #"\d")) #"[\-_]?0*"
+                                                                                      (re/ncg "dateDay"   (re/exn 2 #"\d"))))
+                                                      (re/join #"0*" (re/ncg "semver" (re/ncg "semverFirst" #"\d+") (re/opt-ncg "semverRest" (re/zom-grp #"[\._]\d+")))))  ; semver (must come last)
                                           (re/opt-ncg "suffix" #"\p{Alpha}")))
 
 ; Public because they're used during id detection

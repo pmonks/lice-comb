@@ -105,35 +105,42 @@
   :invalid-bsd-clause-count       :low     ; BSD clause count is invalid (e.g. "BSD 99 Clause")
   :inconsistent-bsd-clause-counts :medium  ; BSD clause counts are inconsistent (e.g. "2 Clause BSD 4 Clause")
   :invalid-bsd-combination        :medium  ; Invalid combination of BSD clause counts and suffixes (e.g. "BSD 2 Clause No Nuclear License")
-  ; GNU-specific confidence explanations
+  ; CC-BY-specific confidence explanations
 ;####TODO
+  ; GNU-specific confidence explanations
+  :missing-version-suffix         :medium  ; GNU family suffix is missing (e.g. "GPL 2.0")
 })
+
+(def ^:private strategies->match-type
+  {"SPDX expression"   :declared
+   "SPDX identifier"   :declared
+   "SPDX LicenseRef"   :declared
+   "SPDX AdditionRef"  :declared
+   "SPDX special form" :declared})
 
 (defn expression-info
   "Returns a fully populated and validated expression-info map, canonicalising
   `id` as appropriate (including into an SPDX expression, in some cases).
 
   Throws if any argument is invalid."
-  ([id strategy match-type matched-text] (expression-info id strategy match-type matched-text nil))
-  ([id strategy match-type matched-text confidence-explanations]
-   (let [canonical-id (if-let [ci (lcis/canonicalise-id id)]
-                        ci
-                        (throw (ex-info "Internal logic error: an invalid identifier or expression was produced" {:invalid-id id :matched-text matched-text})))
-         _            (when-not (keyword? strategy)
-                        (throw (ex-info "Internal logic error: an invalid match strategy was produced" {:strategy strategy})))
-         _            (when-not (contains? #{:declared :concluded} match-type)
-                        (throw (ex-info "Internal logic error: an invalid match type was produced" {:type match-type})))
-         src          (if (s/blank? matched-text)
-                        (throw (ex-info "Internal logic error: matched text was blank" {:id id :matched-text matched-text}))
-                        (list (s/trim matched-text)))
-         confidence   (when (= :concluded match-type)
-                        (if (seq confidence-explanations)
-                          (let [confidences (set (map confidence-explanation->confidence confidence-explanations))]
-                            (if (contains? confidences nil)
-                              (throw (ex-info "Internal logic error: a confidence explanation is missing a confidence level" {:confidence-explanations confidence-explanations}))
-                              (lowest-confidence confidences)))
-                          :high))]  ; Default to :high when confidence-explanations is empty
-     (merge {:id       canonical-id
+  ([^String id-or-expression ^String matched-text ^String strategy] (expression-info id-or-expression matched-text strategy nil))
+  ([^String id-or-expression ^String matched-text ^String strategy confidence-explanations]
+   (let [canonical-id-or-expression
+                    (if-let [ci (lcis/canonicalise-id-or-expression id-or-expression)]
+                      ci
+                      (throw (ex-info "Internal logic error: an invalid identifier or expression was produced" {:invalid-id id-or-expression :matched-text matched-text})))
+         src        (if (s/blank? matched-text)
+                      (throw (ex-info "Internal logic error: matched text was blank" {:id-or-expression id-or-expression :matched-text matched-text}))
+                      (list (s/trim matched-text)))
+         match-type (get strategies->match-type strategy :concluded)
+         confidence (when (= :concluded match-type)
+                      (if (seq confidence-explanations)
+                        (let [confidences (set (map confidence-explanation->confidence confidence-explanations))]
+                          (if (contains? confidences nil)
+                            (throw (ex-info "Internal logic error: a confidence explanation is missing a confidence level" {:confidence-explanations confidence-explanations}))
+                            (lowest-confidence confidences)))
+                        :high))]  ; Default to :high when confidence-explanations is empty
+     (merge {:id       canonical-id-or-expression
              :strategy strategy
              :type     match-type
              :source   src}

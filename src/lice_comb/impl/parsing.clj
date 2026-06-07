@@ -33,6 +33,8 @@
             [lice-comb.impl.license-detection.spdx-refs              :as spdx-refs]
             [lice-comb.impl.license-detection.spdx-special-forms     :as spdx-special-forms]
             [lice-comb.impl.license-detection.bsd                    :as bsd]
+            [lice-comb.impl.license-detection.cc                     :as cc]
+            [lice-comb.impl.license-detection.gnu                    :as gnu]
             [lice-comb.impl.license-detection.cursed                 :as cursed]
             [lice-comb.impl.license-detection.mx4j                   :as mx4j]
             [lice-comb.impl.license-detection.bouncy-castle          :as bouncy-castle]
@@ -193,6 +195,7 @@
                                      (when (>= (count s) 3)                        ; Then remove anything short
                                        %)))))))
 
+;####TODO: THIS ISN'T WORKING!!!!
 (defn- sub-unidentifieds
   "Replace any `String`s in `coll` with an expression-info map containing an
   unidentified LicenseRef or AdditionRef."
@@ -355,12 +358,14 @@
                                     cursed/detect
                                     spdx-refs/detect
                                     bsd/detect
+                                    cc/detect
                                     mx4j/detect
                                     bouncy-castle/detect
                                     like-clojure/detect
                                     public-domain/detect
                                     proprietary-commercial/detect
                                     listed-licenses/detect
+                                    gnu/detect
                                     spdx-special-forms/detect  ; This should go later, since it's somewhat non-specific (i.e. matching "NONE")
 
 ;                                    refs/sub
@@ -386,7 +391,7 @@
 ;(debug-print "PRIOR TO REMOVING FRAGMENTS")
                         remove-extraneous-fragments
 ;(debug-print "AFTER REMOVING FRAGMENTS")
-                        sub-unidentifieds
+                        sub-unidentifieds    ;####TODO: THIS ISN'T WORKING!!!!!
                         finalise-operators
 ;####TEST!!!!
 ;(debug-print "PRIOR TO REBUILD")
@@ -402,14 +407,14 @@
     (let [n (s/trim n)]
       ; 1. If it's an SPDX expression, return the canonicalised rendition of it - in the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should move into the parsing sequence in parse-internal
       (if-let [parse-tree (sexp/parse n)]
-        (let [canonicalised-expression (sexp/unparse parse-tree)]
-          {canonicalised-expression (list {:type     :declared
-                                           :strategy (let [ids (sexp/extract-ids parse-tree)]
-                                                       (if (and (= 1 (count ids))
-                                                                (= :license-id (si/id-type (first ids))))
-                                                         :spdx-identifier
-                                                         :spdx-expression))
-                                           :source (list n)})})
+        (let [canonicalised-expression (sexp/unparse parse-tree)
+              strategy                 (let [ids (sexp/extract-ids parse-tree)]
+                                         (if (and (= 1 (count ids))
+                                                  (= :license-id (si/id-type (first ids))))
+                                           "SPDX identifier"
+                                           "SPDX expression"))
+              ei                       (ei/expression-info canonicalised-expression n strategy)]
+          {canonicalised-expression (list ei)})
         ; 2. Parse the name
         (if-let [result (parse-internal n)]
           result
