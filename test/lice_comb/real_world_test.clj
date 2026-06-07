@@ -1531,7 +1531,7 @@
     (is (valid= #{"MPL-1.0"}                  (name->expressions "Mozilla Public License 1")))
     (is (valid= #{"MPL-2.0"}                  (name->expressions "Mozilla Public License Version 2.0")))
     (is (valid= #{"MPL-2.0"}                  (name->expressions "Mozilla Public License")))
-    (is (valid= #{"Plexus"}                   (name->expressions "Similar to Apache License but with the acknowledgment clause removed")))   ; JDOM - see https://lists.linuxfoundation.org/pipermail/spdx-legal/2014-December/001280.html
+    (is (valid= #{"Plexus"}                   (name->expressions "Similar to Apache License but with the acknowledgment clause removed")))   ; JDOM - see https://lists.spdx.org/g/Spdx-legal/topic/22080544#msg997
     (is (valid= #{"GPL-2.0-only WITH Classpath-exception-2.0"} (name->expressions "GPL2 w/ CPE")))   ; One of two licenses in javax.xml.bind/jaxb-api@2.4.0-b180830.0359 (via parent)
     (is (valid= #{"GPL-2.0-or-later"}         (name->expressions "GNU General Public License (GPL) version 2, or any later version")))   ; One of three licenses in org.bytedeco/javacpp-platform@1.5.10
     (is (valid= #{"GPL-2.0-or-later"}         (name->expressions "GNU General Public License (GPL) version 2, or any lator version")))   ; Spelling variation on the previous test
