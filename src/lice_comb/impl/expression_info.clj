@@ -106,7 +106,7 @@
   :inconsistent-bsd-clause-counts :medium  ; BSD clause counts are inconsistent (e.g. "2 Clause BSD 4 Clause")
   :invalid-bsd-combination        :medium  ; Invalid combination of BSD clause counts and suffixes (e.g. "BSD 2 Clause No Nuclear License")
   ; CC-BY-specific confidence explanations
-;####TODO
+  :invalid-cc-suffix              :low
   ; GNU-specific confidence explanations
   :missing-version-suffix         :medium  ; GNU family suffix is missing (e.g. "GPL 2.0")
 })

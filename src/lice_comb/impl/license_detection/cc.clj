@@ -86,9 +86,6 @@
                  "\n\n#### Clauses ####\n"
                  (clauses)
                  "\n\n#### Version ####\n"
-;####TODO: REMOVE ONCE TESTED!!!!
-;                 (re/opt-grp lcir/fre-version)
-;                 (re/opt-grp (lcir/re-version-and-suffix))
                  (re/opt-grp ref/ows (verexp/expression-regex "cc" ["1.0" "2.0" "2.5" "3.0" "4.0"]))  ; Note: this doesn't technically have to be exhaustive - just enough to emit an appropriate regex for CC version numbers
                  "\n\n#### Suffixes ####\n"
                  (suffixes)
@@ -155,14 +152,15 @@
         ; Hardcode version 1.0 for CC0, and CC-PDM, as that's their only version
         ["1.0" version-present? (and (= major "1") (= minor "0"))]
         ; For everything else, use the version in the regex match, or 4.0 if there isn't one
-        (let [version-number (str (or major "4") "." (or minor "0"))
-              version-number (if (contains? cc-versions version-number)
-                               version-number
-                               (let [version-number (str (or major "4") ".0")]  ; Check if we got something nonsensical like "1.5" and correct to "1.0"
-                                 (if (contains? cc-versions version-number)
-                                   version-number
-                                   "4.0")))]
-          [version-number version-present? true])))))
+        (let [valid-version-number? (contains? cc-versions (str major "." minor))
+              version-number        (str (or major "4") "." (or minor "0"))
+              version-number        (if (contains? cc-versions version-number)
+                                      version-number
+                                      (let [version-number (str (or major "4") ".0")]  ; Check if we got something nonsensical like "1.5" and correct to "1.0"
+                                        (if (contains? cc-versions version-number)
+                                          version-number
+                                          "4.0")))]
+          [version-number version-present? valid-version-number?])))))
 
 (defn- valid-suffix
   "Returns the (single) valid suffix that was found in match `m`, or `nil` if
@@ -223,7 +221,7 @@
   [version-present? valid-version? valid-clauses? valid-suffix?]
   (let [version-explanation (case [version-present? valid-version?]
                               [true true]   nil
-                              [true false]  :invalid-verson
+                              [true false]  :invalid-version
 ;                              [false true]  :missing-version  ; This is logically impossible
                               [false false] :missing-version)]
     (case [(and version-present? valid-version?) valid-clauses? valid-suffix?]
@@ -244,14 +242,7 @@
                                           (valid-version-number m clauses)
         suffix                            (valid-suffix m)
         [id valid-clauses? valid-suffix?] (valid-id clauses version-number suffix valid-clauses?)
-;####TEST!!!!
-_ (println "⭐️⭐️⭐️ clauses" (pr-str clauses)
-           "\nvalid-clauses?" (pr-str valid-clauses?)
-           "\nversion-number" (pr-str version-number)
-           "\nversion-present?" (pr-str version-present?)
-           "\nvalid-version-number?" (pr-str valid-version-number?)
-           "\nsuffix" (pr-str suffix))
-        confidence-explanations              (determine-confidence-explanations version-present? valid-version-number? valid-clauses? valid-suffix?)]
+        confidence-explanations           (determine-confidence-explanations version-present? valid-version-number? valid-clauses? valid-suffix?)]
     (mp/listed-match->expression-info @ids-d id "Creative Commons regex" confidence-explanations m)))
 
 (defn detect

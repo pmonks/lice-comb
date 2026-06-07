@@ -149,17 +149,8 @@
                            (if (sl/listed-id? id)
                              [id confidence-explanations]
                              [(str variant "-" default-version "-or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version not valid
-                              :low
                               (set/union #{:invalid-version} confidence-explanations)])]
     (mp/listed-match->expression-info @ids-d id (str variant " regex") confidence-explanations m)))
-
-;####TODO: REMOVE ONCE TESTED!!!!
-;    (merge {:id         (lcisu/assert-listed-id id)
-;            :type       :concluded
-;            :confidence confidence
-;            :strategy   :regex-matching
-;            :source     (list match)}
-;            (when confidence-explanations {:confidence-explanations confidence-explanations}))))
 
 (defn detect
   "Detects any Creative Commons licenses found in the strings in `coll`, and
