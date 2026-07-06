@@ -60,7 +60,7 @@
                       "\n\n#### Leading word salad ####\n"
                       (re/zom-grp re-agpl-words-before ref/mws)
                       "\n\n#### Matching words ####\n"
-                      (re/ncg "agpl" (re/alt (re/join "A" ref/ows "GPL") "Affero"))
+                      (re/ncg "agpl" (re/alt (re/join "A" ref/ows (re/alt-grp "GPL" "PGL")) "Affero"))  ; "APGL" seen here: https://repo.clojars.org/cider-ci/open-session/2.0.0-beta.1/open-session-2.0.0-beta.1.pom
                       "\n\n#### Pre-version word salad ####\n"
                       (re/zom-grp ref/mws re-agpl-words-before)
                       "\n\n#### Version and version qualifier ####\n"
@@ -84,9 +84,9 @@
                       (re/zom-grp re-lgpl-words-before ref/mws)
                       "\n\n#### Matching words ####\n"
                       (re/ncg "lgpl"
-                              (re/alt (re/join "L" ref/ows "GPL"
+                              (re/alt (re/join "L" ref/ows "GPL")
                                       (re/join (re/alt-grp "GNU" "GPL") ref/mws re-lesser-or-library)
-                                      (re/join re-lesser-or-library ref/mws (re/alt-grp "GNU" "GPL" ref/general)))))
+                                      (re/join re-lesser-or-library ref/mws (re/alt-grp "GNU" "GPL" ref/general))))
                       "\n\n#### Pre-version word salad ####\n"
                       (re/zom-grp ref/mws re-lgpl-words-before)
                       "\n\n#### Version and version qualifier ####\n"
@@ -129,7 +129,12 @@
   match/find match using one of the GNU regexes constructed above."
   [variant m]
   (let [version-present?   (boolean (get m "gnuVersionNumber"))
-        default-version    (if (= variant "LGPL") "2.0" "1.0")  ; Note: on the advice of the SPDX technical team, default to earliest GPL version when version not present (unlike most other license families!)
+        default-version    (case variant
+                             "AGPL" (if (s/includes? (:match m) "GNU")
+                                      "3.0"  ; GNU AGPL started at v3.0
+                                      "1.0") ; But AGPL by itself (without a "GNU" qualifier) started at v1.0
+                             "LGPL" "2.0"
+                             "1.0")  ; Note: on the advice of the SPDX technical team, default to earliest GPL version when version not present (unlike most other license families!)
         version            (s/replace (get m "gnuVersionNumber" default-version) #"[\s\p{Punct}]+" ".")  ; Turn other version number point separators into . (undercore appears in at least one license name, for example)
         confidence-explanations
                            (if version-present?

@@ -22,19 +22,13 @@
             [lice-comb.impl.license-detection.match-processing   :as mp]
             [lice-comb.impl.license-detection.bsd                :as bsd]
             [lice-comb.impl.license-detection.cc                 :as cc]
-            [lice-comb.impl.license-detection.gnu                :as gnu]
-
-;            [lice-comb.impl.license-detection.classpath-exception :as cpe]
-            ))
+            [lice-comb.impl.license-detection.gnu                :as gnu]))
 
 ; Default license and exception ids i.e. those that don't need special case support
 (def ids-d
   (delay
     (apply disj @lcis/ids-d
-                (concat @bsd/ids-d @cc/ids-d @gnu/ids-d))  ;####TODO: ADD MORE HERE AS THEY'RE RE-ADDED!
-))
-
-
+                (concat @bsd/ids-d @cc/ids-d @gnu/ids-d))))
 
 ;####TODO: COME UP WITH A BETTER NAME!!!!
 (defmulti ^:private build-pairs-from-regexes
@@ -69,22 +63,13 @@
   "Builds a sequence of regex/fn pairs for every id in `ids`, sorted by longest
   name to shortest name."  ; ####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
   [ids]
-  (let [;####TODO: NEED TO SPLIT IDS INTO DEPRECATED AND NON-DEPRECATED, THEN SORT BY LENGTH!!!!
+  (let [;####TODO: NEED TO SPLIT IDS INTO DEPRECATED AND NON-DEPRECATED, THEN SORT!!!!
         {raw-version-series :version-series
          unversioned-ids    :unversioned-ids} (verser/version-series ids)
         version-series (vals raw-version-series)
         all-items      (concat unversioned-ids version-series)
         re-fn-pairs    (mapcat build-regex-fn-pairs all-items)]
     (reverse (sort-by #(count (re/str' (first %))) re-fn-pairs))))  ; Sort from longest regex to shortest
-
-;####TODO: DELETE ONCE TESTED!!!!
-;        all-items      (sort-by (fn [x]    ;####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
-;                                  (* -1  ; Sort in reverse order (longest to shortest)
-;                                     (if (string? x)
-;                                       (count (:name (si/id->info x)))
-;                                       (apply max (map #(count %) (:name-formats x))))))  ; Only consider the longest name in each version series
-;                                (concat unversioned-ids version-series))]
-;    (mapcat build-regex-fn-pairs all-items)))
 
 ; Pairs of regex/fn based on listed SPDX license and exception names and ids
 (def ^:private pairs-d (delay (build-regex-fn-pairs-for-ids @ids-d)))
