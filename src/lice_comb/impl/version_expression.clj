@@ -22,8 +22,6 @@
             [lice-comb.impl.regex-fragments :as ref]
             [lice-comb.impl.version-number  :as ver]))
 
-(def re-version-label (re/fgrp "i" "v" (re/opt-grp "er" (re/opt-grp "sion" (re/opt "s")))))
-
 (def ncg-version-number "VersionNumber")
 (def ncg-or-later       "OrLater")
 (def ncg-only           "Only")
@@ -97,6 +95,6 @@
    (when (seq version-numbers)
      (let [version-number-regex (re/ncg (when-not (nil? ncg-prefix) (str ncg-prefix ncg-version-number)) (ver/range-regex version-numbers))
            suffix-regex         (suffix-regex ncg-prefix)]
-       (re/join (re/opt-grp re-version-label ref/ows)
-                version-number-regex
-                (re/opt-grp suffix-regex))))))
+       (re/fgrp "i" (re/opt-grp ref/version-label ref/ows)
+                    version-number-regex
+                    (re/opt-grp suffix-regex))))))

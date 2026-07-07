@@ -19,14 +19,13 @@
     which would make this namespace superfluous)
   * this namespace is not part of the public API of lice-comb and may change
     without notice"
-  (:require [clojure.string                    :as s]
-            [spdx.identifiers                  :as si]
-            [wreck.api                         :as re]
-            [rencg.api                         :as ncg]
-            [lice-comb.impl.spdx               :as lcis]
-            [lice-comb.impl.regex-fragments    :as ref]
-            [lice-comb.impl.version-number     :as vernum]
-            [lice-comb.impl.version-expression :as verexp]))
+  (:require [clojure.string                 :as s]
+            [spdx.identifiers               :as si]
+            [wreck.api                      :as re]
+            [rencg.api                      :as ncg]
+            [lice-comb.impl.spdx            :as lcis]
+            [lice-comb.impl.regex-fragments :as ref]
+            [lice-comb.impl.version-number  :as vernum]))
 
 ; These are public because lice-comb.impl.regex.licenses and lice-comb.impl.id-detection.default depend on knowing what these values are
 (def placeholder-ver  "${VER}")
@@ -41,7 +40,7 @@
 (def ^:private re-oool-in-id        (re/fgrp "i" #"(?:\+|or-later|only)"))
 (def ^:private re-oool-in-name      (re/fgrp "i" #"(?<!\w)(?:\+| or later| only)(?!\w)"))
 (def ^:private re-version-series    (re/join #"(?<prefix>.*?)-" re-version-group #"(?:\+|(?:-(?<suffix>.*)))?"))
-(def ^:private re-opt-version-label (re/opt-grp verexp/re-version-label ref/ows))
+(def ^:private re-opt-version-label (re/opt-grp ref/version-label ref/ows))
 
 ; Only public for the unit tests
 (defn id->version-series

@@ -174,10 +174,10 @@
                       #"(?<!\w)(?i:Microsoft)(?!\w)"                                              (re/inline (re/alt-grp "Microsoft" "MS"))
                       #"(?<!\w)(?i:End[\s\-]user licen[cs]e agreement|EULA)(?!\w)"                (re/inline (re/alt-grp (re/join "End" ref/mws "User" ref/mws ref/license ref/mws "Agreement") "EULA"))
                       #"(?<!\w)(?i:Plexus\s+Classworlds\s+Licen[cs]e)(?!\w)"                      #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))"
-                      #"\A(?i:Open\s+Software\s+Licen[cs]e)(?!\w)"                                (re/inline (re/join #"Open" ref/mws (re/alt-grp #"Software" #"SW") ref/mws ref/license))  ; OSL-x.y
+                      #"\A(?i:Open\s+Software\s+Licen[cs]e)(?!\w)"                                (re/inline (re/join #"Open" ref/mws ref/software ref/mws ref/license))  ; OSL-x.y
                       #"\A(?i:Open\s+Public\s+Licen[cs]e)(?!\w)"                                  (re/inline (re/join #"Open" ref/mws ref/public ref/mws ref/license))  ; OPL-x.y
-                      #"(?<!\w)Unlicense(?!\w)"                                                   (re/inline (re/join #"Un" ref/ows #"licen?[cs]ed?"))
-;                      #""Hyperfiddle Business Source License""
+                      #"(?<!\w)Unlicense(?!\w)"                                                   (re/inline (re/join #"Un" ref/ows ref/license #"d?"))
+                      #"(?<!\w)Business\s+Source\s+Licen[cs]e(?!\w)"                              (re/inline (re/join (re/-lb "Hyperfiddle" ref/bounded-mws) "Business" ref/mws "Source" ref/mws ref/license))
 ;                      #"(?i)(?<!\w)(?<!Microsoft[\s\-–—]+)Reciprocal\s+Public\s+Licen[cs]e(?!\w)" #"(?<!Microsoft[\s\-–—]+)Reciprocal(?:[\s\-–—]+Pub?lic)?[\s\-–—]+Licen[cs]e"
                       ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
 

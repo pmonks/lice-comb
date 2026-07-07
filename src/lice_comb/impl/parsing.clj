@@ -35,6 +35,7 @@
             [lice-comb.impl.license-detection.bsd                    :as bsd]
             [lice-comb.impl.license-detection.cc                     :as cc]
             [lice-comb.impl.license-detection.gnu                    :as gnu]
+            [lice-comb.impl.license-detection.wtf                    :as wtf]
             [lice-comb.impl.license-detection.cursed                 :as cursed]
             [lice-comb.impl.license-detection.mx4j                   :as mx4j]
             [lice-comb.impl.license-detection.bouncy-castle          :as bouncy-castle]
@@ -361,6 +362,7 @@
                                     spdx-refs/detect
                                     bsd/detect
                                     cc/detect
+                                    wtf/detect
                                     mx4j/detect
                                     bouncy-castle/detect
                                     jdom/detect

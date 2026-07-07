@@ -71,6 +71,11 @@
                   ; Numeric year (mandatory - either 2 or 4 digits)
                   #"\d\d(?:\d\d)?"))
 
+; Number variations
+
+(def decimal (re/join #"\d+" (re/opt-grp #"\.\d+")))
+(def semver  (re/join #"\d+" (re/zom-grp #"\.\d+")))
+
 ; Common word variations
 
 (def ands            (re/alt-grp "and" "&"))
@@ -80,12 +85,14 @@
 (def public          #"pub?lic")       ; Note: the optional missing `b` is a known misspelling in a POM license name: https://repo.clojars.org/org/immutant/immutant-common/1.1.4/immutant-common-1.1.4.pom (there are others too)
 (def proprietary     #"propriet[aoe]ry")
 (def general         #"genere?al")     ; Note: "genereal" is a known misspelling in a POM license name: https://repo.clojars.org/clj-file-zip/clj-file-zip/0.1.0/clj-file-zip-0.1.0.pom
+(def software        (re/alt-grp #"Software" #"SW"))
+(def version-label   (re/join "v" (re/opt-grp "er" (re/opt-grp "sion" (re/opt "s")))))
 
 ; Country variants
 
 (def au (re/alt-grp "Australia" "AU"))
 (def at (re/alt-grp "Austria" "AT"))
-(def gb (re/alt-grp "Great Britain" "United Kingdom" (re/join #"Eng(?:land)?" mws ands mws #"Wales") "GB" "UK"))
+(def gb (re/alt-grp "Great Britain" "United Kingdom" (re/join #"Eng(?:land)?" mws ands mws #"Wales") "GB" "UK"))  ; Note: while geopolitically inaccurate, this tends to match how these terms are used in practice
 (def fr (re/alt-grp "France" "FR"))
 (def de (re/alt-grp "Germany" "Deutsche" "DE"))
 (def jp (re/alt-grp "Japan" "JP"))

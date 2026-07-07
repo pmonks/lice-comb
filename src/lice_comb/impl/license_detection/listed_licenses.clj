@@ -22,13 +22,14 @@
             [lice-comb.impl.license-detection.match-processing   :as mp]
             [lice-comb.impl.license-detection.bsd                :as bsd]
             [lice-comb.impl.license-detection.cc                 :as cc]
-            [lice-comb.impl.license-detection.gnu                :as gnu]))
+            [lice-comb.impl.license-detection.gnu                :as gnu]
+            [lice-comb.impl.license-detection.wtf                :as wtf]))
 
 ; Default license and exception ids i.e. those that don't need special case support
 (def ids-d
   (delay
     (apply disj @lcis/ids-d
-                (concat @bsd/ids-d @cc/ids-d @gnu/ids-d))))
+                (concat @bsd/ids-d @cc/ids-d @gnu/ids-d @wtf/ids-d))))
 
 ;####TODO: COME UP WITH A BETTER NAME!!!!
 (defmulti ^:private build-pairs-from-regexes

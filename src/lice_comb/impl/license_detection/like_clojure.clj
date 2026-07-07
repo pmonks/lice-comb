@@ -23,14 +23,15 @@
 (def ^:private re-clojure
   (re/fgrp "i"
            ref/nwb
-           ref/ows
+;           ref/ows
            (re/opt-grp (re/alt-grp "EPL" (re/join "Eclipse" (re/opt-grp ref/mws ref/public) ref/mws ref/license))
                        ref/mws)
            (re/opt-grp (re/alt-grp (re/join (re/opt-grp "the" ref/mws) "same" ref/mws "as")
                                    (re/join (re/opt-grp "just" ref/mws) "like"))
                        ref/mws)
            "Clojure"
-           ref/ows
+           (re/-la ref/bounded-mws "library")
+;           ref/ows
            ref/nwa))
 
 (defn detect
