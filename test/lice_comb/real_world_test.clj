@@ -61,7 +61,7 @@
     (is (valid= #{"Apache-2.0"} (name->expressions "ASL")))
     (is (valid= #{"Apache-2.0"} (name->expressions "ASL 2.0")))
     (is (valid= #{"AFL-3.0"} (name->expressions "Academic Free License 3.0")))
-    (is (valid= #{""} (name->expressions "Aduna BSD license")))  ;####TODO!!!!
+    (is (valid= #{"BSD-3-Clause"} (name->expressions "Aduna BSD license")))
     (is (valid= #{"AGPL-3.0-only"} (name->expressions "Affero GNU Public License v3")))
     (is (valid= #{"AGPL-1.0-or-later"} (name->expressions "Affero General Public License")))
     (is (valid= #{"AGPL-3.0-or-later"} (name->expressions "Affero General Public License v3 or later (at your option)")))
@@ -176,7 +176,7 @@
     (is (valid= #{(str "CC-BY-4.0 WITH " (name->unidentified-addition-ref "exception for binary distribution"))} (name->expressions "CC Attribution 4.0 International with exception for binary distribution")))
     (is (valid= #{"CC-BY-NC-4.0"} (name->expressions "CC BY-NC")))
     (is (valid= #{"CC-BY-NC-4.0"} (name->expressions "CC BY-NC 4.0")))
-    (is (valid= #{"CC-BY-NC-4.0"} (name->expressions "CC BY-SA 4.0")))
+    (is (valid= #{"CC-BY-SA-4.0"} (name->expressions "CC BY-SA 4.0")))
     (is (valid= #{"CC-BY-4.0"} (name->expressions "CC-BY-4.0")))
     (is (valid= #{"CC0-1.0"} (name->expressions "CC0")))
     (is (valid= #{"CC0-1.0"} (name->expressions "CC0 1.0 Universal")))
@@ -580,8 +580,8 @@
     (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/mixradio/graphite-filter/blob/master/LICENSE")))
     (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/mixradio/instrumented-ring-jetty-adapter/blob/master/LICENSE")))
     (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/mixradio/mr-clojure/blob/master/LICENSE")))
-    (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/mixradio/mr-edda/blob/master/LICENSE")))
-    (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/mixradio/multi-atom/blob/master/LICENSE")))
+    (is (unidentified-only? (name->expressions "https://github.com/mixradio/mr-edda/blob/master/LICENSE")))     ; This used to be BSD-3-Clause, but the project was removed from GitHub
+    (is (unidentified-only? (name->expressions "https://github.com/mixradio/multi-atom/blob/master/LICENSE")))  ; This used to be BSD-3-Clause, but the project was removed from GitHub
     (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/mixradio/party/blob/master/LICENSE")))
     (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/mixradio/radix/blob/master/LICENSE")))
     (is (valid= #{"BSD-3-Clause"} (name->expressions "https://github.com/riverford/datagrep/blob/master/LICENSE")))

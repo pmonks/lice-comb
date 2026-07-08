@@ -360,6 +360,7 @@
                         (tu/until-> lcipu/done-parsing?
                                     cursed/detect
                                     spdx-refs/detect
+                                    detect-uris                 ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
                                     bsd/detect
                                     cc/detect
                                     wtf/detect
@@ -369,11 +370,9 @@
                                     like-clojure/detect
                                     public-domain/detect
                                     proprietary-commercial/detect
-                                    listed-licenses/detect     ; This should go after most specific detections, since it's very broad (i.e. detects most of the license & exception lists)
-                                    gnu/detect                 ; Except this one, since it matches very liberally ("word salad" strategy)
-                                    spdx-special-forms/detect  ; This should go later, since it's somewhat non-specific (i.e. matching "NONE")
-                                    detect-uris                ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
-                        )
+                                    listed-licenses/detect      ; This should go after most specific detections, since it's very broad (i.e. detects most of the license & exception lists)
+                                    gnu/detect                  ; Except this one, since it matches very liberally ("word salad" strategy)
+                                    spdx-special-forms/detect)  ; This should go later, since it's somewhat non-specific (i.e. matching "NONE")
                         ; At this point we've identified all of the licenses we possibly can
 ;                        deduplicate-identifiers
                         detect-operators
