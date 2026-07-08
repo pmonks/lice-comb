@@ -69,7 +69,7 @@
     (is (valid= #{"AGPL-1.0-or-later"} (name->expressions "Affero General Public License,")))
     (is (proprietary-only? (name->expressions "All Rights Reserved")))
     (is (proprietary-only? (name->expressions "All rights reserved")))
-    (is (valid= #{""} (name->expressions "Amazon Software License")))  ;####TODO!!!!  See https://github.com/spdx/license-list-XML/issues/2973
+    (is (unidentified-only? (name->expressions "Amazon Software License")))  ; See https://github.com/spdx/license-list-XML/issues/2973
     (is (valid= #{"Apache-2.0"} (name->expressions "Apache")))
     (is (valid= #{"Apache-2.0"} (name->expressions "Apache 2")))
     (is (valid= #{"Apache-2.0"} (name->expressions "Apache 2 License")))
@@ -159,7 +159,7 @@
     (is (valid= #{"BSD-2-Clause"} (name->expressions "BSD C2")))
     (is (valid= #{"BSD-4-Clause"} (name->expressions "BSD License")))
     (is (valid= #{"BSD-3-Clause"} (name->expressions "BSD New, Version 3.0")))
-    (is (valid= #{"BSD-4-Clause"} (name->expressions "BSD Standard License")))
+    (is (valid= #{"BSD-3-Clause"} (name->expressions "BSD Standard License")))  ; Note: not an official BSD term
     (is (valid= #{"BSD-4-Clause"} (name->expressions "BSD license")))
     (is (valid= #{"BSD-2-Clause"} (name->expressions "BSD-2-Clause")))
     (is (valid= #{"BSD-3-Clause"} (name->expressions "BSD-3")))
