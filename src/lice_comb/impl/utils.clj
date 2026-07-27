@@ -169,26 +169,27 @@
   * does not support the `$1` syntax (as supported by Clojure and the JVM) - use
     a function instead"
   [^CharSequence s ^java.util.regex.Pattern re replacement]
-  (let [replacement-fn (if (fn? replacement) replacement (constantly replacement))
-        m              (re-matcher re s)
-        ncgs           (ncg/re-named-groups re)]
-    (loop [result []
-           index  0
-           f      (.find m)]
-      (if f
-        (let [match       (ncg/re-groups m ncgs)
-              match-start (long (:start match))
-              match-end   (long (:end   match))
-              rep-as-list (when-let [r (replacement-fn match)]
-                            (if (list? r)
-                              r
-                              (list r)))]
-          (if (= index match-start)
-            (recur (vec (concat result rep-as-list))                              match-end (.find m))  ; Back-to-back matches
-            (recur (vec (concat result [(subs s index match-start)] rep-as-list)) match-end (.find m))))
-        (if (= index (count s))
-          result  ; The last find consumed to the end of the input
-          (conj result (subs s index (count s))))))))  ; There's some trailing text - make sure to preserve it
+  (when (and s re)
+    (let [replacement-fn (if (fn? replacement) replacement (constantly replacement))
+          m              (re-matcher re s)
+          ncgs           (ncg/re-named-groups re)]
+      (loop [result []
+             index  0
+             f      (.find m)]
+        (if f
+          (let [match       (ncg/re-groups m ncgs)
+                match-start (long (:start match))
+                match-end   (long (:end   match))
+                rep-as-list (when-let [r (replacement-fn match)]
+                              (if (list? r)
+                                r
+                                (list r)))]
+            (if (= index match-start)
+              (recur (vec (concat result rep-as-list))                              match-end (.find m))  ; Back-to-back matches
+              (recur (vec (concat result [(subs s index match-start)] rep-as-list)) match-end (.find m))))
+          (if (= index (count s))
+            result  ; The last find consumed to the end of the input
+            (conj result (subs s index (count s)))))))))  ; There's some trailing text - make sure to preserve it
 
 (defn retained-split
   "As for `clojure.string/split`, but retains whatever `re` matched as distinct
@@ -261,12 +262,14 @@
   (when f
     (html->text (slurp f))))
 
+;####TODO: SHOULD THIS BE IN lice-comb.impl.http ?
 (defn valid-http-uri?
-  "Returns true if given string is a valid HTTP or HTTPS URI."
+  "Returns true if given string is a valid http://, https://, or file:// URI."
   [^String s]
   ; Note: no nil check needed since the isValid method handles null sanely
   (.isValid (org.apache.commons.validator.routines.UrlValidator. ^"[Ljava.lang.String;" (into-array String ["http" "https"])) s))
 
+;####TODO: SHOULD THIS BE IN lice-comb.impl.http ?
 (defn simplify-uri
   "Simplifies a URI (which can be a string, java.net.URL, or java.net.URI) if
   possible, returning a String. Returns nil if the input is nil or blank."
@@ -276,7 +279,7 @@
       (let [luri (s/lower-case (s/trim uri))]
         (if (valid-http-uri? luri)
           (-> luri
-              (s/replace #"\Ahttps?://(www\.)?"     "http://")    ; Normalise to http and strip any www. extension on hostname
+              (s/replace #"\Ahttps?://(www\.)?"     "http://")    ; Canonicalise protocol to http:// and strip any leading www. in hostname
               (s/replace #"licen[cs]es?"            "license")    ; Alternative spelling and plurals of "license"
               (s/replace #"\.\p{Alpha}\p{Alnum}*\z" "")           ; Strip file type extension (if any)
               (s/replace #"/+\z"                    ""))          ; Strip all trailing forward slash (/) characters

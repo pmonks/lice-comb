@@ -121,11 +121,11 @@
                      ref/nwa))
 
 ;;
-;; EXPRESSION-INFO CONSTRUCTION FROM A MATCH
+;; FRAGMENT INFO CONSTRUCTION FROM A MATCH
 ;;
 
-(defn- gnu-match->expression-info
-  "Construct an expression-info map from `m`, a map returned from a rencg regex
+(defn- gnu-match->fragment-info
+  "Construct a fragment info map from `m`, a map returned from a rencg regex
   match/find match using one of the GNU regexes constructed above."
   [variant m]
   (let [version-present?   (boolean (get m "gnuVersionNumber"))
@@ -155,13 +155,13 @@
                              [id confidence-explanations]
                              [(str variant "-" default-version "-or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version not valid
                               (set/union #{:invalid-version} confidence-explanations)])]
-    (mp/listed-match->expression-info @ids-d id (str variant " regex") confidence-explanations m)))
+    (mp/listed-match->fragment-info @ids-d id (str variant " regex") confidence-explanations m)))
 
 (defn detect
   "Detects any Creative Commons licenses found in the strings in `coll`, and
-  replaces them with an expression-info map. Returns other elements unchanged."
+  replaces them with a fragment info map. Returns other elements unchanged."
   [coll]
   (faux/parse coll
-              re-agpl (partial gnu-match->expression-info "AGPL")
-              re-lgpl (partial gnu-match->expression-info "LGPL")
-              re-gpl  (partial gnu-match->expression-info "GPL")))
+              re-agpl (partial gnu-match->fragment-info "AGPL")
+              re-lgpl (partial gnu-match->fragment-info "LGPL")
+              re-gpl  (partial gnu-match->fragment-info "GPL")))

@@ -36,7 +36,7 @@
 
 (defn detect
   "Detects any 'like Clojure' values found inside the `String`s in `coll` and
-  replaces them with an expression-info map in that location. Returns other
+  replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
-  (faux/parse coll re-clojure (partial mp/match->expression-info "EPL-1.0" "'Like Clojure' regex")))
+  (faux/parse coll re-clojure (partial mp/match->fragment-info "EPL-1.0" "'Like Clojure' regex")))

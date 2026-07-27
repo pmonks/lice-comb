@@ -38,7 +38,7 @@
 
 (defn detect
   "Detects any JDOM license declarations found inside the `String`s in `coll`
-  and replaces them with an expression-info map in that location. Returns other
+  and replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
-  (faux/parse coll re-jdom (partial mp/match->expression-info "Plexus" "JDOM regex")))
+  (faux/parse coll re-jdom (partial mp/match->fragment-info "Plexus" "JDOM regex")))

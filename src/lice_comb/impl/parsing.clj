@@ -11,39 +11,36 @@
 (ns lice-comb.impl.parsing
   "License name, URI, and text parsing functionality. Note: this namespace is
   not part of the public API of lice-comb and may change without notice."
-  (:require [clojure.string                                          :as s]
-            [clojure.set                                             :as set]
-            [clojure.java.io                                         :as io]
-            [thread-until.core                                       :as tu]
-            [spdx.matching                                           :as sm]
-            [spdx.identifiers                                        :as si]
-            [spdx.expressions                                        :as sexp]
-            [embroidery.api                                          :as e]
-            [wreck.api                                               :as re]
-            [lice-comb.impl.regex-fragments                          :as ref]
-            [lice-comb.impl.spdx                                     :as lcis]
-            [lice-comb.impl.expression-info                          :as ei]
-            [lice-comb.impl.http                                     :as lcihttp]
-            [lice-comb.impl.correction                               :as lcic]
-            [lice-comb.impl.faux-parse                               :as faux]
-            [lice-comb.impl.utils                                    :as lciu]
-            [lice-comb.impl.parsing-utils                            :as lcipu]
-            [lice-comb.impl.3rd-party                                :as lci3]
-            [lice-comb.impl.license-detection.listed-licenses        :as listed-licenses]
-            [lice-comb.impl.license-detection.spdx-refs              :as spdx-refs]
-            [lice-comb.impl.license-detection.spdx-special-forms     :as spdx-special-forms]
-            [lice-comb.impl.license-detection.bsd                    :as bsd]
-            [lice-comb.impl.license-detection.cc                     :as cc]
-            [lice-comb.impl.license-detection.gnu                    :as gnu]
-            [lice-comb.impl.license-detection.wtf                    :as wtf]
-            [lice-comb.impl.license-detection.cursed                 :as cursed]
-            [lice-comb.impl.license-detection.mx4j                   :as mx4j]
-            [lice-comb.impl.license-detection.bouncy-castle          :as bouncy-castle]
-            [lice-comb.impl.license-detection.jdom                   :as jdom]
-            [lice-comb.impl.license-detection.like-clojure           :as like-clojure]
-            [lice-comb.impl.license-detection.public-domain          :as public-domain]
-            [lice-comb.impl.license-detection.proprietary-commercial :as proprietary-commercial]
-))
+  (:require [clojure.string                                            :as s]
+            [clojure.java.io                                           :as io]
+            [thread-until.core                                         :as tu]
+            [spdx.identifiers                                          :as si]
+            [spdx.expressions                                          :as sexp]
+            [wreck.api                                                 :as re]
+            [lice-comb.impl.regex-fragments                            :as ref]
+            [lice-comb.impl.spdx                                       :as lcis]
+            [lice-comb.impl.info-maps                                  :as im]
+            [lice-comb.impl.correction                                 :as lcic]
+            [lice-comb.impl.faux-parse                                 :as faux]
+            [lice-comb.impl.utils                                      :as lciu]
+            [lice-comb.impl.parsing-utils                              :as lcipu]
+            [lice-comb.impl.3rd-party                                  :as lci3]
+            [lice-comb.impl.license-detection.listed-licenses          :as listed-licenses]
+            [lice-comb.impl.license-detection.spdx-matching-guidelines :as spdx-matching]
+            [lice-comb.impl.license-detection.spdx-refs                :as spdx-refs]
+            [lice-comb.impl.license-detection.spdx-special-forms       :as spdx-special-forms]
+            [lice-comb.impl.license-detection.uris                     :as uris]
+            [lice-comb.impl.license-detection.bsd                      :as bsd]
+            [lice-comb.impl.license-detection.cc                       :as cc]
+            [lice-comb.impl.license-detection.gnu                      :as gnu]
+            [lice-comb.impl.license-detection.wtf                      :as wtf]
+            [lice-comb.impl.license-detection.cursed                   :as cursed]
+            [lice-comb.impl.license-detection.mx4j                     :as mx4j]
+            [lice-comb.impl.license-detection.bouncy-castle            :as bouncy-castle]
+            [lice-comb.impl.license-detection.jdom                     :as jdom]
+            [lice-comb.impl.license-detection.like-clojure             :as like-clojure]
+            [lice-comb.impl.license-detection.public-domain            :as public-domain]
+            [lice-comb.impl.license-detection.proprietary-commercial   :as proprietary-commercial]))
 
 ;####TODO: REMOVE ME!!!!
 (require '[clojure.pprint :as pp])
@@ -63,36 +60,24 @@
   coll)
 
 (defmulti match-text
-  "Returns an expressions-info map for `text` (a `String`, or something that can
+  "Returns an expressions info map for `text` (a `String`, or something that can
   be read), or `nil` if no matches are found or `text` is `nil`."
   {:arglists '([text])}
   class)
 
-(def ^:private num-cpus (.availableProcessors (Runtime/getRuntime)))
-
 (defmethod match-text java.lang.String
-  [s]
-  ; clj-spdx's *-within-text APIs are *expensive* but support batching, so we check batches of ids in parallel
-  (let [license-id-batches   (partition num-cpus @lcis/license-ids-d)
-        exception-id-batches (partition num-cpus @lcis/exception-ids-d)
-        license-ids-found    (apply set/union (e/pmap* #(sm/licenses-within-text   s %) license-id-batches))
-        exception-ids-found  (apply set/union (e/pmap* #(sm/exceptions-within-text s %) exception-id-batches))
-        expressions-found    (if (and (= 1 (count license-ids-found))
-                                      (= 1 (count exception-ids-found)))
-                               #{(str (first license-ids-found) " WITH " (first exception-ids-found))}
-                               (set/union license-ids-found exception-ids-found))]
-    (when expressions-found
-      ; Note: we don't need to sexp/canonicalise the keys here, as the only expressions that can be returned are already correctly constructed
-      (lcic/correct (into {} (map #(hash-map % (list {:id % :type :concluded :confidence :high :strategy :spdx-matching-guidelines :source (list "<content>")})) expressions-found))))))
+  [^String s]
+  (when-let [eis (spdx-matching/text->fragment-infos s)]
+    (lcic/correct (into {} #(hash-map (:fragment %) %) eis))))
 
 (defmethod match-text java.io.Reader
-  [r]
+  [^java.io.Reader r]
   (let [sw (java.io.StringWriter.)]
     (io/copy r sw)
     (match-text (str sw))))
 
 (defmethod match-text java.io.InputStream
-  [is]
+  [^java.io.InputStream is]
   (match-text (io/reader is)))
 
 (defmethod match-text :default
@@ -102,64 +87,33 @@
       (doall (match-text r)))))
 
 (defn parse-uri
-  "Parses the given license `uri`, returning an expressions-info map, or `nil`
-  if no matching license ids were found."
-  [^String uri]
-  (when-not (s/blank? uri)
-    (when-let [result (or
-                        ; 1. Is the URI a close match for any of the URIs in the SPDX license or exception lists?
-                        (when-let [id (lcis/best-near-match-uri uri)]
-                          {id (list {:id id :type :concluded :confidence :high :strategy :spdx-listed-uri-near-match})})  ; We don't need a :source here since we prepend it below
+  "Parses the given license `uri`, returning a fragment info map, or `nil`
+  if no matching license ids were found.
 
-                        ; 2. attempt to retrieve the text/plain contents of the uri and perform license text matching on it
-                        (when-let [license-text (lcihttp/get-text uri)]
-                          (match-text license-text)))]
-      ; We don't need to sexp/canonicalise the keys here, as we never detect an expression from a URI
-      (ei/prepend-source uri (lcic/correct result)))))
+  `attempt-download-and-match?` (default `false`) controls whether URIs are
+  downloaded and SPDX matching attempted on the content if they're not found in
+  the SPDX license list first"
+  ([^String uri] (parse-uri uri false))
+  ([^String uri ^Boolean attempt-download-and-match?]
+   (when-let [eis (uris/uri->fragment-infos uri attempt-download-and-match?)]
+     (lcic/correct (into {} (map #(vector (:fragment %) (list %)) eis))))))
 
-(defn- make-unidentified-ei
-  "Makes an expression-info map for the given license `n`ame, optionally
-  including `unidentified-license-ref` in the :id key."
-  ([^String n] (make-unidentified-ei n nil))
+(def ^:private placeholder-license-ref (lcis/name->unidentified-license-ref "PLACEHOLDER"))
+
+(defn- make-unidentified-fragment-info
+  "Makes a fragment info map for the given license `n`ame, optionally
+  including `unidentified-license-ref` in the :fragment key."
+  ([^String n] (make-unidentified-fragment-info n nil))
   ([^String n unidentified-license-ref]
-    (merge {:type :concluded :confidence :high :strategy :unidentified :source (list n)}
-           (if (s/blank? unidentified-license-ref)
-             {:id :unidentified}
-             {:id unidentified-license-ref}))))
-;####TEST: REMOVE ME ONCE DONE
-;    {:id unidentified-license-ref :type :concluded :confidence :high :strategy :unidentified :source (list n)}))
-
-; An approximately correct regex for finding http URIs in larger texts - loosely based on https://www.rfc-editor.org/rfc/rfc3986#appendix-B
-; Note: not all matches this regex finds are valid as per RFC-3986 - if that's needed, use lciu/valid-http-uri?
-(def ^:private approximate-uri-re (re/fgrp "i"
-                                           ref/nwb
-                                           (re/grp     (re/ncg "scheme" #"https?") #"://")
-                                           (re/ncg     "address" #"[^/?#\s]+")
-                                           (re/opt-ncg "path"    #"\/[^?#\s]*")
-                                           (re/opt-grp #"\?" (re/opt-ncg "queryString" #"[^#\s]*"))
-                                           (re/opt-grp #"#"  (re/opt-ncg "fragment"    #"[^\s]*"))
-                                           ref/nwa))
-
-;####TODO: IDEALLY THIS SHOULD BE IN ITS OWN NAMESPACE UNDER lice-comb.impl.license-detection
-(defn- detect-uris
-  "Detects any uris in the Strings in `coll` and replaces them with an
-  expression info map.  We do that here instead of in a separate namespace
-  because of the dependence on [[parse-uri]]."
-  [coll]
-  (flatten  ; In some cases a single URI results in multiple ids/expression infos, so we flatten them here
-    (faux/replace-in-strings
-      coll
-      approximate-uri-re
-      #(let [uri (:match %)]
-         (if-let [ei (parse-uri uri)]  ; Note: this may return more than one identifier (and associated info)
-           (vals ei)                   ; Unwrap all expressions info maps, and return them as nested sequences (which gets flattened up top)
-           (make-unidentified-ei uri))))))
+   (let [placeholder (if (s/blank? unidentified-license-ref) placeholder-license-ref unidentified-license-ref)]
+     (merge (im/fragment-info placeholder n "Unidentified name")
+            (when (s/blank? unidentified-license-ref) {:fragment :unidentified})))))  ; Note: this results in a (temporarily) invalid fragment info map, which we fix later (by turning it into either a LicenseRef or AdditionRef)
 
 (def ^:private re-operator (re/fgrp "i"
                                     ref/ows
                                     (re/alt (re/ncg "andOr"        ref/nwb #"and[\s/\\\-]+or" ref/nwa)
                                             (re/ncg "and"          ref/nwb #"and" ref/nwa)
-                                            (re/ncg "or"           ref/nwb #"or" (re/-la #"[\s-]lat[eo]r") ref/nwa) ;####TODO: the -later negative lookahead is likely redundant
+                                            (re/ncg "or"           ref/nwb #"or" (re/-la #"[\s-]lat[eo]r") ref/nwa)
                                             (re/ncg "with"         ref/nwb (re/alt (re/join #"with" ref/nwa) #"w/"))
                                             (re/ncg "ampersand"    (re/oom #"&"))
                                             (re/ncg "forwardSlash" (re/oom #"/"))
@@ -176,15 +130,15 @@
                                    re-operator
                                    (fn [m]
                                      (cond
-                                       (get m "and")       :and
-                                       (get m "ampersand") :and
-                                       (get m "or")        :or
                                        (get m "andOr")     :or   ; We assume the least restrictive interpretation
+                                       (get m "and")       :and
+                                       (get m "or")        :or
+                                       (get m "ampersand") :and
                                        (get m "with")      :with
-                                       :else               nil)))))  ; Replace slashes with nothing (i.e. break strings that contain these)
+                                       :else               nil)))))  ; Replace slashes with nothing (i.e. break expressions that contain these)
 
-(defn- remove-extraneous-fragments
-  "Removes 'extraneous' fragments from `coll`."
+(defn- strip-detritus
+  "Strips detritus from `coll`."
   [coll]
   (seq (filter #(if (string? %)
                   (not (s/blank? %))
@@ -200,15 +154,15 @@
 
 ;####TODO: THIS ISN'T WORKING!!!!
 (defn- sub-unidentifieds
-  "Replace any `String`s in `coll` with an expression-info map containing an
+  "Replace any `String`s in `coll` with a fragment info map containing an
   unidentified LicenseRef or AdditionRef."
   [coll]
   (let [placeholders              (lciu/map-str #(let [s (lciu/trim-non-word %)]
                                                    (if (s/blank? s)
-                                                     (make-unidentified-ei %)
-                                                     (make-unidentified-ei s)))
+                                                     (make-unidentified-fragment-info %)
+                                                     (make-unidentified-fragment-info s)))
                                                 coll)
-        unidentified-placeholder? (fn [x] (and (map? x) (= :unidentified (:id x))))]
+        unidentified-placeholder? (fn [x] (and (map? x) (= :unidentified (:fragment x))))]
     (loop [[f s & r] placeholders
            result    []]
       (if-not f
@@ -217,16 +171,16 @@
           ; Very first item in coll is unidentified, so convert it to a LicenseRef
           (unidentified-placeholder? f)
             (recur (concat [s] r)
-                   (conj result (assoc f :id (lcis/name->unidentified-license-ref (s/trim (last (:source f)))))))
+                   (conj result (assoc f :fragment (lcis/name->unidentified-license-ref (s/trim (last (:source f)))))))
 
           ; Second item we're currently looking at is unidentified, so convert it based on the preceding item
           (unidentified-placeholder? s)
             (if (= f :with)
               ; Convert to AdditionRef
-              (recur (concat [(assoc s :id (lcis/name->unidentified-addition-ref (s/trim (last (:source s)))))] r)
+              (recur (concat [(assoc s :fragment (lcis/name->unidentified-addition-ref (s/trim (last (:source s)))))] r)
                      (conj result :with))
               ; Convert to LicenseRef
-              (recur (concat [(assoc s :id (lcis/name->unidentified-license-ref (s/trim (last (:source s)))))] r)
+              (recur (concat [(assoc s :fragment (lcis/name->unidentified-license-ref (s/trim (last (:source s)))))] r)
                      (conj result
                            (case f
                              :or-with  :or
@@ -243,10 +197,10 @@
   SPDX expressions.
 
   For example:
-  [{:id \"Apache-2.0\" ...}]                                                       -> [[{:id \"Apache-2.0\" ...}]]
-  [{:id \"Apache-2.0\" ...} {:id \"MIT\"}]                                         -> [[{:id \"Apache-2.0\" ...}] [{:id \"MIT\" ...}]]
-  [{:id \"Apache-2.0\" ...} :or {:id \"MIT\" ...}]                                 -> [[\"Apache-2.0\" :or \"MIT\"]]
-  [{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...} {:id \"GPL-2.0-or-later\" ...}] -> [[{:id \"Apache-2.0\" ...} :and {:id \"MIT\" ...}] [{:id \"GPL-2.0-or-later\" ...}]]"
+  [{:fragment \"Apache-2.0\" ...}]                                                                   -> [[{:fragment \"Apache-2.0\" ...}]]
+  [{:fragment \"Apache-2.0\" ...} {:fragment \"MIT\"}]                                               -> [[{:fragment \"Apache-2.0\" ...}] [{:fragment \"MIT\" ...}]]
+  [{:fragment \"Apache-2.0\" ...} :or {:fragment \"MIT\" ...}]                                       -> [[\"Apache-2.0\" :or \"MIT\"]]
+  [{:fragment \"Apache-2.0\" ...} :and {:fragment \"MIT\" ...} {:fragment \"GPL-2.0-or-later\" ...}] -> [[{:fragment \"Apache-2.0\" ...} :and {:fragment \"MIT\" ...}] [{:fragment \"GPL-2.0-or-later\" ...}]]"
   [coll]
   (loop [result  [[]]
          [f & r] coll]
@@ -302,14 +256,16 @@
               (partition-by keyword? coll)))))
 
 (defn- finalise-operators
-  "Finalises operator keywords in `coll`, by changing ."
+  "Finalises operator keywords in `coll`, by replacing `AND` and `OR` with
+  `WITH` when they occur between a license or LicenseRef and an exception or an
+  AdditionRef."
   [coll]
   (let [coll (collapse-operators coll)
         f    (fn [idx elem]
                (if (keyword? elem)
                  (let [elem-before (nth coll (dec idx) nil)
                        elem-after  (nth coll (inc idx) nil)]
-                   (case [(lcis/id-position (:id elem-before)) (lcis/id-position (:id elem-after))]
+                   (case [(lcis/id-position (:fragment elem-before)) (lcis/id-position (:fragment elem-after))]
                      [:license-position :exception-position] :with
                      (case elem
                        :with     :and
@@ -320,15 +276,15 @@
     (filter identity (map-indexed f coll))))
 
 (defn- rebuild-expressions
-  "Rebuilds one or more SPDX expressions from the `coll`ection containing ei
-  maps and operator keywords.  Returns a single expressions-info map."
+  "Rebuilds one or more SPDX expressions from the `coll`ection containing
+  fragment info maps and operator keywords.  Returns an expressions map."
   [coll]
   (when coll
     ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
-    (when-not (every? lcis/unidentified? (map :id (filter map? coll)))
+    (when-not (every? lcis/unidentified? (map :fragment (filter map? coll)))
       (if (and (= 1 (count coll)) (map? (first coll)))
-        {(:id (first coll)) coll}  ; Single id detected, so return it
-        (let [grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:id (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
+        {(:fragment (first coll)) coll}  ; Single id detected, so return it
+        (let [grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:fragment (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
               result              (into {}
                                         (map #(let [raw-expression (s/join " " (map (fn [elem]
                                                                                       (cond
@@ -336,7 +292,7 @@
                                                                                           (s/upper-case (name elem))
 
                                                                                         (map? elem)
-                                                                                          (:id elem)
+                                                                                          (:fragment elem)
 
                                                                                         :else
                                                                                          (throw (ex-info "Unexpected element in collection" {:collection coll}))))
@@ -351,16 +307,16 @@
 
 ;####TODO: CAN PROBABLY MOVE THIS INTO parse-name ONCE ITS WORKING!!!!
 (defn- parse-internal
-  "Parses the given license `n`ame, returning an expressions-info map or
-  `nil` if no expressions can be found."
-  [n]
+  "Parses the given license `n`ame, returning an expressions map or `nil` if no
+  expressions can be found."
+  [^String n ^Boolean attempt-download-and-match?]
   (when-let [result (-> [n]
                         ; Substitutions, with short circuiting of steps if we're done early
                         ; The order of these steps is important
                         (tu/until-> lcipu/done-parsing?
-                                    cursed/detect
+                                    cursed/detect               ; This must go first
                                     spdx-refs/detect
-                                    detect-uris                 ; This is here rather than in its own namespace so as to avoid a circular dependency ####TODO: LOOK INTO FIXING THIS
+                                    (uris/detect attempt-download-and-match?)
                                     bsd/detect
                                     cc/detect
                                     wtf/detect
@@ -372,28 +328,34 @@
                                     proprietary-commercial/detect
                                     listed-licenses/detect      ; This should go after most specific detections, since it's very broad (i.e. detects most of the license & exception lists)
                                     gnu/detect                  ; Except this one, since it matches very liberally ("word salad" strategy)
-                                    spdx-special-forms/detect)  ; This should go later, since it's somewhat non-specific (i.e. matching "NONE")
+                                    spdx-special-forms/detect)  ; And this should go last, since it's somewhat non-specific (i.e. matching "NONE")
                         ; At this point we've identified all of the licenses we possibly can
+;####TODO: REMOVE ONCE TESTED
 ;                        deduplicate-identifiers
                         detect-operators
 ;####TEST!!!!
 ;(print-fragments n)
 ;####TEST!!!!
-;(debug-print "PRIOR TO REMOVING FRAGMENTS")
-                        remove-extraneous-fragments
-;(debug-print "AFTER REMOVING FRAGMENTS")
+;(debug-print "PRIOR TO STRIPPING DETRITUS")
+                        strip-detritus
+;(debug-print "AFTER STRIPPING DETRITUS")
                         sub-unidentifieds    ;####TODO: THIS ISN'T WORKING!!!!!
                         finalise-operators
 ;####TEST!!!!
 ;(debug-print "PRIOR TO REBUILD")
                         ; Rebuild the final expression(s)
                         rebuild-expressions)]
-    (ei/prepend-source n result)))
+    (im/prepend-source-to-fims-within-em n result)))
 
 (defn parse-name
-  "Parses the given license `n`ame, returning an expressions-info map or `nil`
-  when `n`ame is blank."
-  [n]
+  "Parses the given license `n`ame, returning an expressions map or `nil` when
+  `n`ame is blank.
+
+  `attempt-download-and-match?` (default `false`) controls whether URIs are
+  downloaded and SPDX matching attempted on the content if they're not found in
+  the SPDX license list first"
+  ([^String n] (parse-name n false))
+  ([^String n ^Boolean attempt-download-and-match?]
   (when-not (s/blank? n)
     (let [n (s/trim n)]
       ; 1. If it's an SPDX expression, return the canonicalised rendition of it - in the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should move into the parsing sequence in parse-internal
@@ -404,22 +366,10 @@
                                                   (= :license-id (si/id-type (first ids))))
                                            "SPDX identifier"
                                            "SPDX expression"))
-              ei                       (ei/expression-info canonicalised-expression n strategy)]
+              ei                       (im/fragment-info canonicalised-expression n strategy)]
           {canonicalised-expression (list ei)})
         ; 2. Parse the name
-        (if-let [result (parse-internal n)]
-          result
-          (let [unidentified-license-ref (lcis/name->unidentified-license-ref n)]
-            {unidentified-license-ref (list (make-unidentified-ei n unidentified-license-ref))}))))))
-
-(defn init!
-  "Initialises this namespace upon first call (and does nothing on subsequent
-  calls), returning nil. Consumers of this namespace are not required to call
-  this fn, as initialisation will occur implicitly anyway; it is provided to
-  allow explicit control of the cost of initialisation to callers who need it.
-
-  Note: this method has a substantial performance cost."
-  []
-  (lcis/init!)
-  (lcihttp/init!)
-  nil)
+        (or (parse-internal n attempt-download-and-match?)
+            ; 3. Turn the entire name into a single unidentified LicenseRef
+            (let [unidentified-license-ref (lcis/name->unidentified-license-ref n)]
+              {unidentified-license-ref (list (make-unidentified-fragment-info n unidentified-license-ref))})))))))

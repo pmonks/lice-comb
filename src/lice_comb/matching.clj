@@ -19,71 +19,66 @@
   Each matching fn has two variants:
 
   1. A 'simple' version that returns a set of SPDX expressions (`String`s)
-  2. An 'info' version that returns an 'expressions-info map' containing
-     metadata on how the determination was made (including confidence
-     information)
+  2. An 'info' version that returns an 'expressions map' containing metadata
+     describing how the determination was made (including source, confidence,
+     the matching strategy, etc.)
 
-  An expressions-info map has this structure:
+  An expressions map has this structure:
 
   * key:   an SPDX expression (`String`)
-  * value: a sequence of 'expression-info' maps
+  * value: a sequence of 'fragment info' maps
 
-  An expression-info map has this structure:
+  Each fragment info map has this structure:
 
-  * `:id` (`String`, optional):
-    The portion of the SPDX expression that this info map refers to (usually,
-    though not always, a single SPDX identifier).
-  * `:type` (either `:declared` or `:concluded`, mandatory):
+  * `:fragment` (`String`, mandatory):
+  * `:match-type` (either `:declared` or `:concluded`, mandatory):
     Whether this identifier was unambiguously declared within the input or was
     instead concluded by lice-comb (see [the SPDX FAQ](https://wiki.spdx.org/view/SPDX_FAQ)
     for more detail on the definition of these two terms).
   * `:confidence` (one of: `:high`, `:medium`, `:low`, only provided when
     `:type` = `:concluded`):
     Indicates the approximate confidence lice-comb has in its conclusions for
-    this particular SPDX identifier.
+    this particular fragment.
   * `:confidence-explanations` (a set of keywords, optional):
     Describes the associated `:confidence` measure (only provided when `:type` =
     `:concluded`).
-  * `:strategy` (a keyword, mandatory):
-    The strategy lice-comb used to determine this particular SPDX identifier.
-    See [[lice-comb.utils/strategy->string]] for an up-to-date list of all
-    possible values.
+  * `:strategy` (a `String`, mandatory):
+    The strategy lice-comb used to detect this particular fragment.
   * `:source` (a sequence of `String`s):
     The list of sources used to arrive at this portion of the SPDX expression,
     starting from the most general (the input) through to the most specific
     (the smallest subset of the input that was used to make this
     determination)."
   (:require [clojure.string         :as s]
-            [spdx.licenses          :as sl]
-            [spdx.exceptions        :as se]
+            [spdx.identifiers       :as si]
             [lice-comb.impl.spdx    :as lcis]
             [lice-comb.impl.parsing :as lcip]))
 
 (defn lice-comb-license-ref?
   "Is the given id one of lice-comb's custom LicenseRefs?"
-  [id]
+  [^CharSequence id]
   (lcis/lice-comb-license-ref? id))
 
 (defn public-domain?
   "Is the given id lice-comb's custom 'public domain' LicenseRef?"
-  [id]
+  [^CharSequence id]
   (lcis/public-domain? id))
 
 (defn proprietary-commercial?
   "Is the given id lice-comb's custom 'proprietary / commercial' LicenseRef?"
-  [id]
+  [^CharSequence id]
   (lcis/proprietary-commercial? id))
 
 (defn unidentified?
   "Is the given id a lice-comb custom 'unidentified' LicenseRef?"
-  [id]
+  [^CharSequence id]
   (lcis/unidentified? id))
 
 (defn unidentified->name
   "Returns a human readable name for the given lice-comb custom 'unidentified'
   LicenseRef. Returns `nil` if id is not a lice-comb custom 'unidentified'
   LicenseRef."
-  [id]
+  [^CharSequence id]
   (lcis/unidentified->human-readable-name id))
 
 (defn id->name
@@ -91,29 +86,28 @@
   either the official SPDX license or exception name or, if the id is a
   lice-comb specific LicenseRef, a lice-comb specific name. Returns `id`
   verbatim if unable to determine a name. Returns `nil` if `id` is blank."
-  [id]
+  [^CharSequence id]
   (when-not (s/blank? id)
-    (cond (sl/listed-id? id)           (:name (sl/id->info id))
-          (se/listed-id? id)           (:name (se/id->info id))
+    (cond (si/listed-id? id)           (:name (si/id->info id))
           (public-domain? id)          "Public domain"
           (proprietary-commercial? id) "Proprietary/commercial"
           (unidentified? id)           (unidentified->name id)
           :else                        id)))
 
 (defn text->expressions-info
-  "Returns an expressions-info map for `text` (a `String`, `Reader`, or anything
+  "Returns an expressions map for `text` (a `String`, `Reader`, or anything
   that's accepted by `clojure.java.io/reader`). Returns `nil` if no expressions
   were found in it.
 
   Notes:
 
-  * this function implements the SPDX matching guidelines (via clj-spdx).
-    See [the SPDX specification](https://spdx.github.io/spdx-spec/v2.3/license-matching-guidelines-and-templates/)
+  * this function uses the SPDX matching guidelines (via clj-spdx).
+    See [the SPDX specification](https://spdx.github.io/spdx-spec/v3.0.1/annexes/license-matching-guidelines-and-templates/)
     for details
   * the caller is expected to open & close a `Reader` or `InputStream` passed to
     this function (e.g. using `clojure.core/with-open`)
   * you cannot pass a `String` representation of a filename to this method - you
-    should pass filenames through `clojure.java.io/file` (or similar) first"
+    should use `clojure.java.io/file` (or similar) first"
   [text]
   (lcip/match-text text))
 
@@ -126,55 +120,36 @@
           set))
 
 (defn uri->expressions-info
-  "Returns an exceptions-info map for `uri` (a `String`, `URL`, or `URI`), or
-  `nil` if no expressions were found or `uri` is `nil`.  It does this via two
-  steps:
-
-  1. Seeing if `uri` is in the SPDX license and/or exception lists
-  2. Attempting to retrieve the plain text content of `uri` and if that succeeds
-     running that text through [[text->expressions-info]]
-
-  Notes on step 1:
-
-  1. this does not perform exact matching; rather it simplifies URIs in various
-     ways to avoid irrelevant differences, including performing a
-     case-insensitive comparison, ignoring protocol differences (http vs https),
-     ignoring extensions representing MIME types (.txt vs .html, etc.), etc.
-  2. URIs in the SPDX license and exception lists are not unique - the same URI
-     may represent multiple licenses and/or exceptions."
-  [uri]
-  (when uri
-    (lcip/parse-uri uri)))
+  "Returns an expressions map for `uri` (a `String`, `URL`, or `URI`), or
+  `nil` if no expressions were found or `uri` is `nil`."
+  ([uri] (uri->expressions-info uri false))
+  ([uri ^Boolean attempt-download-and-match?]
+   (when uri
+     (lcip/parse-uri uri attempt-download-and-match?))))
 
 (defn uri->expressions
-  "Returns a set of SPDX expressions (`String`s) for `uri`. See
-  [[uri->expressions-info]] for details."
-  [uri]
-  (some-> (uri->expressions-info uri)
-          keys
-          set))
+  "Returns a set of SPDX expressions (`String`s) for `uri`."
+  ([uri] (uri->expressions uri false))
+  ([uri ^Boolean attempt-download-and-match?]
+   (some-> (uri->expressions-info uri attempt-download-and-match?)
+           keys
+           set)))
 
 (defn name->expressions-info
-  "Returns an expressions-info map for `n` (a `String`), or `nil` if no
-  expressions were found or `n` is `nil`.  This involves:
-
-  1. Determining whether `n` is a valid SPDX license expression, and if so
-     normalising it (see [clj-spdx's `spdx.expressions/normalise` fn](https://pmonks.github.io/clj-spdx/spdx.expressions.html#var-normalise))
-  2. Checking if `n` is actually a URI, and if so performing URL matching
-     on it via [[uri->expressions-info]]
-  3. attempting to parse `n` to construct one or more SPDX license
-     expressions"
-  [n]
-  (when-not (s/blank? n)
-    (lcip/parse-name n)))
+  "Returns an expressions map for `n`ame (a `String`), or `nil` if `n` is
+  `clojure.string/blank?`."
+  ([^CharSequence n] (name->expressions-info n false))
+  ([^CharSequence n ^Boolean attempt-download-and-match?]
+   (when-not (s/blank? n)
+     (lcip/parse-name n attempt-download-and-match?))))
 
 (defn name->expressions
-  "Returns a set of SPDX expressions (`String`s) for `name`. See
-  [[name->expressions-info]] for details."
-  [name]
-  (some-> (name->expressions-info name)
-          keys
-          set))
+  "Returns a set of SPDX expressions (`String`s) for `n`ame."
+  ([^CharSequence n] (name->expressions n false))
+  ([^CharSequence n ^Boolean attempt-download-and-match?]
+   (some-> (name->expressions-info n attempt-download-and-match?)
+           keys
+           set)))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent
@@ -185,5 +160,4 @@
   Note: this method may have a substantial performance cost."
   []
   (lcis/init!)
-  (lcip/init!)
   nil)

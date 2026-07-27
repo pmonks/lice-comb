@@ -15,14 +15,20 @@
   without notice."
   (:require [wreck.api                      :as re]
             [lice-comb.impl.regex-fragments :as ref]
-            [lice-comb.impl.faux-parse      :as faux]))
+            [lice-comb.impl.faux-parse      :as faux]
+            [lice-comb.impl.info-maps       :as im]))
 
 ; Map of name values seen in the wild that are too ambiguous / cursed to support any reasonable form of automated parsing
 (def ^:private cursed-names {
   ; Seen in https://repo.maven.apache.org/maven2/com/sun/mail/all/1.4.7/all-1.4.7.pom and other javax.mail/javax.mail-api artifacts
-  "GPLv2+CE" '({:id "GPL-2.0-only"            :type :concluded :confidence :high :strategy "Manual verification" :source ("GPLv2+CE" "GPLv2")}
-               :with
-               {:id "Classpath-exception-2.0" :type :concluded :confidence :high :strategy "Manual verification" :source ("GPLv2+CE" "CE")})})
+  "GPLv2+CE" (list (im/fragment-info "GPL-2.0-only" ["GPLv2+CE" "GPLv2"] "Manual verification")
+                   :with
+                   (im/fragment-info "Classpath-exception-2.0" ["GPLv2+CE" "CE"] "Manual verification"))})
+
+;####TODO: REMOVE ONCE TESTED!!!!
+;             '({:id "GPL-2.0-only"            :type :concluded :confidence :high :strategy "Manual verification" :source ("GPLv2+CE" "GPLv2")}
+;               :with
+;               {:id "Classpath-exception-2.0" :type :concluded :confidence :high :strategy "Manual verification" :source ("GPLv2+CE" "CE")})})
 
 (def ^:private pairs
   (map #(vector (re/fgrp "i" ref/nwb (re/esc (key %)) ref/nwa)
@@ -31,7 +37,7 @@
 
 (defn detect
   "Detects any cursed expressions found inside the `String`s in `coll` and
-  replaces them with an expression-info map in that location. Returns other
+  replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
   (faux/parse-with-pairs pairs coll))

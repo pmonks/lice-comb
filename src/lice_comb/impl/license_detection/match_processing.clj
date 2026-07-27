@@ -17,7 +17,7 @@
             [wreck.api                      :as re]
             [spdx.identifiers               :as si]
             [lice-comb.impl.spdx            :as lcis]
-            [lice-comb.impl.expression-info :as ei]
+            [lice-comb.impl.info-maps       :as im]
             [lice-comb.impl.version-number  :as vernum]
             [lice-comb.impl.version-series  :as verser]
             [lice-comb.impl.license-regexes :as licre]))
@@ -71,7 +71,7 @@
   [id-formats or-later? versions]
   (when (and (seq id-formats) (seq versions))
     (let [ids (seq
-                (map #(lcis/canonicalise-id-or-expression (str % (when or-later? "+")))
+                (map #(lcis/canonicalise-spdx-expression-fragment (str % (when or-later? "+")))
                      (distinct (filter si/listed? (for [id-format id-formats
                                                         version   versions]
                                                     (if (re-find re-placeholder-ver id-format)
@@ -119,15 +119,15 @@
     ; No version number was found in the match
     [(:default-id version-series) #{:missing-version}]))
 
-(defn match->expression-info
-  "Constructs a valid expression-info map from the given match information."
-  ([^String detected-id ^String strategy ^java.util.Map m] (match->expression-info detected-id strategy nil m))
+(defn match->fragment-info
+  "Constructs a valid fragment info map from the given match information."
+  ([^String detected-id ^String strategy ^java.util.Map m] (match->fragment-info detected-id strategy nil m))
   ([^String detected-id ^String strategy confidence-explanations ^java.util.Map m]
-   (ei/expression-info detected-id (:match m) strategy confidence-explanations)))
+   (im/fragment-info detected-id (:match m) strategy confidence-explanations)))
 
-(defn listed-match->expression-info
-  "Constructs a valid expression-info map from the given listed license match."
-  ([ids-checked ^String detected-id ^String default-strategy ^java.util.Map m] (listed-match->expression-info ids-checked detected-id default-strategy nil m))
+(defn listed-match->fragment-info
+  "Constructs a valid fragment info map from the given listed license match."
+  ([ids-checked ^String detected-id ^String default-strategy ^java.util.Map m] (listed-match->fragment-info ids-checked detected-id default-strategy nil m))
   ([ids-checked ^String detected-id ^String default-strategy confidence-explanations ^java.util.Map m]
    (let [matched-text (:match m)
          ids          (seq (filter identity ids-checked))
@@ -137,20 +137,20 @@
                         (some #{matched-text}                names)                    "SPDX listed name exact match"
                         (some #{(s/lower-case matched-text)} (map s/lower-case names)) "SPDX listed name case insensitive match"
                         :else                                                          default-strategy)]
-   (ei/expression-info detected-id matched-text strategy confidence-explanations))))
+   (im/fragment-info detected-id matched-text strategy confidence-explanations))))
 
-(defn unversioned-match->expression-info
-  "Returns an expression info map for the unversioned (non-version-series)
+(defn unversioned-match->fragment-info
+  "Returns an fragment info map for the unversioned (non-version-series)
   match `m`, which matched `id` via `regex-type`."
   [^String id regex-type ^java.util.Map m]
   (let [default-strategy (str id " " (if (= regex-type :id-regex) "identifier" "name") " regex")]
-    (listed-match->expression-info [id] id default-strategy m)))
+    (listed-match->fragment-info [id] id default-strategy m)))
 
-(defn versioned-match->expression-info
-  "Returns an expression info map based on the 'best' identifier in match m,
+(defn versioned-match->fragment-info
+  "Returns an fragment info map based on the 'best' identifier in match `m`,
   assumed to be within `version-series`.  Returns `nil` only if `m` is `nil`,
   otherwise _always_ returns a result."
   [^java.util.Map version-series regex-type ^java.util.Map m]
   (let [[detected-id confidence-explanations] (best-id-from-match version-series m)
         default-strategy                      (str (:series-id version-series) " " (if (= regex-type :id-regex) "identifier" "name") " regex")]
-    (listed-match->expression-info (:ids version-series) detected-id default-strategy confidence-explanations m)))
+    (listed-match->fragment-info (:ids version-series) detected-id default-strategy confidence-explanations m)))

@@ -235,7 +235,7 @@
       [false false false] #{version-explanation :invalid-cc-clauses :invalid-cc-suffix})))
 
 
-(defn- cc-match->expression-info
+(defn- cc-match->fragment-info
   [m]
   (let [[clauses valid-clauses?]          (valid-clauses m)
         [version-number version-present? valid-version-number?]
@@ -243,10 +243,10 @@
         suffix                            (valid-suffix m)
         [id valid-clauses? valid-suffix?] (valid-id clauses version-number suffix valid-clauses?)
         confidence-explanations           (determine-confidence-explanations version-present? valid-version-number? valid-clauses? valid-suffix?)]
-    (mp/listed-match->expression-info @ids-d id "Creative Commons regex" confidence-explanations m)))
+    (mp/listed-match->fragment-info @ids-d id "Creative Commons regex" confidence-explanations m)))
 
 (defn detect
   "Detects any Creative Commons licenses found in the strings in `coll`, and
-  replaces them with an expression-info map. Returns other elements unchanged."
+  replaces them with a fragment info map. Returns other elements unchanged."
   [coll]
-  (faux/parse coll re cc-match->expression-info))
+  (faux/parse coll re cc-match->fragment-info))

@@ -11,12 +11,12 @@
 (ns lice-comb.deps
   "Functionality related to combing tools.deps dependency maps and lib maps for
   license information."
-  (:require [clojure.string                 :as s]
-            [clojure.tools.logging          :as log]
-            [lice-comb.maven                :as lcmvn]
-            [lice-comb.files                :as lcf]
-            [lice-comb.impl.expression-info :as ei]
-            [lice-comb.impl.utils           :as lciu]))
+  (:require [clojure.string           :as s]
+            [clojure.tools.logging    :as log]
+            [lice-comb.maven          :as lcmvn]
+            [lice-comb.files          :as lcf]
+            [lice-comb.impl.info-maps :as im]
+            [lice-comb.impl.utils     :as lciu]))
 
 (defn- normalise-dep
   "Normalises a dep, by removing any classifier suffixes from the artifact-id
@@ -73,12 +73,12 @@
 (defmethod dep->expressions-info :mvn
   [dep]
   (when-let [expressions (expressions-from-dep dep)]
-    (ei/prepend-source (dep->string dep) expressions)))
+    (im/prepend-source-to-fims-within-em (dep->string dep) expressions)))
 
 (defmethod dep->expressions-info :deps
   [dep]
   (let [[_ info] (normalise-dep dep)]
-    (ei/prepend-source (dep->string dep) (lcf/dir->expressions-info (:deps/root info)))))
+    (im/prepend-source-to-fims-within-em (dep->string dep) (lcf/dir->expressions-info (:deps/root info)))))
 
 (defmethod dep->expressions-info nil
   [[ga _ :as dep]]
@@ -91,7 +91,7 @@
                                  (catch javax.xml.stream.XMLStreamException xse
                                    (log/warn (str "Failed to parse POM for " group-id "/" artifact-id (when version (str "@" version)) " - ignoring") xse)
                                    nil))]
-        (ei/prepend-source (str ga "@" version) gav-expressions)))))
+        (im/prepend-source-to-fims-within-em (str ga "@" version) gav-expressions)))))
 
 (defmethod dep->expressions-info :default
   [[_ info :as dep]]

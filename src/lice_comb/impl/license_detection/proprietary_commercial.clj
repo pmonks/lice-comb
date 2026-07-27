@@ -32,7 +32,7 @@
 
 (defn detect
   "Detects any proprietary/commercial values found inside the `String`s in
-  `coll` and replaces them with an expression-info map in that location. Returns
+  `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-proprietary-commercial (partial mp/match->expression-info (lcis/proprietary-commercial) "Proprietary/commercial regex")))
+  (faux/parse coll re-proprietary-commercial (partial mp/match->fragment-info (lcis/proprietary-commercial) "Proprietary/commercial regex")))

@@ -11,13 +11,13 @@
 (ns lice-comb.files
   "Functionality related to combing files, directories, and ZIP format archives
   for license information."
-  (:require [clojure.string                 :as s]
-            [clojure.java.io                :as io]
-            [clojure.tools.logging          :as log]
-            [lice-comb.matching             :as lcm]
-            [lice-comb.maven                :as lcmvn]
-            [lice-comb.impl.expression-info :as ei]
-            [lice-comb.impl.utils           :as lciu]))
+  (:require [clojure.string           :as s]
+            [clojure.java.io          :as io]
+            [clojure.tools.logging    :as log]
+            [lice-comb.matching       :as lcm]
+            [lice-comb.maven          :as lcmvn]
+            [lice-comb.impl.info-maps :as im]
+            [lice-comb.impl.utils     :as lciu]))
 
 (def ^:private probable-license-filenames #{"pom.xml" "license" "license.txt" "license.html" "copying" "unlicense"})
 
@@ -52,7 +52,7 @@
              set))))
 
 (defn file->expressions-info
-  "Returns an expressions-info map for `f` (an `InputStream` or something that
+  "Returns an expressions map for `f` (an `InputStream` or something that
   can have an `clojure.java.io/input-stream` opened on it), or `nil` if no
   expressions were found.
 
@@ -70,11 +70,10 @@
                             (s/ends-with? lfname ".htm")) (doall (lcm/text->expressions-info (lciu/html-file->text f)))
                         (instance? java.io.InputStream f) (doall (lcm/text->expressions-info f))
                         :else                             (with-open [is (io/input-stream f)] (doall (lcm/text->expressions-info is))))]  ; Default is to assume it's a plain text file containing license text(s)
-       (ei/prepend-source filepath result)))))
+       (im/prepend-source-to-fims-within-em filepath result)))))
 
 (defn file->expressions
-  "Returns a set of SPDX expressions (`String`s) for `f`. See
-   [[file->expressions-info]] for details."
+  "Returns a set of SPDX expressions (`String`s) for `f`."
   ([f] (file->expressions f (lciu/filepath f)))
   ([f filepath]
    (some-> (file->expressions-info f filepath)
@@ -82,8 +81,8 @@
            set)))
 
 (defn zip->expressions-info
-  "Returns an expressions-info map for `zip` (a `String` or `File`, which must
-  refer to a ZIP-format compressed file), or `nil` if no expressions were found.
+  "Returns an expressions map for `zip` (a `String` or `File`, which must refer
+  to a ZIP-format compressed file), or `nil` if no expressions were found.
 
   Throws various Java IO exceptions if the file is not a valid ZIP-format file."
   [zip]
@@ -96,7 +95,7 @@
                  entry  (.getNextEntry zip-is)]
             (if-not entry
               ; Base case
-              (when-not (empty? result) (ei/prepend-source (lciu/filepath zip-file) result))
+              (when-not (empty? result) (im/prepend-source-to-fims-within-em (lciu/filepath zip-file) result))
               ; Recursive case
               (if (probable-license-file? entry)
                 (if-let [expressions (try
@@ -138,7 +137,7 @@
 
 #_{:clj-kondo/ignore [:unused-binding]}
 (defn dir->expressions-info
-  "Returns an expressions-info map for `dir` (a `String` or `File`, which must
+  "Returns an expressions map for `dir` (a `String` or `File`, which must
   refer to a readable directory), or `nil` if or no expressions were found.
 
   The optional `opts` map has these keys:
@@ -169,8 +168,8 @@
                                                        (log/warn (str "Unexpected exception while processing " % " - ignoring") e)
                                                        nil))
                                                   (zip-compressed-files dir opts))))]
-           (ei/prepend-source (lciu/filepath dir) (merge file-expressions zip-expressions)))
-         (ei/prepend-source (lciu/filepath dir) file-expressions))))))
+           (im/prepend-source-to-fims-within-em (lciu/filepath dir) (merge file-expressions zip-expressions)))
+         (im/prepend-source-to-fims-within-em (lciu/filepath dir) file-expressions))))))
 
 (defn dir->expressions
   "Returns a set of SPDX expressions (`String`s) for `dir`. See

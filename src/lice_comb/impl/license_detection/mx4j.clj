@@ -32,8 +32,8 @@
            ref/nwa))
 
 (defn detect
-  "Detects any proprietary/commercial identifiers found inside the `String`s in
-  `coll` and replaces them with an expression-info map in that location. Returns
-  other elements unchanged."
+  "Detects any MX4J identifiers found inside the `String`s in `coll` and
+  replaces them with a fragment info map in that location. Returns other
+  elements unchanged."
   [coll]
-  (faux/parse coll re-mx4j (partial mp/match->expression-info "Apache-1.1" "MX4J regex")))
+  (faux/parse coll re-mx4j (partial mp/match->fragment-info "Apache-1.1" "MX4J regex")))

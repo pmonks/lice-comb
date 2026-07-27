@@ -11,9 +11,9 @@
 (ns lice-comb.lein
   "Functionality related to combing Leiningen dependency sequences for license
   information."
-  (:require [lice-comb.deps                 :as lcd]
-            [lice-comb.impl.expression-info :as ei]
-            [lice-comb.impl.utils           :as lciu]))
+  (:require [lice-comb.deps           :as lcd]
+            [lice-comb.impl.info-maps :as im]
+            [lice-comb.impl.utils     :as lciu]))
 
 (defn- lein-dep->toolsdeps-dep
   "Converts a leiningen style dependency vector into a (partial) tools.deps style
@@ -24,25 +24,24 @@
     [ga {:mvn/version version :deps/manifest :mvn}]))   ;####TODO: Synthesise :paths key (for paths to JAR files)
 
 (defn dep->expressions-info
-  "Returns an expressions-info map for `dep`, a Leiningen style dep (a vector of
+  "Returns an expressions map for `dep`, a Leiningen style dep (a vector of
   the form `[groupId/artifactId \"version\"]`), or `nil` if or no expressions
   were found."
   [dep]
   (when-let [toolsdep-dep (lein-dep->toolsdeps-dep dep)]
-    (ei/prepend-source (pr-str dep) (lcd/dep->expressions-info toolsdep-dep))))
+    (im/prepend-source-to-fims-within-em (pr-str dep) (lcd/dep->expressions-info toolsdep-dep))))
 
 (defn dep->expressions
-  "Returns a set of SPDX expressions (`String`s) for `dep`. See
-  [[dep->expressions-info]] for details."
+  "Returns a set of SPDX expressions (`String`s) for `dep`."
   [dep]
   (some-> (dep->expressions-info dep)
           keys
           set))
 
 (defn deps->expressions-info
-  "Returns a map of expressions-info maps for each Leiningen style dep in
+  "Returns a map of expressions maps for each Leiningen style dep in
   `deps`.  Each key in the map is a value from `deps`, and the associated value
-  is the expressions-info map for that dep (which will be `nil` if no
+  is the expressions map for that dep (which will be `nil` if no
   expressions were found)."
   [deps]
   (when deps
@@ -50,7 +49,7 @@
 
 (defn deps->expressions
   "Returns a map of sets of SPDX expressions (`String`s) for each Leiningen
-  style dep in `deps`. See [[deps->expressions-info]] for details."
+  style dep in `deps`."
   [deps]
   (when deps
     (into {} (lciu/file-handle-bounded-pmap #(vec [% (dep->expressions %)]) deps))))

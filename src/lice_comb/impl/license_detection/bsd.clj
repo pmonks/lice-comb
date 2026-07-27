@@ -188,7 +188,7 @@
 
 
 ;;
-;; EXPRESSION-INFO CONSTRUCTION FROM A MATCH
+;; FRAGMENT INFO CONSTRUCTION FROM A MATCH
 ;;
 
 (defn- valid-clause-count?
@@ -293,8 +293,8 @@
           (when (or (clause-counts m) (suffix m))
             #{:invalid-bsd-combination}))))
 
-(defn- bsd-match->expression-info
-  "Turns a match from the BSD regex into an expression-info map."
+(defn- bsd-match->fragment-info
+  "Turns a match from the BSD regex into a fragment info map."
   [m]
   (let [[id confidence-explanations]
           (if-let [sbi (suffix-based-identifier m)]
@@ -307,10 +307,10 @@
               (if (sl/listed-id? id-and-suffix)
                 [id-and-suffix con-exp]
                 [id            (set/union #{:invalid-bsd-combination} con-exp)])))]
-    (mp/listed-match->expression-info @ids-d id "BSD regex" confidence-explanations m)))
+    (mp/listed-match->fragment-info @ids-d id "BSD regex" confidence-explanations m)))
 
 (defn detect
   "Detects any BSD licenses found in the strings in `coll`, and replaces them
-  with an expression-info map. Returns other elements unchanged."
+  with a fragment info map. Returns other elements unchanged."
   [coll]
-  (faux/parse coll re bsd-match->expression-info))
+  (faux/parse coll re bsd-match->fragment-info))

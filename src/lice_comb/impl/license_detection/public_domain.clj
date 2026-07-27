@@ -31,7 +31,7 @@
 
 (defn detect
   "Detects any proprietary/commercial identifiers found inside the `String`s in
-  `coll` and replaces them with an expression-info map in that location. Returns
+  `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-public-domain (partial mp/match->expression-info (lcis/public-domain) "Public domain regex")))
+  (faux/parse coll re-public-domain (partial mp/match->fragment-info (lcis/public-domain) "Public domain regex")))

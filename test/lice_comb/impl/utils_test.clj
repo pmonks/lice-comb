@@ -12,9 +12,27 @@
   (:require [clojure.test               :refer [deftest testing is use-fixtures]]
             [clojure.java.io            :as io]
             [lice-comb.test-boilerplate :refer [fixture test-data-path]]
-            [lice-comb.impl.utils       :refer [simplify-uri filepath filename html->text]]))
+            [lice-comb.impl.utils       :refer [replacing-split simplify-uri filepath filename html->text]]))
 
 (use-fixtures :once fixture)
+
+(deftest replacing-split-tests
+  (testing "Nil values"
+    (is (nil? (replacing-split nil   nil    nil)))
+    (is (nil? (replacing-split "foo" nil    nil)))
+    (is (nil? (replacing-split nil   #"foo" nil))))
+  (testing "Non replacements"
+    (is (= ["foo"] (replacing-split "foo" #"bar" nil))))
+  (testing "Simple replacements"
+    (is (= [:foo " bar blah"]    (replacing-split "foo bar blah" #"foo"  :foo)))
+    (is (= ["foo " :bar " blah"] (replacing-split "foo bar blah" #"bar"  :bar)))
+    (is (= ["foo bar " :blah]    (replacing-split "foo bar blah" #"blah" :blah))))
+  (testing "Replacements with functions"
+    (is (= ["foo " :bar " blah"]     (replacing-split "foo bar blah" #"bar"          #(keyword (:match %)))))
+    (is (= [:foo " " :bar " " :blah] (replacing-split "foo bar blah" #"foo|bar|blah" #(keyword (:match %))))))
+  (testing "Replacement flattening (lists only)"
+    (is (= ["foo " :bar :bar   " blah"] (replacing-split "foo bar blah" #"bar"  (list   :bar :bar))))
+    (is (= ["foo " [:bar :bar] " blah"] (replacing-split "foo bar blah" #"bar"  (vector :bar :bar))))))  ; Note: does _NOT_ get flattened - only lists get flattened
 
 (def simplified-apache2-uri "http://apache.org/license/license-2.0")
 (def local-mpl2-html        (str test-data-path "/MPL-2.0/LICENSE.html"))

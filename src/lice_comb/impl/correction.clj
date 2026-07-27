@@ -21,12 +21,12 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [spdx.licenses                   :as sl]
-            [spdx.exceptions                 :as se]
-            [lice-comb.impl.spdx             :as lcis]))
+  (:require [spdx.licenses       :as sl]
+            [spdx.exceptions     :as se]
+            [lice-comb.impl.spdx :as lcis]))
 
 ;####TODOS:
-; * Update to only work on expressions-info maps - there is no need to support sets, since they're only emitted at the final step
+; * Update to only work on expressions maps - there is no need to support sets, since they're only emitted at the final step
 ; * Update to support whatever intermediate data structure the parsing code ends up using
 
 (def ^:private gpl-ids-with-only-or-later #{"AGPL-1.0"
@@ -106,7 +106,7 @@
 
 (defn correct
   "Corrects certain invalid/nonsensical combinations of license identifiers in a
-  set or map of expressions."
+  set of SPDX expressions, or an expression map."
   [expressions]
   (some-> expressions
           fix-gpl-only-or-later

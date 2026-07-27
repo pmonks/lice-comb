@@ -21,12 +21,12 @@
 (defn- ref-match->ei
   "Turns a match from the ref regex into an expression info map."
   [strategy m]
-  (mp/match->expression-info (:match m) strategy m))
+  (mp/match->fragment-info (:match m) strategy m))
 
 
 (defn detect
   "Detects any SPDX license or addition refs found in the `String`s in
-  `coll` with an expression-info map. Returns other elements unchanged."
+  `coll` with a fragment info map. Returns other elements unchanged."
   [coll]
   (faux/parse coll
               (sre/license-ref-re)  (partial ref-match->ei "SPDX LicenseRef")

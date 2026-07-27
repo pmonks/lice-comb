@@ -30,7 +30,7 @@
 
 (defn detect
   "Detects any Bouncy Castle license declarations found inside the `String`s in
-  `coll` and replaces them with an expression-info map in that location. Returns
+  `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-bouncy-castle (partial mp/match->expression-info "MIT" "Bouncy Castle regex")))
+  (faux/parse coll re-bouncy-castle (partial mp/match->fragment-info "MIT" "Bouncy Castle regex")))

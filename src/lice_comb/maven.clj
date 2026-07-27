@@ -25,17 +25,17 @@
 
   Other/custom Maven artifact repositories are supported via the
   `set-local-maven-repo!` and `set-remote-maven-repos!` fns."
-  (:require [clojure.string                 :as s]
-            [clojure.java.io                :as io]
-            [clojure.java.shell             :as sh]
-            [clojure.data.xml               :as xml]
-            [clojure.tools.logging          :as log]
-            [xml-in.core                    :as xi]
-            [lice-comb.matching             :as lcm]
-            [lice-comb.impl.correction      :as lcic]
-            [lice-comb.impl.expression-info :as ei]
-            [lice-comb.impl.http            :as lcihttp]
-            [lice-comb.impl.utils           :as lciu]))
+  (:require [clojure.string            :as s]
+            [clojure.java.io           :as io]
+            [clojure.java.shell        :as sh]
+            [clojure.data.xml          :as xml]
+            [clojure.tools.logging     :as log]
+            [xml-in.core               :as xi]
+            [lice-comb.matching        :as lcm]
+            [lice-comb.impl.correction :as lcic]
+            [lice-comb.impl.info-maps  :as im]
+            [lice-comb.impl.http       :as lcihttp]
+            [lice-comb.impl.utils      :as lciu]))
 
 (def ^:private separator java.io.File/separator)
 
@@ -125,9 +125,9 @@
           (if (or (empty? uri-expressions)
                   (and (= 1 (count uri-expressions))
                        (lcm/unidentified? (first (keys uri-expressions)))))
-            (ei/prepend-source "<licenses><license><name>" name-expressions)   ; Nothing useful found in URI, so revert to whatever we found in name (i.e. an unidentified license)
-            (ei/prepend-source "<licenses><license><url>" uri-expressions)))
-        (ei/prepend-source "<licenses><license><name>" name-expressions)))))
+            (im/prepend-source-to-fims-within-em "<licenses><license><name>" name-expressions)   ; Nothing useful found in URI, so revert to whatever we found in name (i.e. an unidentified license)
+            (im/prepend-source-to-fims-within-em "<licenses><license><url>" uri-expressions)))
+        (im/prepend-source-to-fims-within-em "<licenses><license><name>" name-expressions)))))
 
 (defn- xml-find-all-alts
   "As for xi/find-all, but supports an alternative fallback set of tags (to
@@ -267,20 +267,22 @@
          (when-let [remote-uri (first (filter lcihttp/uri-resolves? (map #(str % "/" gav-path) (vals @remote-maven-repos-a))))]
            (java.net.URI. remote-uri)))))))
 
-(defn- create-single-expression
-  "Creates a single SPDX license expression by merging all the license info maps
-  in `licenses`, using `op` (either :and or :or) as the operator."
-  ([licenses] (create-single-expression :or licenses))
-  ([op licenses]
-   (when-let [new-expression (ei/join-maps-with-operator op licenses)]
-     (let [exp  (key (first new-expression))
-           info (val (first new-expression))]
-       (if (> (count licenses) 1)
-         {exp (concat (list {:type :concluded :confidence (ei/calculate-confidence-for-expression info) :strategy :maven-pom-multi-license-rule}) info)}
-         {exp info})))))
+; This should arguably use im/fragment-info, but it lacks both a :fragment and a :source, which makes it pretty unique
+(def ^:private maven-multi-license-block-fim-d (delay {:type :concluded :confidence :high :strategy "Implied OR between <license> blocks in Maven POMs"}))
+
+(defn- combine-expressions-with-or
+  "Combines all entries in expressions map `em`, using the SPDX operator `OR`.
+  This handles Maven POMs with multiple `<license>` blocks."
+  [em]
+  (if (<= (count em) 1)
+    em
+    (let [new-em          (im/combine-expressions-map-with-operator em :or)
+          spdx-expression (key (first new-em))
+          fragment-infos  (val (first new-em))]
+      {spdx-expression (concat (list @maven-multi-license-block-fim-d) fragment-infos)})))
 
 (defmulti pom->expressions-info
-  "Returns an expressions-info map for `pom` (an `InputStream` or something that
+  "Returns an expressions map for `pom` (an `InputStream` or something that
   can have an `clojure.java.io/input-stream` opened on it), or `nil` if no
   expressions were found.
 
@@ -290,7 +292,7 @@
 
   Notes:
   * despite the name, will always return a singleton map, due to [Maven's rule
-    about multi-licensed POMs](https://maven.apache.org/ref/3.9.7/maven-model/maven.html)
+    about multi-licensed POMs](https://maven.apache.org/ref/current/maven-model/maven.html)
     (then search that page for 'licenses/license*')
   * throws on XML parsing error"
   {:arglists '([pom] [pom filepath])}
@@ -298,7 +300,7 @@
 
 ; Note: a few rare pom.xml files are missing the xmlns declation (e.g. software.amazon.ion/ion-java) - so we look for both namespaced and non-namespaced versions of all tags
 (defmethod pom->expressions-info java.io.InputStream
-  [pom-is filepath]
+  [^java.io.InputStream pom-is ^CharSequence filepath]
   (try
     (let [pom-xml (xml/parse pom-is)
           result  (if-let [pom-licenses (xml-find-all-alts pom-xml [::pom/project ::pom/licenses] [:project :licenses])]
@@ -313,9 +315,9 @@
                                               distinct
                                               (map licenses-from-pair)
                                               (filter identity)
-                                              (into (array-map))   ; We force the use of an array-map here to preserve order
+                                              (into (array-map))   ; We force the use of an array-map here to preserve order ####TODO: IS THIS NECESSARY, GIVEN THEY'RE ABOUT TO BE COMBINED??
                                               lcic/correct
-                                              create-single-expression)]
+                                              combine-expressions-with-or)]
                       license-ei)
                     ; License block doesn't exist, so attempt to lookup the parent pom and try again
                     (let [parent       (seq (xi/find-first pom-xml [::pom/project ::pom/parent]))
@@ -329,13 +331,13 @@
                                                                   :version     (lciu/strim (first (xi/find-first parent-no-ns [:version])))}))]
                       (when-not (empty? parent-gav)
                         (pom->expressions-info (gav->pom-uri parent-gav)))))]   ; Note: naive (stack consuming) recursion, which is fine here as pom hierarchies are rarely very deep
-      (ei/prepend-source filepath result))
+      (im/prepend-source-to-fims-within-em filepath result))
   (catch javax.xml.stream.XMLStreamException xse
     (throw (javax.xml.stream.XMLStreamException. (str "XML error parsing " filepath) xse)))))
 
 (defmethod pom->expressions-info :default
   ([pom] (pom->expressions-info pom (lciu/filepath pom)))
-  ([pom filepath]
+  ([pom ^CharSequence filepath]
    (when pom
      (with-open [pom-is (io/input-stream pom)]
        (doall
@@ -344,8 +346,7 @@
            (log/info (str "'" filepath "'") "contains no license information")))))))
 
 (defn pom->expressions
-  "Returns a set of SPDX expressions (`String`s) for `pom`. See
-   [[pom->expressions-info]] for details."
+  "Returns a set of SPDX expressions (`String`s) for `pom`."
   ([pom] (pom->expressions pom (lciu/filepath pom)))
   ([pom filepath]
    (some-> (pom->expressions-info pom filepath)
@@ -353,16 +354,15 @@
            set)))
 
 (defn gav->expressions-info
-  "Returns an expressions-info map for the given GA and (optionally) V, by
-  looking up the POM for the given GA(V) and calling [[pom->expressions-info]]
-  on it.
+  "Returns an expressions map for the given GA and (optionally) V, by looking up
+  the POM for the given GA(V) and calling [[pom->expressions-info]] on it.
 
   If `version` is not provided, the latest version is looked up (which involves
   file and potentially also network I/O).
 
   Notes:
   * despite the name, will always return a singleton map, due to [Maven's rule
-    about multi-licensed POMs](https://maven.apache.org/ref/3.9.7/maven-model/maven.html)
+    about multi-licensed POMs](https://maven.apache.org/ref/current/maven-model/maven.html)
     (then search that page for 'licenses/license*')
   * throws on XML parsing error"
   ([group-id artifact-id] (gav->expressions-info group-id artifact-id nil))
@@ -370,11 +370,11 @@
    (when-let [version (or version (ga-latest-version group-id artifact-id))]
      (when-let [pom-uri (gav->pom-uri group-id artifact-id version)]
        (with-open [pom-is (io/input-stream pom-uri)]
-         (doall (ei/prepend-source (str group-id "/" artifact-id "@" version) (pom->expressions-info pom-is (str pom-uri)))))))))
+         (doall (im/prepend-source-to-fims-within-em (str group-id "/" artifact-id "@" version) (pom->expressions-info pom-is (str pom-uri)))))))))
 
 (defn gav->expressions
   "Returns a set of SPDX expressions (`String`s) for the given GA and
-  optionally V. See [[gav->expressions-info]] for details."
+  optionally V."
   ([group-id artifact-id] (gav->expressions group-id artifact-id nil))
   ([group-id artifact-id version]
    (some-> (gav->expressions-info group-id artifact-id version)

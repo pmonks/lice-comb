@@ -54,7 +54,7 @@
       "github.com" (if (s/includes? uri "/blob/")
                      (-> uri
                          (s/replace-first #"(?i)github\.com" "raw.githubusercontent.com")
-                         (s/replace-first "/blob/"          "/"))
+                         (s/replace-first "/blob/"           "/"))
                      uri)
       uri)
     uri))
@@ -80,12 +80,3 @@
            (:text/html :application/xhtml+xml) (lciu/html->text (:body response))))
       (catch Exception _
         nil))))
-
-(defn init!
-  "Initialises this namespace upon first call (and does nothing on subsequent
-  calls), returning nil. Consumers of this namespace are not required to call
-  this fn, as initialisation will occur implicitly anyway; it is provided to
-  allow explicit control of the cost of initialisation to callers who need it."
-  []
-  @http-client-d
-  nil)

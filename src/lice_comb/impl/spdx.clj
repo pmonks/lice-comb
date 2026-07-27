@@ -11,13 +11,13 @@
 (ns lice-comb.impl.spdx
   "SPDX-related functionality. Note: this namespace is not part of the public
   API of lice-comb and may change without notice."
-  (:require [clojure.string                :as s]
-            [embroidery.api                :as e]
-            [spdx.identifiers              :as si]
-            [spdx.licenses                 :as sl]
-            [spdx.exceptions               :as se]
-            [spdx.expressions              :as sexp]
-            [lice-comb.impl.utils          :as lciu]))
+  (:require [clojure.string       :as s]
+            [embroidery.api       :as e]
+            [spdx.identifiers     :as si]
+            [spdx.licenses        :as sl]
+            [spdx.exceptions      :as se]
+            [spdx.expressions     :as sexp]
+            [lice-comb.impl.utils :as lciu]))
 
 ; The subset of SPDX identifiers that we use, as an unordered set
 (def license-ids-d   (delay (some->> (sl/ids)
@@ -33,45 +33,21 @@
   "Returns the 'position' (expressed as `:license-position` or
   `:exception-position`) of `id` (a license, LicenseRef, exception, AdditionRef,
   or special form) in an SPDX expression, or `nil` if it's none of those things."
-  [^String id]
+  [^CharSequence id]
   (when-let [type (si/id-type id)]
     (case type
-      :license-id   :license-position
-      :license-ref  :license-position
-      :special-form :license-position
-      :exception-id :exception-position
-      :addition-ref :exception-position)))
+      (:license-id :license-ref :special-form) :license-position
+      (:exception-id :addition-ref)            :exception-position)))
 
-(defn canonicalise-id-or-expression
-  "Canonicalises `id-or-expression`, or returns `nil` if it cannot be
+(defn canonicalise-spdx-expression-fragment
+  "Canonicalises `spdx-expression-fragment`, or returns `nil` if it cannot be
   canonicalised (i.e. is not an SPDX expression, listed SPDX identifier, a valid
   ref, or a special form)."
-  [^String id-or-expression]
-  (when-not (s/blank? id-or-expression)
-    (if-let [canonical-expression (sexp/canonicalise id-or-expression)]
+  [^CharSequence spdx-expression-fragment]
+  (when-not (s/blank? spdx-expression-fragment)
+    (if-let [canonical-expression (sexp/canonicalise spdx-expression-fragment)]  ; First, attempt expression canonicalisation (which handles more cases than identifer canonicalisation)
       canonical-expression
-      (case (si/id-type id-or-expression)
-         (:exception-id :addition-ref) (se/canonicalise id-or-expression)
-         nil))))
-
-;####TODO: REMOVE ONCE TESTED
-;  `id` may include a trailing `+` character, in which case it will override the
-;  value of `or-later?` (if that argument is provided).  For id types that don't
-;  support an or-later suffix, a trailing `+` character will be removed (and the
-;  `or-later?` flag, if `true` will be ignored)."
-;  ([^String id-or-expression] (canonicalise-id-or-expression id-or-expression false))
-;  ([^String id-or-expression or-later?]
-;   (when-not (s/blank? id)
-;     (let [has-or-later? (s/ends-with? id "+")
-;           raw-id        (if has-or-later? (subs id 0 (dec (count id))) id)]
-;       (case (si/id-type raw-id)
-;         :license-id                   (if-let [canonical-expression (sexp/canonicalise (str raw-id (when (or has-or-later? or-later?) "+")))]
-;                                         canonical-expression
-;                                         (when-let [canonical-id (sl/canonicalise raw-id)]
-;                                           (str canonical-id (when (or has-or-later? or-later?) "+"))))
-;         (:license-ref :special-form)  (sl/canonicalise raw-id)
-;         (:exception-id :addition-ref) (se/canonicalise raw-id)
-;         nil)))))
+      (si/canonicalise spdx-expression-fragment))))                              ; But if that doesn't work, fall back on identifier canonicalisation
 
 ; Custom license and addition refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
 (def ^:private lice-comb-document-ref             "lice-comb")
@@ -83,21 +59,21 @@
 
 (defn lice-comb-license-ref?
   "Is `id` one of lice-comb's custom LicenseRefs?"
-  [id]
+  [^CharSequence id]
   (boolean
     (when-let [m (sl/string->license-ref-map id)]
       (= lice-comb-document-ref (:document-ref m)))))
 
 (defn lice-comb-addition-ref?
   "Is `id` one of lice-comb's custom AdditionRefs?"
-  [id]
+  [^CharSequence id]
   (boolean
     (when-let [m (se/string->addition-ref-map id)]
       (= lice-comb-document-ref (:addition-document-ref m)))))
 
 (defn lice-comb-ref?
   "Is `id` a lice-comb custom LicenseRef or AdditionRef"
-  [id]
+  [^CharSequence id]
   (or (lice-comb-license-ref?  id)
       (lice-comb-addition-ref? id)))
 
@@ -129,7 +105,7 @@
 
 (defn unidentified-license-ref?
   "Is `id` a lice-comb custom 'unidentified' LicenseRef?"
-  [id]
+  [^CharSequence id]
   (boolean
     (when-let [m (sl/string->license-ref-map id)]
       (and (= lice-comb-document-ref (:document-ref m))
@@ -137,7 +113,7 @@
 
 (defn unidentified-addition-ref?
   "Is `id` a lice-comb custom 'unidentified' AdditionRef?"
-  [id]
+  [^CharSequence id]
   (boolean
     (when-let [m (se/string->addition-ref-map id)]
       (and (= lice-comb-document-ref (:addition-document-ref m))
@@ -145,7 +121,7 @@
 
 (defn unidentified?
   "Is `id` a lice-comb custom 'unidentified' LicenseRef or AdditionRef?"
-  [id]
+  [^CharSequence id]
   (or (unidentified-license-ref? id)
       (unidentified-addition-ref? id)))
 
@@ -154,26 +130,26 @@
   unidentified license, with the given name (if provided) appended as Base62
   (since the variable tag in an SPDX ref is limited to Base62)."
   ([] (name->unidentified-license-ref nil))
-  ([name]
+  ([^CharSequence n]
    (sl/license-ref lice-comb-document-ref
-                   (str unidentified-ref-prefix (when-not (s/blank? name)
-                                                  (str "-" (lciu/base62-encode name)))))))
+                   (str unidentified-ref-prefix (when-not (s/blank? n)
+                                                  (str "-" (lciu/base62-encode n)))))))
 
 (defn name->unidentified-addition-ref
   "Constructs a valid SPDX id (an AdditionRef specific to lice-comb) for an
   unidentified license exception, with the given name (if provided) appended as
   (since the variable tag in an SPDX ref is limited to Base62)."
   ([] (name->unidentified-addition-ref nil))
-  ([name]
+  ([^CharSequence n]
    (se/addition-ref lice-comb-document-ref
-                    (str unidentified-ref-prefix (when-not (s/blank? name)
-                                                   (str "-" (lciu/base62-encode name)))))))
+                    (str unidentified-ref-prefix (when-not (s/blank? n)
+                                                   (str "-" (lciu/base62-encode n)))))))
 
 (defn unidentified-license-ref->name
   "Get the original name of the given unidentified license ref. Returns nil if
   id is nil or is not a lice-comb unidentified LicenseRef, or if the
   unidentified LicenseRef did not have a name."
-  [id]
+  [^CharSequence id]
   (when (unidentified-license-ref? id)
     (let [m   (sl/string->license-ref-map id)
           tag (:license-ref m)]
@@ -184,7 +160,7 @@
   "Get the original name of the given unidentified addition ref. Returns nil if
   id is nil or is not a lice-comb unidentified AdditionRef, or if the
   unidentified AdditionRef did not have a name."
-  [id]
+  [^CharSequence id]
   (when (unidentified-addition-ref? id)
     (let [m   (se/string->addition-ref-map id)
           tag (:addition-ref m)]
@@ -195,7 +171,7 @@
   "Get the original name of the given unidentified license ref or addition ref.
   Returns nil if id is nil or is not a lice-comb unidentified Ref, or if the
   Ref did not have a name."
-  [id]
+  [^CharSequence id]
   (cond
     (unidentified-license-ref?  id) (unidentified-license-ref->name id)
     (unidentified-addition-ref? id) (unidentified-addition-ref->name id)))
@@ -204,7 +180,7 @@
   "Returns the string 'Unidentified' with the original name of the given
   unidentified license in parens. Returns nil if id is nil or is not a
   lice-comb unidentified LicenseRef."
-  [id]
+  [^CharSequence id]
   (when (unidentified-license-ref? id)
     (let [original-name (unidentified->name id)]
       (str "Unidentified (\""
@@ -217,7 +193,7 @@
   "Returns the string 'Unidentified' with the original name of the given
   unidentified license exception in parens. Returns nil if id is nil or
   is not a lice-comb unidentified AdditionRef."
-  [id]
+  [^CharSequence id]
   (when (unidentified-addition-ref? id)
     (let [original-name (unidentified->name id)]
       (str "Unidentified (\""
@@ -230,7 +206,7 @@
   "Returns the string 'Unidentified' with the original name of the given
   unidentified license or license exception in parens. Returns nil if id is nil
   or is not a lice-comb unidentified LicenseRef or AdditionRef."
-  [id]
+  [^CharSequence id]
   (cond
     (unidentified-license-ref?  id) (unidentified-license-ref->human-readable-name id)
     (unidentified-addition-ref? id) (unidentified-addition-ref->human-readable-name id)))
@@ -255,11 +231,6 @@
 
 (def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples (map sl/info @license-ids-d))))
                                              (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples (map se/info @exception-ids-d)))))))
-
-;####TODO: REMOVE ONCE TESTED
-;(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @license-list-d)))
-;                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples @exception-list-d))))))
-
 
 (defn near-match-uri
   "Returns the id(s) (a set) for the given listed `uri`, or `nil` if no ids were

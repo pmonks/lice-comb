@@ -21,11 +21,11 @@
 (defn- special-form-match->ei
   "Turns a match from the special form regex into an expression info map."
   [m]
-  (mp/match->expression-info (:match m) "SPDX special form" m))
+  (mp/match->fragment-info (:match m) "SPDX special form" m))
 
 (defn detect
   "Detects any SPDX license or addition refs found in the `String`s in
-  `coll` with an expression-info map. Returns other elements unchanged."
+  `coll` with a fragment info map. Returns other elements unchanged."
   [coll]
   (faux/parse coll
               (sre/special-form-re) special-form-match->ei))

@@ -43,7 +43,7 @@
   (map (fn [regex-map-entry]
          (let [regex-type (key regex-map-entry)
                regex      (val regex-map-entry)]
-           [regex (partial mp/unversioned-match->expression-info id regex-type)]))
+           [regex (partial mp/unversioned-match->fragment-info id regex-type)]))
        regex-map))
 
 (defmethod ^:private build-pairs-from-regexes java.util.Map
@@ -51,7 +51,7 @@
   (map (fn [regex-map-entry]
          (let [regex-type (key regex-map-entry)
                regex      (val regex-map-entry)]
-           [regex (partial mp/versioned-match->expression-info version-series regex-type)]))
+           [regex (partial mp/versioned-match->fragment-info version-series regex-type)]))
        regex-map))
 
 ;####TODO: COME UP WITH A BETTER NAME!!!!
@@ -61,8 +61,8 @@
     (mapcat (partial build-pairs-from-regexes id-or-version-series) regexes)))
 
 (defn- build-regex-fn-pairs-for-ids
-  "Builds a sequence of regex/fn pairs for every id in `ids`, sorted by longest
-  name to shortest name."  ; ####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
+  "Builds a sequence of regex/fn pairs for every id in `ids`, in such an order
+  that maximises the chances of correct matches."  ; ####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
   [ids]
   (let [;####TODO: NEED TO SPLIT IDS INTO DEPRECATED AND NON-DEPRECATED, THEN SORT!!!!
         {raw-version-series :version-series
@@ -77,7 +77,7 @@
 
 (defn detect
   "Detects any default identifiers found inside the `String`s in `coll` and
-  replaces them with an expression-info map in that location. Returns other
+  replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
   (faux/parse-with-pairs @pairs-d coll))
