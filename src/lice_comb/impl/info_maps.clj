@@ -24,7 +24,7 @@
   (when fim
     (if (s/blank? s)
       fim
-      (assoc fim :source (into [(s/trim s)] source)))))  ;####TODO: do we need to check if `s` is already at the front of `source`?  The old code did this, but I'm not sure it's needed...
+      (assoc fim :source (conj (seq source) (s/trim s))))))  ;####TODO: do we need to check if `s` is already at the front of `source`?  The old code did this, but I'm not sure it's needed...
 
 (defn prepend-source-to-fims-within-em
   "Prepends the given source `s` (a String) onto the `:source` sequences of all
@@ -113,9 +113,11 @@
   :inconsistent-bsd-clause-counts :low     ; BSD clause counts are inconsistent (e.g. "2 Clause BSD 4 Clause")
   :invalid-bsd-combination        :low     ; Invalid combination of BSD clause counts and suffixes (e.g. "BSD 2 Clause No Nuclear License")
   ; CC-BY-specific confidence explanations
-  :invalid-cc-suffix              :low
+  :invalid-cc-suffix              :low     ; Invalid combination of CC version and suffix (e.g. "CC BY 4.0 Australia")
   ; GNU-specific confidence explanations
   :missing-version-suffix         :medium  ; GNU family suffix is missing (e.g. "GPL 2.0")
+  ; URI-specific confidence explanations
+  :download-skipped               :low     ; URI is in the allow list, but downloading was skipped
 })
 
 (def ^:private strategies->match-type

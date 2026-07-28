@@ -21,10 +21,13 @@
 
 (defn replace-in-strings
   "For each `String` in `partial-parse` (a sequential), replaces any occurrences
-  of `re` (a regex) with `replacement`, as per [[lice-comb.impl.utils/replacing-split]].
-  Returns a new sequential."
+  of `re` (a regex) within the string with `replacement`, as per
+  [[lice-comb.impl.utils/replacing-split]]. Returns a new sequential."
   [partial-parse re replacement]
-  (lciu/mapcat-str #(lciu/replacing-split % re replacement) partial-parse))
+  (when partial-parse
+    (if re
+      (lciu/mapcat-str #(lciu/replacing-split % re replacement) partial-parse)
+      partial-parse)))
 
 (defn consumed?
   "Has `partial-parse` been consumed?  This is defined as having no non-blank

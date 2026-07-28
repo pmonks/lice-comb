@@ -66,11 +66,12 @@
   "`mapcat` on `coll`, calling `f` for any/all values for which `pred` returns
   logical true, passing through other values unchanged."
   [pred f coll]
-  (when (and pred f coll)
+  (if (and pred f)
     (mapcat #(if (pred %)
                (f %)
-               [%])
-            coll)))
+               (list %))
+            coll)
+    coll))
 
 (defn mapcat-str
   "[mapcat-pred] but with `pred` hardcoded to be `string?`."
@@ -97,8 +98,8 @@
   [s]
   (when s
     (-> s
-        (s/replace #"(?U)\A[^\w]+" "")
-        (s/replace #"(?U)[^\w]+\z" ""))))
+        (s/replace #"(?U:\A[^\w]+)" "")
+        (s/replace #"(?U:[^\w]+\z)" ""))))
 
 (defn is-digits?
   "Does `s` contains digits only?"
@@ -155,7 +156,9 @@
 
 (defn replacing-split
   "As for `clojure.string/split`, but replaces whatever `re` matched with
-  `replacement`, which can be a value or a function of one argument.
+  `replacement`, which can be a value or a function of one argument (which
+  cannot be a 'raw' keyword, since keywords aren't `fn?`s, even though they can
+  behave like one for the purposes of map lookups).
 
   Notes:
 
@@ -169,27 +172,32 @@
   * does not support the `$1` syntax (as supported by Clojure and the JVM) - use
     a function instead"
   [^CharSequence s ^java.util.regex.Pattern re replacement]
-  (when (and s re)
-    (let [replacement-fn (if (fn? replacement) replacement (constantly replacement))
-          m              (re-matcher re s)
-          ncgs           (ncg/re-named-groups re)]
-      (loop [result []
-             index  0
-             f      (.find m)]
-        (if f
-          (let [match       (ncg/re-groups m ncgs)
-                match-start (long (:start match))
-                match-end   (long (:end   match))
-                rep-as-list (when-let [r (replacement-fn match)]
-                              (if (list? r)
-                                r
-                                (list r)))]
-            (if (= index match-start)
-              (recur (vec (concat result rep-as-list))                              match-end (.find m))  ; Back-to-back matches
-              (recur (vec (concat result [(subs s index match-start)] rep-as-list)) match-end (.find m))))
-          (if (= index (count s))
-            result  ; The last find consumed to the end of the input
-            (conj result (subs s index (count s)))))))))  ; There's some trailing text - make sure to preserve it
+  (when s
+    (if re
+      (let [replacement-fn (if (fn? replacement) replacement (constantly replacement))
+            m              (re-matcher re s)
+            ncgs           (ncg/re-named-groups re)]
+        (loop [result []
+               index  0
+               f      (.find m)]
+          (if f
+            ; The regex found a match, so perform the replacement and recur
+            (let [match       (ncg/re-groups m ncgs)
+                  match-start (long (:start match))
+                  match-end   (long (:end   match))
+                  rep-as-list (when-let [r (replacement-fn match)]
+                                (if (list? r)
+                                  r
+                                  (list r)))]
+              (if (= index match-start)
+                (recur (vec (concat result                              rep-as-list)) match-end (.find m))  ; Back-to-back matches, so there's no intermediate string
+                (recur (vec (concat result [(subs s index match-start)] rep-as-list)) match-end (.find m))))
+            ; No find occurred, so return the result
+            (if (= index (count s))
+              result  ; The last find consumed to the end of the input
+              (conj result (subs s index (count s)))))))  ; There's some trailing text - make sure to preserve it
+      ; No regex provided, so no matches can possibly occur - just return s (in a vector)
+      [s])))
 
 (defn retained-split
   "As for `clojure.string/split`, but retains whatever `re` matched as distinct

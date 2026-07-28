@@ -10,6 +10,7 @@
 
 (ns lice-comb.impl.utils-test
   (:require [clojure.test               :refer [deftest testing is use-fixtures]]
+            [clojure.string             :as s]
             [clojure.java.io            :as io]
             [lice-comb.test-boilerplate :refer [fixture test-data-path]]
             [lice-comb.impl.utils       :refer [replacing-split simplify-uri filepath filename html->text]]))
@@ -18,11 +19,13 @@
 
 (deftest replacing-split-tests
   (testing "Nil values"
-    (is (nil? (replacing-split nil   nil    nil)))
-    (is (nil? (replacing-split "foo" nil    nil)))
-    (is (nil? (replacing-split nil   #"foo" nil))))
+    (is (nil? (replacing-split nil nil    nil)))
+    (is (nil? (replacing-split nil #"foo" nil)))
+    (is (nil? (replacing-split nil nil    :foo))))
   (testing "Non replacements"
-    (is (= ["foo"] (replacing-split "foo" #"bar" nil))))
+    (is (= ["foo"] (replacing-split "foo" nil    nil)))
+    (is (= ["foo"] (replacing-split "foo" #"bar" nil)))
+    (is (= ["foo"] (replacing-split "foo" nil    :foo))))
   (testing "Simple replacements"
     (is (= [:foo " bar blah"]    (replacing-split "foo bar blah" #"foo"  :foo)))
     (is (= ["foo " :bar " blah"] (replacing-split "foo bar blah" #"bar"  :bar)))
@@ -31,8 +34,15 @@
     (is (= ["foo " :bar " blah"]     (replacing-split "foo bar blah" #"bar"          #(keyword (:match %)))))
     (is (= [:foo " " :bar " " :blah] (replacing-split "foo bar blah" #"foo|bar|blah" #(keyword (:match %))))))
   (testing "Replacement flattening (lists only)"
-    (is (= ["foo " :bar :bar   " blah"] (replacing-split "foo bar blah" #"bar"  (list   :bar :bar))))
-    (is (= ["foo " [:bar :bar] " blah"] (replacing-split "foo bar blah" #"bar"  (vector :bar :bar))))))  ; Note: does _NOT_ get flattened - only lists get flattened
+    (is (= [:bar :bar]                  (replacing-split "bar"          #"bar"  (list    :bar :bar))))
+    (is (= ['(:bar :bar)]               (replacing-split "bar"          #"bar"  (list    (list :bar :bar)))))  ; Lists only get flattened by one level
+    (is (= [:bar :rab]                  (replacing-split "bar"          #"bar"  #(list   (keyword (:match %)) (keyword (s/reverse (:match %)))))))
+    (is (= ["foo" :bar :rab]            (replacing-split "foobar"       #"bar"  #(list   (keyword (:match %)) (keyword (s/reverse (:match %)))))))
+    (is (= [:bar :rab "blah"]           (replacing-split "barblah"      #"bar"  #(list   (keyword (:match %)) (keyword (s/reverse (:match %)))))))
+    (is (= [[:bar :bar]]                (replacing-split "bar"          #"bar"  (vector  :bar :bar))))                                              ; Note: does _NOT_ get flattened - only lists get flattened
+    (is (= [[:bar :rab]]                (replacing-split "bar"          #"bar"  #(vector (keyword (:match %)) (keyword (s/reverse (:match %)))))))  ; Note: does _NOT_ get flattened - only lists get flattened
+    (is (= ["foo " :bar :bar   " blah"] (replacing-split "foo bar blah" #"bar"  (list    :bar :bar))))
+    (is (= ["foo " [:bar :bar] " blah"] (replacing-split "foo bar blah" #"bar"  (vector  :bar :bar))))))                                            ; Note: does _NOT_ get flattened - only lists get flattened
 
 (def simplified-apache2-uri "http://apache.org/license/license-2.0")
 (def local-mpl2-html        (str test-data-path "/MPL-2.0/LICENSE.html"))
