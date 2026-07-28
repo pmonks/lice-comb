@@ -12,11 +12,21 @@
   "General purpose utility fns that I seem to end up needing in every single
   project I write... Note: this namespace is not part of the public API of
   lice-comb and may change without notice."
-  (:require [clojure.string           :as s]
-            [clojure.java.io          :as io]
-            [clj-base62.core          :as base62]
-            [embroidery.api           :as e]
-            [rencg.api                :as ncg]))
+  (:require [clojure.string  :as s]
+            [clojure.java.io :as io]
+            [clj-base62.core :as base62]
+            [embroidery.api  :as e]
+            [rencg.api       :as ncg]))
+
+(defn third
+  "Third element in `coll`, or `nil` if it doesn't have one."
+  [coll]
+  (nth coll 2 nil))
+
+(defn fourth
+  "Fourth element in `coll`, or `nil` if it doesn't have one."
+  [coll]
+  (nth coll 3 nil))
 
 (defn mapfonk
   "Returns a new map where f has been applied to all of the keys of m."

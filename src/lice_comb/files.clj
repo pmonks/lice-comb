@@ -11,13 +11,13 @@
 (ns lice-comb.files
   "Functionality related to combing files, directories, and ZIP format archives
   for license information."
-  (:require [clojure.string           :as s]
-            [clojure.java.io          :as io]
-            [clojure.tools.logging    :as log]
-            [lice-comb.matching       :as lcm]
-            [lice-comb.maven          :as lcmvn]
-            [lice-comb.impl.info-maps :as im]
-            [lice-comb.impl.utils     :as lciu]))
+  (:require [clojure.string                   :as s]
+            [clojure.java.io                  :as io]
+            [clojure.tools.logging            :as log]
+            [lice-comb.matching               :as lcm]
+            [lice-comb.maven                  :as lcmvn]
+            [lice-comb.impl.parsing.info-maps :as info]
+            [lice-comb.impl.utils             :as u]))
 
 (def ^:private probable-license-filenames #{"pom.xml" "license" "license.txt" "license.html" "copying" "unlicense"})
 
@@ -27,7 +27,7 @@
   `File`, `ZipEntry`) is a probable license file, false otherwise."
   [f]
   (and (not (nil? f))  ; Use this idiom to ensure a boolean value is returned, not nil
-       (let [fname (s/lower-case (lciu/filename f))]
+       (let [fname (s/lower-case (u/filename f))]
          (and (not (s/blank? fname))
               (or (contains? probable-license-filenames fname)
                   (s/ends-with? fname ".pom"))))))
@@ -44,11 +44,11 @@
     search or not."
   ([dir] (probable-license-files dir nil))
   ([dir {:keys [include-hidden-dirs?] :or {include-hidden-dirs? false}}]
-   (when (lciu/readable-dir? dir)
-     (some-> (lciu/filter-file-only-seq (io/file dir)
-                                        (fn [^java.io.File d] (and (not= (.getCanonicalFile d) (.getCanonicalFile (io/file (lcmvn/local-maven-repo))))  ; Make sure to exclude the Maven local repo, just in case it happens to be nested within dir
-                                                                   (or include-hidden-dirs? (not (.isHidden d)))))
-                                        probable-license-file?)
+   (when (u/readable-dir? dir)
+     (some-> (u/filter-file-only-seq (io/file dir)
+                                     (fn [^java.io.File d] (and (not= (.getCanonicalFile d) (.getCanonicalFile (io/file (lcmvn/local-maven-repo))))  ; Make sure to exclude the Maven local repo, just in case it happens to be nested within dir
+                                                                (or include-hidden-dirs? (not (.isHidden d)))))
+                                     probable-license-file?)
              set))))
 
 (defn file->expressions-info
@@ -59,22 +59,22 @@
   If an `InputStream` is provided, it is the caller's responsibility to open and
   close it, and a filepath associated with the `InputStream` *must* be provided
   as the second parameter (it is not required for other types of input)."
-  ([f] (file->expressions-info f (lciu/filepath f)))
+  ([f] (file->expressions-info f (u/filepath f)))
   ([f filepath]
-   (when (lciu/readable-file? f)
-     (let [fname  (lciu/filename filepath)
+   (when (u/readable-file? f)
+     (let [fname  (u/filename filepath)
            lfname (s/lower-case fname)
            result (cond (or (= lfname "pom.xml")
                             (s/ends-with? lfname ".pom")) (doall (lcmvn/pom->expressions-info f fname))
                         (or (s/ends-with? lfname ".html")
-                            (s/ends-with? lfname ".htm")) (doall (lcm/text->expressions-info (lciu/html-file->text f)))
+                            (s/ends-with? lfname ".htm")) (doall (lcm/text->expressions-info (u/html-file->text f)))
                         (instance? java.io.InputStream f) (doall (lcm/text->expressions-info f))
                         :else                             (with-open [is (io/input-stream f)] (doall (lcm/text->expressions-info is))))]  ; Default is to assume it's a plain text file containing license text(s)
-       (im/prepend-source-to-fims-within-em filepath result)))))
+       (info/prepend-source-to-fims-within-em filepath result)))))
 
 (defn file->expressions
   "Returns a set of SPDX expressions (`String`s) for `f`."
-  ([f] (file->expressions f (lciu/filepath f)))
+  ([f] (file->expressions f (u/filepath f)))
   ([f filepath]
    (some-> (file->expressions-info f filepath)
            keys
@@ -86,7 +86,7 @@
 
   Throws various Java IO exceptions if the file is not a valid ZIP-format file."
   [zip]
-  (when (lciu/readable-file? zip)
+  (when (u/readable-file? zip)
     (let [zip-file (io/file zip)]
       (java.util.zip.ZipFile. zip-file)  ; This no-op forces validation of the zip file - ZipInputStream constructor does not reliably perform validation
       (with-open [zip-is (java.util.zip.ZipInputStream. (io/input-stream zip-file))]
@@ -95,13 +95,13 @@
                  entry  (.getNextEntry zip-is)]
             (if-not entry
               ; Base case
-              (when-not (empty? result) (im/prepend-source-to-fims-within-em (lciu/filepath zip-file) result))
+              (when-not (empty? result) (info/prepend-source-to-fims-within-em (u/filepath zip-file) result))
               ; Recursive case
               (if (probable-license-file? entry)
                 (if-let [expressions (try
-                                       (file->expressions-info zip-is (lciu/filepath entry))
+                                       (file->expressions-info zip-is (u/filepath entry))
                                        (catch Exception e
-                                         (log/warn (str "Unexpected exception while processing " (lciu/filename zip) ":" (lciu/filename entry) " - ignoring") e)
+                                         (log/warn (str "Unexpected exception while processing " (u/filename zip) ":" (u/filename entry) " - ignoring") e)
                                          nil))]
                   (recur (merge result expressions) (.getNextEntry zip-is))
                   (recur result (.getNextEntry zip-is)))
@@ -126,8 +126,8 @@
     search or not."
   ([dir] (zip-compressed-files dir nil))
   ([dir  {:keys [include-hidden-dirs?] :or {include-hidden-dirs? false}}]
-   (when (lciu/readable-dir? dir)
-      (some-> (lciu/filter-file-only-seq (io/file dir)
+   (when (u/readable-dir? dir)
+      (some-> (u/filter-file-only-seq (io/file dir)
                                          (fn [^java.io.File d] (or include-hidden-dirs? (not (.isHidden d))))
                                          (fn [^java.io.File f]
                                            (let [lname (s/lower-case (.getName f))]
@@ -150,9 +150,9 @@
   Note: logs and ignores errors (XML parsing errors, ZIP file errors, etc.)"
   ([dir] (dir->expressions-info dir nil))
   ([dir {:keys [include-hidden-dirs? include-zips?] :or {include-hidden-dirs? false include-zips? false} :as opts}]
-   (when (lciu/readable-dir? dir)
+   (when (u/readable-dir? dir)
      (let [file-expressions (into {} (filter identity
-                                             (lciu/file-handle-bounded-pmap
+                                             (u/file-handle-bounded-pmap
                                                #(try
                                                   (file->expressions-info %)
                                                   (catch Exception e
@@ -161,15 +161,15 @@
                                                (probable-license-files dir opts))))]
        (if include-zips?
          (let [zip-expressions (into {} (filter identity
-                                                (lciu/file-handle-bounded-pmap
+                                                (u/file-handle-bounded-pmap
                                                   #(try
                                                      (zip->expressions-info %)
                                                      (catch Exception e
                                                        (log/warn (str "Unexpected exception while processing " % " - ignoring") e)
                                                        nil))
                                                   (zip-compressed-files dir opts))))]
-           (im/prepend-source-to-fims-within-em (lciu/filepath dir) (merge file-expressions zip-expressions)))
-         (im/prepend-source-to-fims-within-em (lciu/filepath dir) file-expressions))))))
+           (info/prepend-source-to-fims-within-em (u/filepath dir) (merge file-expressions zip-expressions)))
+         (info/prepend-source-to-fims-within-em (u/filepath dir) file-expressions))))))
 
 (defn dir->expressions
   "Returns a set of SPDX expressions (`String`s) for `dir`. See

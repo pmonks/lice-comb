@@ -16,7 +16,7 @@
   (:require [clojure.string       :as s]
             [clojure.java.io      :as io]
             [hato.client          :as hc]
-            [lice-comb.impl.utils :as lciu]))
+            [lice-comb.impl.utils :as u]))
 
 (def ^:private user-agent    "https://github.com/pmonks/lice-comb")
 (def ^:private http-client-d (delay (hc/build-http-client {:connect-timeout 1000
@@ -33,7 +33,7 @@
   * Does not throw - returns false on errors"
   [uri]
   (boolean
-    (when (lciu/valid-http-uri? (str uri))
+    (when (u/valid-http-uri? (str uri))
       (try
         (when-let [response (hc/head (str uri)
                                      {:http-client @http-client-d
@@ -69,7 +69,7 @@
   * Automatically uses CDN URLs when known (as per `cdn-uri`)
   * HTML responses are automatically converted to plain text (using JSoup)"
   [uri]
-  (when (lciu/valid-http-uri? uri)
+  (when (u/valid-http-uri? uri)
     (try
       (when-let [response (hc/get (cdn-uri uri)
                                   {:http-client @http-client-d
@@ -77,6 +77,6 @@
                                    :header      {"User-Agent" user-agent}})]
         (case (:content-type response)
            :text/plain                         (:body response)
-           (:text/html :application/xhtml+xml) (lciu/html->text (:body response))))
+           (:text/html :application/xhtml+xml) (u/html->text (:body response))))
       (catch Exception _
         nil))))

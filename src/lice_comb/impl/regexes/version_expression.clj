@@ -8,7 +8,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.version-expression
+(ns lice-comb.impl.regexes.version-expression
   "Version expression regex related functionality. A version expression is
   comprised of:
   * a version label (e.g. 'v', 'ver', 'version', etc.)
@@ -18,9 +18,9 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [wreck.api                      :as re]
-            [lice-comb.impl.regex-fragments :as ref]
-            [lice-comb.impl.version-number  :as ver]))
+  (:require [wreck.api                             :as re]
+            [lice-comb.impl.regexes.fragments      :as ref]
+            [lice-comb.impl.regexes.version-number :as ver]))
 
 (def ncg-version-number "VersionNumber")
 (def ncg-or-later       "OrLater")

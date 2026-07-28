@@ -9,9 +9,9 @@
 ;
 
 (ns lice-comb.impl.info-maps-test
-  (:require [clojure.test               :refer [deftest testing is use-fixtures]]
-            [lice-comb.test-boilerplate :refer [fixture]]
-            [lice-comb.impl.info-maps   :refer [prepend-source-to-fims-within-em merge-expressions-maps]]))
+  (:require [clojure.test                     :refer [deftest testing is use-fixtures]]
+            [lice-comb.test-boilerplate       :refer [fixture]]
+            [lice-comb.impl.parsing.info-maps :refer [prepend-source-to-fims-within-em merge-expressions-maps]]))
 
 (use-fixtures :once fixture)
 

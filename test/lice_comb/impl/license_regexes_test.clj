@@ -22,7 +22,7 @@
             [clojure.set                    :as set]
             [spdx.identifiers               :as si]
             [lice-comb.test-boilerplate     :refer [fixture ids-d all-version-series-d]]
-            [lice-comb.impl.license-regexes :refer [regexes]]))
+            [lice-comb.impl.regexes.license :refer [regexes]]))
 
 (use-fixtures :once fixture)
 

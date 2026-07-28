@@ -17,13 +17,13 @@
             [clojure.set                                       :as set]
             [wreck.api                                         :as re]
             [spdx.licenses                                     :as sl]
-            [lice-comb.impl.faux-parse                         :as faux]
-            [lice-comb.impl.spdx                               :as lcis]
-            [lice-comb.impl.regex-fragments                    :as ref]
-            [lice-comb.impl.utils                              :as lciu]
+            [lice-comb.impl.spdx                               :as spdx]
+            [lice-comb.impl.utils                              :as u]
+            [lice-comb.impl.regexes.fragments                  :as ref]
+            [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
-(def ids-d (delay (concat ["0BSD" "AMPAS" "FreeBSD-DOC"] (filter #(s/starts-with? % "BSD-") @lcis/license-ids-d))))
+(def ids-d (delay (concat ["0BSD" "AMPAS" "FreeBSD-DOC"] (filter #(s/starts-with? % "BSD-") @spdx/license-ids-d))))
 
 
 ;;
@@ -202,7 +202,7 @@
   `nil` if no matches were found.  Duplicates will be removed, but invalid
   clause counts will not be removed."
   [m]
-  (let [version-number (when-let [version-number-dbl (lciu/parse-dbl (get m "versionNumber"))] (int version-number-dbl))]
+  (let [version-number (when-let [version-number-dbl (u/parse-dbl (get m "versionNumber"))] (int version-number-dbl))]
     (seq
       (distinct
         (filter identity

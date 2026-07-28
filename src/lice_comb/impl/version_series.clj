@@ -19,13 +19,14 @@
     which would make this namespace superfluous)
   * this namespace is not part of the public API of lice-comb and may change
     without notice"
-  (:require [clojure.string                 :as s]
-            [spdx.identifiers               :as si]
-            [wreck.api                      :as re]
-            [rencg.api                      :as ncg]
-            [lice-comb.impl.spdx            :as lcis]
-            [lice-comb.impl.regex-fragments :as ref]
-            [lice-comb.impl.version-number  :as vernum]))
+  (:require [clojure.string                        :as s]
+            [spdx.identifiers                      :as si]
+            [wreck.api                             :as re]
+            [rencg.api                             :as ncg]
+            [lice-comb.impl.spdx                   :as spdx]
+            [lice-comb.impl.version-number         :as vernum]
+            [lice-comb.impl.regexes.fragments      :as ref]
+            [lice-comb.impl.regexes.version-number :as rev]))
 
 ; These are public because lice-comb.impl.regex.licenses and lice-comb.impl.id-detection.default depend on knowing what these values are
 (def placeholder-ver  "${VER}")
@@ -136,7 +137,7 @@
     "W3C"    "W3C"
     "libpng" "Libpng"
     (let [[default or-later?] (defaults series-id)]
-      (lcis/canonicalise-spdx-expression-fragment (str (default series-ids) (when or-later? "+"))))))
+      (spdx/canonicalise-spdx-expression-fragment (str (default series-ids) (when or-later? "+"))))))
 
 ;####TODO: MERGE THIS WITH default-id
 (defn best-id
@@ -148,7 +149,7 @@
   (if (= 1 (count ids))
     (first ids)
     (let [[default or-later?] (defaults series-id)]
-      (lcis/canonicalise-spdx-expression-fragment (str (default ids) (when or-later? "+"))))))
+      (spdx/canonicalise-spdx-expression-fragment (str (default ids) (when or-later? "+"))))))
 
 (defn- id-formats
   "Returns a set of unique id formats in the given version series (identified
@@ -162,9 +163,9 @@
                   (if-let [id-version (get (ncg/re-matches re-version-series id) "version")]
                     ; Id has a version, so replace version elements with placeholders
                     (-> id
-                        (s/replace-first (vernum/exact-regex id-version) (s/re-quote-replacement placeholder-ver))   ; The license's version
-                        (s/replace       re-oool-in-id                   (s/re-quote-replacement placeholder-oool))  ; "only" or "or later"
-                        (s/replace       re-ver-oool                     (s/re-quote-replacement placeholder-ver)))  ; Collapse consecutive version and OOOL
+                        (s/replace-first (rev/exact-regex id-version) (s/re-quote-replacement placeholder-ver))   ; The license's version
+                        (s/replace       re-oool-in-id                (s/re-quote-replacement placeholder-oool))  ; "only" or "or later"
+                        (s/replace       re-ver-oool                  (s/re-quote-replacement placeholder-ver)))  ; Collapse consecutive version and OOOL
                     ; Id has no versions in it (e.g. Libpng, W3C), so return it verbatim
                     id)))
            distinct))
@@ -212,7 +213,7 @@
                                 "20021231"  ; Special case for the (highly irregular) W3C identifier
                                 (get (ncg/re-matches re-version-series id) "version"))]
                (if id-version
-                 (let [re-exact-version-and-label (when id-version (re/fgrp "i" (re/-lb #"\A\d{0,4}") #"[,\s]*" re-opt-version-label (vernum/exact-regex id-version)))]
+                 (let [re-exact-version-and-label (when id-version (re/fgrp "i" (re/-lb #"\A\d{0,4}") #"[,\s]*" re-opt-version-label (rev/exact-regex id-version)))]
                     ; Name has a version, so replace version elements with placeholders
                    (-> nm
                        (s/replace-first re-exact-version-and-label (s/re-quote-replacement placeholder-ver))            ; The license's version

@@ -14,9 +14,9 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [wreck.api                                         :as re]
-            [lice-comb.impl.faux-parse                         :as faux]
-            [lice-comb.impl.spdx                               :as lcis]
-            [lice-comb.impl.regex-fragments                    :as ref]
+            [lice-comb.impl.spdx                               :as spdx]
+            [lice-comb.impl.regexes.fragments                  :as ref]
+            [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
 (def ^:private re-public-domain
@@ -34,4 +34,4 @@
   `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-public-domain (partial mp/match->fragment-info (lcis/public-domain) "Public domain regex")))
+  (faux/parse coll re-public-domain (partial mp/match->fragment-info (spdx/public-domain) "Public domain regex")))

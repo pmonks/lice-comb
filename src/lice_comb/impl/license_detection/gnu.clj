@@ -17,26 +17,26 @@
             [clojure.set                                       :as set]
             [wreck.api                                         :as re]
             [spdx.licenses                                     :as sl]
-            [lice-comb.impl.faux-parse                         :as faux]
-            [lice-comb.impl.spdx                               :as lcis]
-            [lice-comb.impl.regex-fragments                    :as ref]
-            [lice-comb.impl.version-expression                 :as verexp]
+            [lice-comb.impl.spdx                               :as spdx]
+            [lice-comb.impl.regexes.fragments                  :as ref]
+            [lice-comb.impl.regexes.version-expression         :as verexp]
+            [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
-; Unlike the other substitution namespaces, for the GNU family we use a "word salad" strategy for matching.  Basically
+; Unlike the other detection namespaces, for the GNU family we use a "word salad" strategy for detection.  Basically
 ; this involves matching any words that are known to appear in a GNU family license *in any order*.  So even nonsensical
 ; values that don't appear in the wild will match, such as "Open Source License License GNU v3 Licensed Under or later"
 ;
-; For this reason, the `sub`stitution function in this namespace should be called *last, after all other substitutions
-; have already been performed*.
+; For this reason, the `detect` function in this namespace should be called *last, after all other detections have
+; already been performed*.
 ;
 ; We do this because of the sheer number of variations of GNU family license names in the wild.
 
-(def ids-d (delay (filter #(and (sl/listed-id? %)  ; This namespace only handles GNU license identifiers, not exceptions
-                                (or (s/starts-with? % "AGPL-")
+(def ids-d (delay (filter #(and (sl/listed-id? %)               ; This namespace only handles GNU license identifiers, not exceptions
+                                (or (s/starts-with? % "AGPL-")  ; It also handles AGPL-1.0, despite that license not being published by the FSF/GNU
                                     (s/starts-with? % "LGPL-")
                                     (s/starts-with? % "GPL-")))
-                          @lcis/license-ids-d)))
+                          @spdx/license-ids-d)))
 
 ;;
 ;; GNU REGEXES CONSTRUCTION

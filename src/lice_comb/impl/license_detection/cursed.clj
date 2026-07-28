@@ -13,17 +13,17 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [wreck.api                      :as re]
-            [lice-comb.impl.regex-fragments :as ref]
-            [lice-comb.impl.faux-parse      :as faux]
-            [lice-comb.impl.info-maps       :as im]))
+  (:require [wreck.api                         :as re]
+            [lice-comb.impl.regexes.fragments  :as ref]
+            [lice-comb.impl.parsing.faux-parse :as faux]
+            [lice-comb.impl.parsing.info-maps  :as info]))
 
 ; Map of name values seen in the wild that are too ambiguous / cursed to support any reasonable form of automated parsing
 (def ^:private cursed-names {
   ; Seen in https://repo.maven.apache.org/maven2/com/sun/mail/all/1.4.7/all-1.4.7.pom and other javax.mail/javax.mail-api artifacts
-  "GPLv2+CE" (list (im/fragment-info "GPL-2.0-only" ["GPLv2+CE" "GPLv2"] "Manual verification")
+  "GPLv2+CE" (list (info/fragment-info "GPL-2.0-only" ["GPLv2+CE" "GPLv2"] "Manual verification")
                    :with
-                   (im/fragment-info "Classpath-exception-2.0" ["GPLv2+CE" "CE"] "Manual verification"))})
+                   (info/fragment-info "Classpath-exception-2.0" ["GPLv2+CE" "CE"] "Manual verification"))})
 
 ;####TODO: REMOVE ONCE TESTED!!!!
 ;             '({:id "GPL-2.0-only"            :type :concluded :confidence :high :strategy "Manual verification" :source ("GPLv2+CE" "GPLv2")}

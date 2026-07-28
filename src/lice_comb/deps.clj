@@ -11,12 +11,12 @@
 (ns lice-comb.deps
   "Functionality related to combing tools.deps dependency maps and lib maps for
   license information."
-  (:require [clojure.string           :as s]
-            [clojure.tools.logging    :as log]
-            [lice-comb.maven          :as lcmvn]
-            [lice-comb.files          :as lcf]
-            [lice-comb.impl.info-maps :as im]
-            [lice-comb.impl.utils     :as lciu]))
+  (:require [clojure.string                   :as s]
+            [clojure.tools.logging            :as log]
+            [lice-comb.maven                  :as lcmvn]
+            [lice-comb.files                  :as lcf]
+            [lice-comb.impl.parsing.info-maps :as info]
+            [lice-comb.impl.utils             :as u]))
 
 (defn- normalise-dep
   "Normalises a dep, by removing any classifier suffixes from the artifact-id
@@ -53,7 +53,7 @@
         gav-expressions
         ; If we didn't find any licenses in the dep's POM, check the dep's JAR(s)
         (into {} (filter identity
-                         (lciu/file-handle-bounded-pmap
+                         (u/file-handle-bounded-pmap
                            #(try
                               (lcf/zip->expressions-info %)
                               (catch javax.xml.stream.XMLStreamException xse
@@ -73,12 +73,12 @@
 (defmethod dep->expressions-info :mvn
   [dep]
   (when-let [expressions (expressions-from-dep dep)]
-    (im/prepend-source-to-fims-within-em (dep->string dep) expressions)))
+    (info/prepend-source-to-fims-within-em (dep->string dep) expressions)))
 
 (defmethod dep->expressions-info :deps
   [dep]
   (let [[_ info] (normalise-dep dep)]
-    (im/prepend-source-to-fims-within-em (dep->string dep) (lcf/dir->expressions-info (:deps/root info)))))
+    (info/prepend-source-to-fims-within-em (dep->string dep) (lcf/dir->expressions-info (:deps/root info)))))
 
 (defmethod dep->expressions-info nil
   [[ga _ :as dep]]
@@ -91,7 +91,7 @@
                                  (catch javax.xml.stream.XMLStreamException xse
                                    (log/warn (str "Failed to parse POM for " group-id "/" artifact-id (when version (str "@" version)) " - ignoring") xse)
                                    nil))]
-        (im/prepend-source-to-fims-within-em (str ga "@" version) gav-expressions)))))
+        (info/prepend-source-to-fims-within-em (str ga "@" version) gav-expressions)))))
 
 (defmethod dep->expressions-info :default
   [[_ info :as dep]]

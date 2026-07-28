@@ -9,10 +9,10 @@
 ;
 
 (ns lice-comb.impl.faux-parse-test
-  (:require [clojure.test               :refer [deftest testing is use-fixtures]]
-            [clojure.string             :as s]
-            [lice-comb.test-boilerplate :refer [fixture]]
-            [lice-comb.impl.faux-parse  :refer [replace-in-strings]]))
+  (:require [clojure.test                      :refer [deftest testing is use-fixtures]]
+            [clojure.string                    :as s]
+            [lice-comb.test-boilerplate        :refer [fixture]]
+            [lice-comb.impl.parsing.faux-parse :refer [replace-in-strings]]))
 
 (use-fixtures :once fixture)
 

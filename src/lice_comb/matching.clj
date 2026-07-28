@@ -49,38 +49,38 @@
     starting from the most general (the input) through to the most specific
     (the smallest subset of the input that was used to make this
     determination)."
-  (:require [clojure.string         :as s]
-            [spdx.identifiers       :as si]
-            [spdx.licenses          :as sl]
-            [lice-comb.impl.spdx    :as lcis]
-            [lice-comb.impl.parsing :as lcip]))
+  (:require [clojure.string                :as s]
+            [spdx.identifiers              :as si]
+            [spdx.licenses                 :as sl]
+            [lice-comb.impl.spdx           :as spdx]
+            [lice-comb.impl.parsing.parser :as lcip]))
 
 (defn lice-comb-license-ref?
   "Is the given id one of lice-comb's custom LicenseRefs?"
   [^CharSequence id]
-  (lcis/lice-comb-license-ref? id))
+  (spdx/lice-comb-license-ref? id))
 
 (defn public-domain?
   "Is the given id lice-comb's custom 'public domain' LicenseRef?"
   [^CharSequence id]
-  (lcis/public-domain? id))
+  (spdx/public-domain? id))
 
 (defn proprietary-commercial?
   "Is the given id lice-comb's custom 'proprietary / commercial' LicenseRef?"
   [^CharSequence id]
-  (lcis/proprietary-commercial? id))
+  (spdx/proprietary-commercial? id))
 
 (defn unidentified?
   "Is the given id a lice-comb custom 'unidentified' LicenseRef?"
   [^CharSequence id]
-  (lcis/unidentified? id))
+  (spdx/unidentified? id))
 
 (defn unidentified->name
   "Returns a human readable name for the given lice-comb custom 'unidentified'
   LicenseRef. Returns `nil` if id is not a lice-comb custom 'unidentified'
   LicenseRef."
   [^CharSequence id]
-  (lcis/unidentified->human-readable-name id))
+  (spdx/unidentified->human-readable-name id))
 
 (defn id->name
   "Returns a human readable name of the given license or exception identifier;
@@ -173,5 +173,5 @@
 
   Note: this method may have a substantial performance cost."
   []
-  (lcis/init!)
+  (spdx/init!)
   nil)

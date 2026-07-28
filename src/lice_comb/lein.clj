@@ -11,9 +11,9 @@
 (ns lice-comb.lein
   "Functionality related to combing Leiningen dependency sequences for license
   information."
-  (:require [lice-comb.deps           :as lcd]
-            [lice-comb.impl.info-maps :as im]
-            [lice-comb.impl.utils     :as lciu]))
+  (:require [lice-comb.deps                   :as lcd]
+            [lice-comb.impl.parsing.info-maps :as info]
+            [lice-comb.impl.utils             :as u]))
 
 (defn- lein-dep->toolsdeps-dep
   "Converts a leiningen style dependency vector into a (partial) tools.deps style
@@ -29,7 +29,7 @@
   were found."
   [dep]
   (when-let [toolsdep-dep (lein-dep->toolsdeps-dep dep)]
-    (im/prepend-source-to-fims-within-em (pr-str dep) (lcd/dep->expressions-info toolsdep-dep))))
+    (info/prepend-source-to-fims-within-em (pr-str dep) (lcd/dep->expressions-info toolsdep-dep))))
 
 (defn dep->expressions
   "Returns a set of SPDX expressions (`String`s) for `dep`."
@@ -45,14 +45,14 @@
   expressions were found)."
   [deps]
   (when deps
-    (into {} (lciu/file-handle-bounded-pmap #(vec [% (dep->expressions-info %)]) deps))))
+    (into {} (u/file-handle-bounded-pmap #(vec [% (dep->expressions-info %)]) deps))))
 
 (defn deps->expressions
   "Returns a map of sets of SPDX expressions (`String`s) for each Leiningen
   style dep in `deps`."
   [deps]
   (when deps
-    (into {} (lciu/file-handle-bounded-pmap #(vec [% (dep->expressions %)]) deps))))
+    (into {} (u/file-handle-bounded-pmap #(vec [% (dep->expressions %)]) deps))))
 
 (defn init!
   "Initialises this namespace upon first call (and does nothing on subsequent

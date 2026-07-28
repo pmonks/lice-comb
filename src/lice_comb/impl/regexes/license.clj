@@ -8,19 +8,20 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.license-regexes
-  "License (and license exception) regex related functionality. Note: this
-  namespace is not part of the public API of lice-comb and may change without
-  notice."
-  (:require [clojure.string                    :as s]
-            [clojure.math.combinatorics        :as combo]
-            [spdx.identifiers                  :as si]
-            [wreck.api                         :as re]
-            [lice-comb.impl.faux-parse         :as faux]
-            [lice-comb.impl.regex-fragments    :as ref]
-            [lice-comb.impl.version-series     :as verser]
-            [lice-comb.impl.version-expression :as verexp]
-            [lice-comb.impl.utils              :as lciu]))
+(ns lice-comb.impl.regexes.license
+  "License (and license exception) regex related functionality.
+
+  Note: this namespace is not part of the public API of lice-comb and may change
+  without notice."
+  (:require [clojure.string                            :as s]
+            [clojure.math.combinatorics                :as combo]
+            [wreck.api                                 :as re]
+            [spdx.identifiers                          :as si]
+            [lice-comb.impl.version-series             :as verser]
+            [lice-comb.impl.regexes.version-expression :as verexp]
+            [lice-comb.impl.regexes.fragments          :as ref]
+            [lice-comb.impl.parsing.faux-parse         :as faux]
+            [lice-comb.impl.utils                      :as u]))
 
 (def ^:private re-placeholder-ver  (re/join ref/ows (re/esc verser/placeholder-ver)))
 (def ^:private re-placeholder-oool (re/join ref/ows (re/esc verser/placeholder-oool)))
@@ -40,7 +41,7 @@
     (let [re-vers  (re/opt-grp ref/ows (re/opt-grp ref/single-qots) (verexp/expression-regex ncg-prefix versions))
           re-oool  (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing)))
           template (if (re-find re-placeholder-ver s)
-                     (lciu/replacing-split s re-placeholder-ver re-vers)
+                     (u/replacing-split s re-placeholder-ver re-vers)
                      [s re-vers])]  ; Always add a version matching component on the end, to handle cases where the version doesn't appear in the name (e.g. Adobe-2006, Arphic-1999)
       (faux/parse (concat [(re/opt-grp #"The" ref/mws)] template)
                   ; only or or-later suffix
@@ -80,11 +81,11 @@
 ;                                          (let [re-vers (re/opt-grp ref/ows (verexp/expression-regex ncg-prefix versions))
 ;                                                re-oool (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing)))]
 ;                                            (->> template)
-;                                                 (lciu/mapcat-str #(if (re-find re-placeholder-ver %)
-;                                                                     (lciu/replacing-split % re-placeholder-ver re-vers)
+;                                                 (u/mapcat-str #(if (re-find re-placeholder-ver %)
+;                                                                     (u/replacing-split % re-placeholder-ver re-vers)
 ;                                                                     [% re-vers]))
-;                                                 (lciu/mapcat-str #(if (re-find re-placeholder-oool %)
-;                                                                     (lciu/replacing-split % re-placeholder-oool re-oool)
+;                                                 (u/mapcat-str #(if (re-find re-placeholder-oool %)
+;                                                                     (u/replacing-split % re-placeholder-oool re-oool)
 ;                                                                     [% re-oool])))
 ;                                          template)]
 
@@ -144,7 +145,7 @@
           ; Replace whitespace
           (faux/replace-in-strings #"[\s\-]+" ref/mws)
           ; Cleanup, escape remaining fragments, then combine into a single regex
-          (->> (lciu/mapcat-str #(vector (re/esc %)))
+          (->> (u/mapcat-str #(vector (re/esc %)))
                (apply re/join))))
 
 
@@ -232,7 +233,7 @@
                       #"[\(\[\{«‹]+"                                        #"[\(\[\{«‹]*"      ; Make parens optional
                       #"[\)\]\}»›]+"                                        #"[\)\]\}»›]*")
         ; Cleanup, escape, and concat into a single pattern
-          (->> (lciu/mapcat-str #(vector (re/esc %)))
+          (->> (u/mapcat-str #(vector (re/esc %)))
                (apply re/join))))
 
 (defn- regexes-impl

@@ -8,14 +8,14 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.info-maps
+(ns lice-comb.impl.parsing.info-maps
   "lice-comb information map (expressions, fragments) helper functions.
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [clojure.string      :as s]
             [spdx.expressions    :as sexp]
-            [lice-comb.impl.spdx :as lcis]))
+            [lice-comb.impl.spdx :as spdx]))
 
 (defn prepend-source-to-fim
   "Prepends the given source `s` (a String) onto the `:source` sequence of a
@@ -86,12 +86,14 @@
   (when cs
     (first (sort-confidences cs))))
 
+;####TODO: REMOVE
 (defn- highest-confidence
   "Returns the highest confidence in a sequence of confidences."
   [^clojure.lang.Sequential cs]
   (when cs
     (last (sort-confidences cs))))
 
+;####TODO: REMOVE
 (defn- calculate-confidence-for-expression
   "Calculate the confidence for an expression, as the lowest confidence in the
   expression-infos for the identifiers that make up the expression."
@@ -137,7 +139,7 @@
   ([^CharSequence fragment src ^CharSequence strategy] (fragment-info fragment src strategy nil))
   ([^CharSequence fragment src ^CharSequence strategy ^clojure.lang.Sequential confidence-explanations]
    (let [canonical-fragment
-                    (if-let [ci (lcis/canonicalise-spdx-expression-fragment fragment)]
+                    (if-let [ci (spdx/canonicalise-spdx-expression-fragment fragment)]
                       ci
                       (throw (ex-info "Internal logic error: invalid fragment" {:fragment fragment :source src})))
          src        (cond

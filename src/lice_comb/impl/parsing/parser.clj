@@ -8,39 +8,41 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.parsing
-  "License name, URI, and text parsing functionality. Note: this namespace is
-  not part of the public API of lice-comb and may change without notice."
-  (:require [clojure.string                                            :as s]
-            [clojure.java.io                                           :as io]
-            [thread-until.core                                         :as tu]
-            [spdx.identifiers                                          :as si]
-            [spdx.expressions                                          :as sexp]
-            [wreck.api                                                 :as re]
-            [lice-comb.impl.regex-fragments                            :as ref]
-            [lice-comb.impl.spdx                                       :as lcis]
-            [lice-comb.impl.info-maps                                  :as im]
-            [lice-comb.impl.correction                                 :as lcic]
-            [lice-comb.impl.faux-parse                                 :as faux]
-            [lice-comb.impl.utils                                      :as lciu]
-            [lice-comb.impl.parsing-utils                              :as lcipu]
-            [lice-comb.impl.3rd-party                                  :as lci3]
-            [lice-comb.impl.license-detection.listed-licenses          :as listed-licenses]
-            [lice-comb.impl.license-detection.spdx-matching-guidelines :as spdx-matching]
-            [lice-comb.impl.license-detection.spdx-refs                :as spdx-refs]
-            [lice-comb.impl.license-detection.spdx-special-forms       :as spdx-special-forms]
-            [lice-comb.impl.license-detection.uris                     :as uris]
-            [lice-comb.impl.license-detection.bsd                      :as bsd]
-            [lice-comb.impl.license-detection.cc                       :as cc]
-            [lice-comb.impl.license-detection.gnu                      :as gnu]
-            [lice-comb.impl.license-detection.wtf                      :as wtf]
-            [lice-comb.impl.license-detection.cursed                   :as cursed]
-            [lice-comb.impl.license-detection.mx4j                     :as mx4j]
-            [lice-comb.impl.license-detection.bouncy-castle            :as bouncy-castle]
-            [lice-comb.impl.license-detection.jdom                     :as jdom]
-            [lice-comb.impl.license-detection.like-clojure             :as like-clojure]
-            [lice-comb.impl.license-detection.public-domain            :as public-domain]
-            [lice-comb.impl.license-detection.proprietary-commercial   :as proprietary-commercial]))
+(ns lice-comb.impl.parsing.parser
+  "License name, URI, and text parsing functionality.
+
+  Note: this namespace is not part of the public API of lice-comb and may change
+  without notice."
+  (:require [clojure.string                                          :as s]
+            [clojure.java.io                                         :as io]
+            [thread-until.core                                       :as tu]
+            [spdx.identifiers                                        :as si]
+            [spdx.expressions                                        :as sexp]
+            [wreck.api                                               :as re]
+            [lice-comb.impl.spdx                                     :as spdx]
+            [lice-comb.impl.utils                                    :as u]
+            [lice-comb.impl.3rd-party                                :as third-party]
+            [lice-comb.impl.parsing.faux-parse                       :as faux]
+            [lice-comb.impl.parsing.info-maps                        :as info]
+            [lice-comb.impl.parsing.correction                       :as correct]
+;            [lice-comb.impl.parsing.utils                            :as pu]
+            [lice-comb.impl.regexes.fragments                        :as ref]
+            [lice-comb.impl.license-detection.listed-licenses        :as listed-licenses]
+            [lice-comb.impl.license-detection.spdx-matching          :as spdx-matching]
+            [lice-comb.impl.license-detection.spdx-refs              :as spdx-refs]
+            [lice-comb.impl.license-detection.spdx-special-forms     :as spdx-special-forms]
+            [lice-comb.impl.license-detection.uris                   :as uris]
+            [lice-comb.impl.license-detection.bsd                    :as bsd]
+            [lice-comb.impl.license-detection.cc                     :as cc]
+            [lice-comb.impl.license-detection.gnu                    :as gnu]
+            [lice-comb.impl.license-detection.wtf                    :as wtf]
+            [lice-comb.impl.license-detection.cursed                 :as cursed]
+            [lice-comb.impl.license-detection.mx4j                   :as mx4j]
+            [lice-comb.impl.license-detection.bouncy-castle          :as bouncy-castle]
+            [lice-comb.impl.license-detection.jdom                   :as jdom]
+            [lice-comb.impl.license-detection.like-clojure           :as like-clojure]
+            [lice-comb.impl.license-detection.public-domain          :as public-domain]
+            [lice-comb.impl.license-detection.proprietary-commercial :as proprietary-commercial]))
 
 ;####TODO: REMOVE ME!!!!
 (require '[clojure.pprint :as pp])
@@ -55,7 +57,7 @@
 (defn print-detritus
   [coll n]
 ;  (binding [*out* *err*]
-    (if-let [detritus (seq (filter #(and (string? %) (< (count %) 3)) coll))]
+    (when-let [detritus (seq (filter #(and (string? %) (< (count %) 3)) coll))]
       (debug-print detritus (str n " detritus:")))
   coll)
 
@@ -68,7 +70,7 @@
 (defmethod match-text java.lang.String
   [^String s]
   (when-let [eis (spdx-matching/text->fragment-infos s)]
-    (lcic/correct (into {} #(hash-map (:fragment %) %) eis))))
+    (correct/correct (into {} #(hash-map (:fragment %) %) eis))))
 
 (defmethod match-text java.io.Reader
   [^java.io.Reader r]
@@ -96,7 +98,7 @@
   ([^String uri] (parse-uri uri false))
   ([^String uri ^Boolean attempt-download-and-match?]
    (when-let [eis (uris/uri->fragment-infos uri attempt-download-and-match?)]
-     (lcic/correct (into {} (map #(vector (:fragment %) (list %)) eis))))))
+     (correct/correct (into {} (map #(vector (:fragment %) (list %)) eis))))))
 
 (def ^:private re-operator (re/fgrp "i"
                                     ref/ows
@@ -114,7 +116,7 @@
   keyword representing the detected operator. The possible keyword values are:
   `:and`, `:or`, and `:with`."
   [coll]
-  (filter lciu/not-blank-string?
+  (filter u/not-blank-string?
           (faux/replace-in-strings coll
                                    re-operator
                                    (fn [m]
@@ -150,7 +152,7 @@
     ; Step 1: drop leading, trailing operator keywords, and dedupe
     (let [coll (->> coll
                     (drop-while keyword?)
-                    (lci3/rdrop-while keyword?)
+                    (third-party/rdrop-while keyword?)
                     dedupe
                     seq)]
       ; Step 2: collapse sequences of operator keywords to a single operator keyword
@@ -177,19 +179,19 @@
                         (faux/replace-in-strings (re/inline (re/join ref/nwb (re/opt-grp "Double") ref/ows "licensed" ref/ows "under" (re/opt-grp ref/ows "the") ref/nwa)) nil)
                         (faux/replace-in-strings (re/inline (re/join ref/nwb "Open" ref/ows "Source" ref/ows "Initiative" ref/nwa)) nil)
                         (faux/replace-in-strings (re/inline (re/join ref/nwb "Distributed" ref/ows "under" ref/ows (re/alt-grp "the" "an") ref/nwa)) nil))
-                    (lciu/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all Unicode word characters and trim the result
-                                     (when (>= (count s) 3)                        ; Then remove anything short
-                                       %)))))))
+                    (u/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all Unicode word characters and trim the result
+                                 (when (>= (count s) 3)                         ; Then remove anything short
+                                   %)))))))
 
 (defn- sub-unidentified-placeholders
   "Replace any non-blank `String`s in `coll` with an unidentified placeholder (a
   Map).  Blank `String`s are filtered out."
   [coll]
   (filter identity
-          (lciu/map-str #(let [s (s/trim %)]
-                           (when-not (s/blank? s)
-                             {:unidentified (s/trim s)}))
-                        coll)))
+          (u/map-str #(let [s (s/trim %)]
+                        (when-not (s/blank? s)
+                          {:unidentified (s/trim s)}))
+                     coll)))
 
 (defn- unidentified-placeholder?
   "Is `x` an unidentified placeholder?"
@@ -199,23 +201,23 @@
 (defn- unidentified-fragment-info
   "Constructs a fragment info map for an unidentified ref and src."
   [ref src]
-  (im/fragment-info ref
-                    src
-                    "Unidentified"))
+  (info/fragment-info ref
+                      src
+                      "Unidentified"))
 
 (defn- unidentified-placeholder->license-ref-fragment-info
   "Turn `m`, an unidentified placeholder map, into a fragment info map
   containing a LicenseRef."
   [^java.util.Map m]
   (let [s (:unidentified m)]
-    (unidentified-fragment-info (lcis/name->unidentified-license-ref s) s)))
+    (unidentified-fragment-info (spdx/name->unidentified-license-ref s) s)))
 
 (defn- unidentified-placeholder->addition-ref-fragment-info
   "Turn `m`, an unidentified placeholder map, into a fragment info map
   containing an AdditionRef."
   [^java.util.Map m]
   (let [s (:unidentified m)]
-    (unidentified-fragment-info (lcis/name->unidentified-addition-ref s) s)))
+    (unidentified-fragment-info (spdx/name->unidentified-addition-ref s) s)))
 
 (defn- finalise-operators-and-unidentified-placeholders
   "Finalises operator keywords in `coll` and unidentified placeholders, by:
@@ -231,7 +233,7 @@
               ; It's an operator - finalise it based on what it's between
               (let [elem-before (nth coll (dec idx) nil)
                     elem-after  (nth coll (inc idx) nil)]
-                (case [(lcis/id-position (:fragment elem-before)) (lcis/id-position (:fragment elem-after))]
+                (case [(spdx/id-position (:fragment elem-before)) (spdx/id-position (:fragment elem-after))]
                   [:license-position :exception-position] :with
                   (case elem
                     :with     (if (unidentified-placeholder? elem-after) :with :and)
@@ -278,7 +280,7 @@
   [coll]
   (when (seq coll)
     ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
-    (when-not (every? #(or (keyword? %) (lcis/unidentified? (:fragment %))) coll)
+    (when-not (every? #(or (keyword? %) (spdx/unidentified? (:fragment %))) coll)
       (let [grouped-expressions (group-expressions coll)
             result              (into {}
                                       (map #(let [raw-expression (s/join " " (map (fn [elem]
@@ -300,6 +302,11 @@
                                            grouped-expressions))]
         result))))
 
+(defn- done-parsing?
+  "Are we done parsing `coll`?"
+  [coll]
+  (every? #(or (not (string? %)) (re-matches #"\W*" %)) coll))
+
 (defn parse-name
   "Parses the given license `n`ame, returning an expressions map or `nil` when
   `n`ame is blank.
@@ -319,13 +326,13 @@
                                                   (= :license-id (si/id-type (first ids))))
                                            "SPDX identifier"
                                            "SPDX expression"))
-              ei                       (im/fragment-info canonicalised-expression n strategy)]
+              ei                       (info/fragment-info canonicalised-expression n strategy)]
           {canonicalised-expression (list ei)})
 
         (or ; Alternative 2 - attempt to parse the name
             (some-> [n]
                     ; License detection within n, with short circuiting of steps if we're done early
-                    (tu/until-> lcipu/done-parsing?
+                    (tu/until-> done-parsing?
                                 ; Special cased license detectors
                                 cursed/detect
                                 spdx-refs/detect
@@ -352,8 +359,8 @@
                     finalise-operators-and-unidentified-placeholders
                     ; Rebuild the final expression(s)
                     rebuild-expressions
-                    (->> (im/prepend-source-to-fims-within-em n)))
+                    (->> (info/prepend-source-to-fims-within-em n)))
 
             ; Alternative 3. Turn the entire name into a single unidentified LicenseRef, and construct an expressions map with it
-            (let [fim (unidentified-fragment-info (lcis/name->unidentified-license-ref n) n)]
+            (let [fim (unidentified-fragment-info (spdx/name->unidentified-license-ref n) n)]
               {(:fragment fim) (list fim)}))))))

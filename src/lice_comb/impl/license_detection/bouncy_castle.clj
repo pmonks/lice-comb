@@ -14,8 +14,8 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [wreck.api                                         :as re]
-            [lice-comb.impl.faux-parse                         :as faux]
-            [lice-comb.impl.regex-fragments                    :as ref]
+            [lice-comb.impl.parsing.faux-parse                 :as faux]
+            [lice-comb.impl.regexes.fragments                  :as ref]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
 ; Bouncy Castle License is MIT - see https://github.com/spdx/license-list-XML/issues/910

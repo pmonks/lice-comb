@@ -17,7 +17,7 @@
             [spdx.licenses        :as sl]
             [spdx.exceptions      :as se]
             [spdx.expressions     :as sexp]
-            [lice-comb.impl.utils :as lciu]))
+            [lice-comb.impl.utils :as u]))
 
 ; The subset of SPDX identifiers that we use, as an unordered set
 (def license-ids-d   (delay (some->> (sl/ids)
@@ -130,7 +130,7 @@
   ([] (name->unidentified-license-ref nil))
   ([^CharSequence n]
    (sl/license-ref (str unidentified-ref-prefix (when-not (s/blank? n)
-                                                  (str "-" (lciu/base62-encode n)))))))
+                                                  (str "-" (u/base62-encode n)))))))
 
 (defn name->unidentified-addition-ref
   "Constructs a valid SPDX id (an AdditionRef specific to lice-comb) for an
@@ -139,7 +139,7 @@
   ([] (name->unidentified-addition-ref nil))
   ([^CharSequence n]
    (se/addition-ref (str unidentified-ref-prefix (when-not (s/blank? n)
-                                                   (str "-" (lciu/base62-encode n)))))))
+                                                   (str "-" (u/base62-encode n)))))))
 
 (defn unidentified-license-ref->name
   "Get the original name of the given unidentified license ref. Returns nil if
@@ -150,7 +150,7 @@
     (let [m   (sl/string->license-ref-map id)
           tag (:license-ref m)]
       (when (s/starts-with? tag (str unidentified-ref-prefix "-"))
-        (lciu/base62-decode (subs id (inc (count unidentified-ref-prefix))))))))
+        (u/base62-decode (subs id (inc (count unidentified-ref-prefix))))))))
 
 (defn unidentified-addition-ref->name
   "Get the original name of the given unidentified addition ref. Returns nil if
@@ -161,7 +161,7 @@
     (let [m   (se/string->addition-ref-map id)
           tag (:addition-ref m)]
       (when (s/starts-with? tag (str unidentified-ref-prefix "-"))
-        (lciu/base62-decode (subs id (inc (count unidentified-ref-prefix))))))))
+        (u/base62-decode (subs id (inc (count unidentified-ref-prefix))))))))
 
 (defn unidentified->name
   "Get the original name of the given unidentified license ref or addition ref.
@@ -218,22 +218,25 @@
       (first (sort-by count non-deprecated-ids))
       (first (sort-by count ids)))))
 
+;####TODO: MOVE THIS TO lice-comb.impl.license-detection.uris
 (defn- urls->id-tuples
   "Extracts all urls for a given list (license or exception) entry."
   [list-entry]
   (let [id              (:id list-entry)
-        simplified-uris (map lciu/simplify-uri (filter (complement s/blank?) (concat (:see-also list-entry) (get-in list-entry [:cross-refs :url]))))]
+        simplified-uris (map u/simplify-uri (filter (complement s/blank?) (concat (:see-also list-entry) (get-in list-entry [:cross-refs :url]))))]
     (map #(vec [% id]) simplified-uris)))
 
-(def ^:private index-uri->id-d (delay (merge (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples (map sl/info @license-ids-d))))
-                                             (lciu/mapfonv #(lciu/nset (map second %)) (group-by first (mapcat urls->id-tuples (map se/info @exception-ids-d)))))))
+(def ^:private index-uri->id-d (delay (merge (u/mapfonv #(u/nset (map second %)) (group-by first (mapcat urls->id-tuples (map sl/info @license-ids-d))))
+                                             (u/mapfonv #(u/nset (map second %)) (group-by first (mapcat urls->id-tuples (map se/info @exception-ids-d)))))))
 
+;####TODO: MOVE THIS TO lice-comb.impl.license-detection.uris
 (defn near-match-uri
   "Returns the id(s) (a set) for the given listed `uri`, or `nil` if no ids were
   found. The result may include deprecated ids."
   [uri]
-  (get @index-uri->id-d (lciu/simplify-uri uri)))
+  (get @index-uri->id-d (u/simplify-uri uri)))
 
+;####TODO: MOVE THIS TO lice-comb.impl.license-detection.uris
 ; This is needed for pathological cases like "http://gnu.org/license/fdl-1.3" (which has 7 (!) ids associated with it)
 (defn best-near-match-uri
   "Returns the 'best match' id (a `String`) for `uri`, or `nil` if no ids were

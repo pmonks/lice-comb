@@ -17,11 +17,12 @@
 ;
 
 (ns lice-comb.impl.version-number-test
-  (:require [clojure.test                  :refer [deftest testing is use-fixtures]]
-            [clojure.string                :as s]
-            [wreck.api                     :as re]
-            [lice-comb.test-boilerplate    :refer [fixture]]
-            [lice-comb.impl.version-number :refer [canonicalise metadata exact-regex range-regex]]))
+  (:require [clojure.test                          :refer [deftest testing is use-fixtures]]
+            [clojure.string                        :as s]
+            [wreck.api                             :as re]
+            [lice-comb.test-boilerplate            :refer [fixture]]
+            [lice-comb.impl.version-number         :refer [canonicalise metadata]]
+            [lice-comb.impl.regexes.version-number :refer [exact-regex range-regex]]))
 
 (use-fixtures :once fixture)
 

@@ -13,17 +13,17 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [clojure.string                                            :as s]
-            [wreck.api                                                 :as re]
-            [rencg.api                                                 :as ncg]
-            [spdx.identifiers                                          :as si]
-            [lice-comb.impl.spdx                                       :as lcis]
-            [lice-comb.impl.http                                       :as lcihttp]
-            [lice-comb.impl.utils                                      :as lciu]
-            [lice-comb.impl.info-maps                                  :as im]
-            [lice-comb.impl.faux-parse                                 :as faux]
-            [lice-comb.impl.regex-fragments                            :as ref]
-            [lice-comb.impl.license-detection.spdx-matching-guidelines :as spdx-matching]))
+  (:require [clojure.string                                 :as s]
+            [wreck.api                                      :as re]
+            [rencg.api                                      :as ncg]
+            [spdx.identifiers                               :as si]
+            [lice-comb.impl.spdx                            :as spdx]
+            [lice-comb.impl.http                            :as http]
+            [lice-comb.impl.utils                           :as u]
+            [lice-comb.impl.parsing.info-maps               :as info]
+            [lice-comb.impl.parsing.faux-parse              :as faux]
+            [lice-comb.impl.regexes.fragments               :as ref]
+            [lice-comb.impl.license-detection.spdx-matching :as spdx-matching]))
 
 ; An approximately correct regex for finding http URIs in larger texts - loosely based on https://www.rfc-editor.org/rfc/rfc3986#appendix-B
 ; Note: not all matches that this regex finds are valid URIs as per RFC-3986 - if that level of validity is needed, use lciu/valid-http-uri?
@@ -40,7 +40,7 @@
   "Match other well known license URIs that aren't included in the SPDX license
   list's `:see-also` field, based solely on the URI itself."
   [^String uri]
-  (when-let [suri (lciu/simplify-uri uri)]
+  (when-let [suri (u/simplify-uri uri)]
     (when-let [uri-components (ncg/re-matches re-uri suri)]
       (let [host (s/lower-case (get uri-components "address"))]
         (cond
@@ -96,8 +96,8 @@
   perform SPDX matching on it. Returns a sequence of fragment info maps."
   [uri]
   (when (download-allowed? uri)
-    (when-let [license-text (lcihttp/get-text uri)]
-      (map #(im/prepend-source-to-fim (str uri) %) (spdx-matching/text->fragment-infos license-text)))))  ; Note: spdx-matching/text->fragment-infos returns a sequence of fragment info maps
+    (when-let [license-text (http/get-text uri)]
+      (map #(info/prepend-source-to-fim (str uri) %) (spdx-matching/text->fragment-infos license-text)))))  ; Note: spdx-matching/text->fragment-infos returns a sequence of fragment info maps
 
 (defn uri->fragment-infos
   "Returns a sequence of fragment info maps for the given URI, or `nil` if
@@ -117,24 +117,24 @@
   (when-not (s/blank? uri)
     (or
       ; 1. Is the URI a close match for any of the URIs in the SPDX license or exception lists?
-      (when-let [id (lcis/best-near-match-uri uri)]
-        (list (im/fragment-info id uri "SPDX listed URI near match")))
+      (when-let [id (spdx/best-near-match-uri uri)]
+        (list (info/fragment-info id uri "SPDX listed URI near match")))
 
       ; 2. Is the URI a close match for any of the "well known" URIs we additionally support?  (choosealicense, etc.)
       (when-let [id (match-well-known-uri uri)]
-        (list (im/fragment-info id uri "Well known license URI near match")))
+        (list (info/fragment-info id uri "Well known license URI near match")))
 
       ; 3. Optionally attempt to retrieve the text/plain contents of the uri and perform license text matching on it (expensive, so off by default)
       (when attempt-download-and-match?
         (attempt-to-download-and-match uri))
 
       ; 4. Return an unidentified ei (inside a list)
-      (list (im/fragment-info (lcis/name->unidentified-license-ref uri)
-                              uri
-                              "Unidentified URI"
-                              (when (and (not attempt-download-and-match?)
-                                         (download-allowed? uri))
-                                #{:download-skipped}))))))
+      (list (info/fragment-info (spdx/name->unidentified-license-ref uri)
+                                uri
+                                "Unidentified URI"
+                                (when (and (not attempt-download-and-match?)
+                                           (download-allowed? uri))
+                                  #{:download-skipped}))))))
 
 (defn detect
   "Detects any URIs found inside the `String`s in `coll` and replaces them with

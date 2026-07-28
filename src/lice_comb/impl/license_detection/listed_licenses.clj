@@ -14,21 +14,21 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [wreck.api                                           :as re]
-            [lice-comb.impl.spdx                                 :as lcis]
-            [lice-comb.impl.version-series                       :as verser]
-            [lice-comb.impl.faux-parse                           :as faux]
-            [lice-comb.impl.license-regexes                      :as licre]
-            [lice-comb.impl.license-detection.match-processing   :as mp]
-            [lice-comb.impl.license-detection.bsd                :as bsd]
-            [lice-comb.impl.license-detection.cc                 :as cc]
-            [lice-comb.impl.license-detection.gnu                :as gnu]
-            [lice-comb.impl.license-detection.wtf                :as wtf]))
+  (:require [wreck.api                                         :as re]
+            [lice-comb.impl.spdx                               :as spdx]
+            [lice-comb.impl.version-series                     :as verser]
+            [lice-comb.impl.regexes.license                    :as relic]
+            [lice-comb.impl.parsing.faux-parse                 :as faux]
+            [lice-comb.impl.license-detection.match-processing :as mp]
+            [lice-comb.impl.license-detection.bsd              :as bsd]
+            [lice-comb.impl.license-detection.cc               :as cc]
+            [lice-comb.impl.license-detection.gnu              :as gnu]
+            [lice-comb.impl.license-detection.wtf              :as wtf]))
 
 ; Default license and exception ids i.e. those that don't need special case support
 (def ids-d
   (delay
-    (apply disj @lcis/ids-d
+    (apply disj @spdx/ids-d
                 (concat @bsd/ids-d @cc/ids-d @gnu/ids-d @wtf/ids-d))))
 
 ;####TODO: COME UP WITH A BETTER NAME!!!!
@@ -57,7 +57,7 @@
 ;####TODO: COME UP WITH A BETTER NAME!!!!
 (defn- build-regex-fn-pairs
   [id-or-version-series]
-  (when-let [regexes (licre/regexes id-or-version-series)]
+  (when-let [regexes (relic/regexes id-or-version-series)]
     (mapcat (partial build-pairs-from-regexes id-or-version-series) regexes)))
 
 (defn- build-regex-fn-pairs-for-ids

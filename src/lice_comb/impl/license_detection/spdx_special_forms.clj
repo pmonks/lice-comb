@@ -15,7 +15,7 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [spdx.regexes                                      :as sre]
-            [lice-comb.impl.faux-parse                         :as faux]
+            [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
 (defn- special-form-match->ei

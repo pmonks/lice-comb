@@ -13,14 +13,14 @@
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
-  (:require [clojure.string                 :as s]
-            [wreck.api                      :as re]
-            [spdx.identifiers               :as si]
-            [lice-comb.impl.spdx            :as lcis]
-            [lice-comb.impl.info-maps       :as im]
-            [lice-comb.impl.version-number  :as vernum]
-            [lice-comb.impl.version-series  :as verser]
-            [lice-comb.impl.license-regexes :as licre]))
+  (:require [clojure.string                   :as s]
+            [wreck.api                        :as re]
+            [spdx.identifiers                 :as si]
+            [lice-comb.impl.spdx              :as spdx]
+            [lice-comb.impl.parsing.info-maps :as info]
+            [lice-comb.impl.version-number    :as vernum]
+            [lice-comb.impl.version-series    :as verser]
+            [lice-comb.impl.regexes.license   :as relic]))
 
 (def ^:private re-placeholder-ver  (re-pattern (re/esc verser/placeholder-ver)))
 (def ^:private re-placeholder-oool (re-pattern (re/esc verser/placeholder-oool)))
@@ -50,7 +50,7 @@
   "Returns a tuple of `or-later?` (a `boolean`) and `confidence-explanation` (a
   `set`, possibly `nil`) found in match `m`."
   [m]
-  (case [(licre/match->or-later? m) (licre/match->only? m)]
+  (case [(relic/match->or-later? m) (relic/match->only? m)]
     [false false] [false]
     [false true]  [false]
     [true  false] [true]
@@ -71,7 +71,7 @@
   [id-formats or-later? versions]
   (when (and (seq id-formats) (seq versions))
     (let [ids (seq
-                (map #(lcis/canonicalise-spdx-expression-fragment (str % (when or-later? "+")))
+                (map #(spdx/canonicalise-spdx-expression-fragment (str % (when or-later? "+")))
                      (distinct (filter si/listed? (for [id-format id-formats
                                                         version   versions]
                                                     (if (re-find re-placeholder-ver id-format)
@@ -86,7 +86,7 @@
      `version-series`
   2. a set of confidence explanations (which may be `nil`)"
   [version-series m]
-  (if-let [versions (licre/match->versions m)]
+  (if-let [versions (relic/match->versions m)]
     ; The match includes a version number, so try and determine which identifier in the series
     (let [[or-later? confidence-explanations] (or-later-with-explanation m)
           canonicalised-versions              (seq (distinct (map (partial vernum/canonicalise (:version-type version-series)) versions)))
@@ -123,7 +123,7 @@
   "Constructs a valid fragment info map from the given match information."
   ([^String detected-id ^String strategy ^java.util.Map m] (match->fragment-info detected-id strategy nil m))
   ([^String detected-id ^String strategy confidence-explanations ^java.util.Map m]
-   (im/fragment-info detected-id (:match m) strategy confidence-explanations)))
+   (info/fragment-info detected-id (:match m) strategy confidence-explanations)))
 
 (defn listed-match->fragment-info
   "Constructs a valid fragment info map from the given listed license match."
@@ -137,7 +137,7 @@
                         (some #{matched-text}                names)                    "SPDX listed name exact match"
                         (some #{(s/lower-case matched-text)} (map s/lower-case names)) "SPDX listed name case insensitive match"
                         :else                                                          default-strategy)]
-   (im/fragment-info detected-id matched-text strategy confidence-explanations))))
+   (info/fragment-info detected-id matched-text strategy confidence-explanations))))
 
 (defn unversioned-match->fragment-info
   "Returns an fragment info map for the unversioned (non-version-series)

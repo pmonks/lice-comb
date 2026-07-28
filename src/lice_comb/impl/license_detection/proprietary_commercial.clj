@@ -15,9 +15,9 @@
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [wreck.api                                         :as re]
-            [lice-comb.impl.faux-parse                         :as faux]
-            [lice-comb.impl.spdx                               :as lcis]
-            [lice-comb.impl.regex-fragments                    :as ref]
+            [lice-comb.impl.spdx                               :as spdx]
+            [lice-comb.impl.regexes.fragments                  :as ref]
+            [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
 (def ^:private re-proprietary-commercial
@@ -35,4 +35,4 @@
   `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-proprietary-commercial (partial mp/match->fragment-info (lcis/proprietary-commercial) "Proprietary/commercial regex")))
+  (faux/parse coll re-proprietary-commercial (partial mp/match->fragment-info (spdx/proprietary-commercial) "Proprietary/commercial regex")))

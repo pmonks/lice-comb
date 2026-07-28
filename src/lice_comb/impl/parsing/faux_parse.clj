@@ -8,7 +8,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ;
 
-(ns lice-comb.impl.faux-parse
+(ns lice-comb.impl.parsing.faux-parse
   "Functionality related to 'faux parsing' (parsing a String to a heterogeneous
   sequence by successively performing replacements on the string fragments
   remaining after each prior replacement).
@@ -17,7 +17,7 @@
   without notice."
   (:require [clojure.string       :as s]
             [thread-until.core    :as tu]
-            [lice-comb.impl.utils :as lciu]))
+            [lice-comb.impl.utils :as u]))
 
 (defn replace-in-strings
   "For each `String` in `partial-parse` (a sequential), replaces any occurrences
@@ -26,7 +26,7 @@
   [partial-parse re replacement]
   (when partial-parse
     (if re
-      (lciu/mapcat-str #(lciu/replacing-split % re replacement) partial-parse)
+      (u/mapcat-str #(u/replacing-split % re replacement) partial-parse)
       partial-parse)))
 
 (defn consumed?

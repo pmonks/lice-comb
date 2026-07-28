@@ -16,16 +16,17 @@
 ; SPDX-License-Identifier: Apache-2.0
 ;
 
-(ns lice-comb.impl.correction
+(ns lice-comb.impl.parsing.correction
   "Corrects conceptually invalid/nonsensical combinations of license identifiers.
 
   Note: this namespace is not part of the public API of lice-comb and may change
   without notice."
   (:require [spdx.licenses       :as sl]
             [spdx.exceptions     :as se]
-            [lice-comb.impl.spdx :as lcis]))
+            [lice-comb.impl.spdx :as spdx]))
 
 ;####TODOS:
+; * Work out whether this is even needed at all
 ; * Update to only work on expressions maps - there is no need to support sets, since they're only emitted at the final step
 ; * Update to support whatever intermediate data structure the parsing code ends up using
 
@@ -67,9 +68,9 @@
   "If the keys of expressions includes both CC0-1.0 and lice-comb's public
   domain LicenseRef, remove the LicenseRef as it's redundant."
   [expressions]
-  (if (and (contains? expressions (lcis/public-domain))
+  (if (and (contains? expressions (spdx/public-domain))
            (contains? expressions "CC0-1.0"))
-    (dis expressions (lcis/public-domain))
+    (dis expressions (spdx/public-domain))
     expressions))
 
 (defn- fix-mpl-2
