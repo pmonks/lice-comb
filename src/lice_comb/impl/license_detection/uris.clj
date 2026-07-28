@@ -126,8 +126,7 @@
 
       ; 3. Optionally attempt to retrieve the text/plain contents of the uri and perform license text matching on it (expensive, so off by default)
       (when attempt-download-and-match?
-        (into (list)  ; This is REALLY important, since the result of `attempt-to-download-and-match` isn't necessarily a `list?` (it can be a `clojure.lang.Cons` instead), which is how multiple SPDX matches get flattened
-              (attempt-to-download-and-match uri)))
+        (attempt-to-download-and-match uri))
 
       ; 4. Return an unidentified ei (inside a list)
       (list (im/fragment-info (lcis/name->unidentified-license-ref uri)

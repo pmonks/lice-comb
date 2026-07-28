@@ -51,6 +51,7 @@
     determination)."
   (:require [clojure.string         :as s]
             [spdx.identifiers       :as si]
+            [spdx.licenses          :as sl]
             [lice-comb.impl.spdx    :as lcis]
             [lice-comb.impl.parsing :as lcip]))
 
@@ -89,15 +90,16 @@
   [^CharSequence id]
   (when-not (s/blank? id)
     (cond (si/listed-id? id)           (:name (si/id->info id))
+          (sl/special-form? id)        (sl/canonicalise id)
           (public-domain? id)          "Public domain"
           (proprietary-commercial? id) "Proprietary/commercial"
           (unidentified? id)           (unidentified->name id)
           :else                        id)))
 
 (defn text->expressions-info
-  "Returns an expressions map for `text` (a `String`, `Reader`, or anything
-  that's accepted by `clojure.java.io/reader`). Returns `nil` if no expressions
-  were found in it.
+  "Returns an expressions map for `text` (a `String`, `File`, or anything that's
+  supported by `clojure.java.io/reader`). Returns `nil` if no expressions were
+  found in it.
 
   Notes:
 
@@ -121,14 +123,20 @@
 
 (defn uri->expressions-info
   "Returns an expressions map for `uri` (a `String`, `URL`, or `URI`), or
-  `nil` if no expressions were found or `uri` is `nil`."
+  `nil` if no expressions were found or `uri` is `nil`.
+  `attempt-download-and-match?` (default `false`) controls whether URIs that
+  point to a limited number of allow-listed hosts will have their content
+  downloaded and SPDX matching attempted."
   ([uri] (uri->expressions-info uri false))
   ([uri ^Boolean attempt-download-and-match?]
    (when uri
      (lcip/parse-uri uri attempt-download-and-match?))))
 
 (defn uri->expressions
-  "Returns a set of SPDX expressions (`String`s) for `uri`."
+  "Returns a set of SPDX expressions (`String`s) for `uri`.
+  `attempt-download-and-match?` (default `false`) controls whether URIs that
+  point to a limited number of allow-listed hosts will have their content
+  downloaded and SPDX matching attempted."
   ([uri] (uri->expressions uri false))
   ([uri ^Boolean attempt-download-and-match?]
    (some-> (uri->expressions-info uri attempt-download-and-match?)
@@ -137,14 +145,20 @@
 
 (defn name->expressions-info
   "Returns an expressions map for `n`ame (a `String`), or `nil` if `n` is
-  `clojure.string/blank?`."
+  `clojure.string/blank?`.  `attempt-download-and-match?` (default `false`)
+  controls whether URIs found in a name and that point to a limited number of
+  allow-listed hosts will have their content downloaded and SPDX matching
+  attempted."
   ([^CharSequence n] (name->expressions-info n false))
   ([^CharSequence n ^Boolean attempt-download-and-match?]
    (when-not (s/blank? n)
      (lcip/parse-name n attempt-download-and-match?))))
 
 (defn name->expressions
-  "Returns a set of SPDX expressions (`String`s) for `n`ame."
+  "Returns a set of SPDX expressions (`String`s) for `n`ame.
+  `attempt-download-and-match?` (default `false`) controls whether URIs found in
+  a name and that point to a limited number of allow-listed hosts will have
+  their content downloaded and SPDX matching attempted."
   ([^CharSequence n] (name->expressions n false))
   ([^CharSequence n ^Boolean attempt-download-and-match?]
    (some-> (name->expressions-info n attempt-download-and-match?)

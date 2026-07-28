@@ -115,7 +115,7 @@
   ; CC-BY-specific confidence explanations
   :invalid-cc-suffix              :low     ; Invalid combination of CC version and suffix (e.g. "CC BY 4.0 Australia")
   ; GNU-specific confidence explanations
-  :missing-version-suffix         :medium  ; GNU family suffix is missing (e.g. "GPL 2.0")
+  :missing-version-range          :medium  ; GNU family version range is missing (e.g. "GPL 2.0" - missing "-only" or "-or-later")
   ; URI-specific confidence explanations
   :download-skipped               :low     ; URI is in the allow list, but downloading was skipped
 })

@@ -50,26 +50,26 @@
       (si/canonicalise spdx-expression-fragment))))                              ; But if that doesn't work, fall back on identifier canonicalisation
 
 ; Custom license and addition refs lice-comb uses (note: the unidentified one usually has a hyphen then a base62 suffix appended)
-(def ^:private lice-comb-document-ref             "lice-comb")
+(def ^:private lice-comb-prefix                   "lice-comb")
 
-(def ^:private public-domain-license-ref          (sl/license-ref lice-comb-document-ref "PUBLIC-DOMAIN"))
-(def ^:private proprietary-commercial-license-ref (sl/license-ref lice-comb-document-ref "PROPRIETARY-COMMERCIAL"))
-(def ^:private hippocratic-30-license-ref         (sl/license-ref lice-comb-document-ref "Hippocratic-3.0"))  ; Only needed until https://github.com/spdx/license-list-XML/issues/2931 is resolved
-(def ^:private unidentified-ref-prefix            "UNIDENTIFIED")
+(def ^:private public-domain-license-ref          (sl/license-ref (str lice-comb-prefix "-PUBLIC-DOMAIN")))
+(def ^:private proprietary-commercial-license-ref (sl/license-ref (str lice-comb-prefix "-PROPRIETARY-COMMERCIAL")))
+(def ^:private hippocratic-30-license-ref         (sl/license-ref (str lice-comb-prefix "-Hippocratic-3.0")))  ; Only needed until https://github.com/spdx/license-list-XML/issues/2931 is resolved
+(def ^:private unidentified-ref-prefix            (str lice-comb-prefix "-UNIDENTIFIED"))
 
 (defn lice-comb-license-ref?
   "Is `id` one of lice-comb's custom LicenseRefs?"
   [^CharSequence id]
   (boolean
     (when-let [m (sl/string->license-ref-map id)]
-      (= lice-comb-document-ref (:document-ref m)))))
+      (s/starts-with? (:license-ref m) lice-comb-prefix))))
 
 (defn lice-comb-addition-ref?
   "Is `id` one of lice-comb's custom AdditionRefs?"
   [^CharSequence id]
   (boolean
     (when-let [m (se/string->addition-ref-map id)]
-      (= lice-comb-document-ref (:addition-document-ref m)))))
+      (s/starts-with? (:addition-ref m) lice-comb-prefix))))
 
 (defn lice-comb-ref?
   "Is `id` a lice-comb custom LicenseRef or AdditionRef"
@@ -108,16 +108,14 @@
   [^CharSequence id]
   (boolean
     (when-let [m (sl/string->license-ref-map id)]
-      (and (= lice-comb-document-ref (:document-ref m))
-           (s/starts-with? (:license-ref m) unidentified-ref-prefix)))))
+      (s/starts-with? (:license-ref m) unidentified-ref-prefix))))
 
 (defn unidentified-addition-ref?
   "Is `id` a lice-comb custom 'unidentified' AdditionRef?"
   [^CharSequence id]
   (boolean
     (when-let [m (se/string->addition-ref-map id)]
-      (and (= lice-comb-document-ref (:addition-document-ref m))
-           (s/starts-with? (:addition-ref m) unidentified-ref-prefix)))))
+      (s/starts-with? (:addition-ref m) unidentified-ref-prefix))))
 
 (defn unidentified?
   "Is `id` a lice-comb custom 'unidentified' LicenseRef or AdditionRef?"
@@ -131,8 +129,7 @@
   (since the variable tag in an SPDX ref is limited to Base62)."
   ([] (name->unidentified-license-ref nil))
   ([^CharSequence n]
-   (sl/license-ref lice-comb-document-ref
-                   (str unidentified-ref-prefix (when-not (s/blank? n)
+   (sl/license-ref (str unidentified-ref-prefix (when-not (s/blank? n)
                                                   (str "-" (lciu/base62-encode n)))))))
 
 (defn name->unidentified-addition-ref
@@ -141,8 +138,7 @@
   (since the variable tag in an SPDX ref is limited to Base62)."
   ([] (name->unidentified-addition-ref nil))
   ([^CharSequence n]
-   (se/addition-ref lice-comb-document-ref
-                    (str unidentified-ref-prefix (when-not (s/blank? n)
+   (se/addition-ref (str unidentified-ref-prefix (when-not (s/blank? n)
                                                    (str "-" (lciu/base62-encode n)))))))
 
 (defn unidentified-license-ref->name

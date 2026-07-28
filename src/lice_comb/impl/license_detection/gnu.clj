@@ -144,12 +144,12 @@
         version            (if (s/includes? version ".")
                              version
                              (str version ".0"))
-        [suffix confidence-explanations]
+        [version-range confidence-explanations]
                            (cond (contains? m "gnuOrLater") ["or-later" confidence-explanations]
                                  (contains? m "gnuOnly")    ["only"     confidence-explanations]
-                                 :else                      [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" variant if version or suffix not present (unlike most other license families!)
-                                                             (set/union #{:missing-version-suffix} confidence-explanations)])
-        id                 (str variant "-" version  "-" suffix)
+                                 :else                      [(if version-present? "only" "or-later")  ; Note: on the advice of SPDX technical team, default to "or later" version range if version number or range not present (unlike most other license families!)
+                                                             (set/union #{:missing-version-range} confidence-explanations)])
+        id                 (str variant "-" version  "-" version-range)
         [id confidence-explanations]
                            (if (sl/listed-id? id)
                              [id confidence-explanations]

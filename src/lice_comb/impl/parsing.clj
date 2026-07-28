@@ -52,11 +52,11 @@
    (println "⬅️ ⭐️⭐️⭐️")
    (flush)
    x))
-(defn print-fragments
+(defn print-detritus
   [coll n]
 ;  (binding [*out* *err*]
-    (if-let [fragments (seq (filter #(and (string? %) (< (count %) 3)) coll))]
-      (debug-print fragments (str n " fragments:")))
+    (if-let [detritus (seq (filter #(and (string? %) (< (count %) 3)) coll))]
+      (debug-print detritus (str n " detritus:")))
   coll)
 
 (defmulti match-text
@@ -98,25 +98,14 @@
    (when-let [eis (uris/uri->fragment-infos uri attempt-download-and-match?)]
      (lcic/correct (into {} (map #(vector (:fragment %) (list %)) eis))))))
 
-(def ^:private placeholder-license-ref (lcis/name->unidentified-license-ref "PLACEHOLDER"))
-
-(defn- make-unidentified-fragment-info
-  "Makes a fragment info map for the given license `n`ame, optionally
-  including `unidentified-license-ref` in the :fragment key."
-  ([^String n] (make-unidentified-fragment-info n nil))
-  ([^String n unidentified-license-ref]
-   (let [placeholder (if (s/blank? unidentified-license-ref) placeholder-license-ref unidentified-license-ref)]
-     (merge (im/fragment-info placeholder n "Unidentified name")
-            (when (s/blank? unidentified-license-ref) {:fragment :unidentified})))))  ; Note: this results in a (temporarily) invalid fragment info map, which we fix later (by turning it into either a LicenseRef or AdditionRef)
-
 (def ^:private re-operator (re/fgrp "i"
                                     ref/ows
                                     (re/alt (re/ncg "andOr"        ref/nwb #"and[\s/\\\-]+or" ref/nwa)
                                             (re/ncg "and"          ref/nwb #"and" ref/nwa)
-                                            (re/ncg "or"           ref/nwb #"or" (re/-la #"[\s-]lat[eo]r") ref/nwa)
+                                            (re/ncg "or"           ref/nwb #"or" (re/-la #"[\s-]lat[eo]r") ref/nwa)   ;####TODO: THE LOOKAHEAD HERE MAY BE REDUNDANT
                                             (re/ncg "with"         ref/nwb (re/alt (re/join #"with" ref/nwa) #"w/"))
                                             (re/ncg "ampersand"    (re/oom #"&"))
-                                            (re/ncg "forwardSlash" (re/oom #"/"))
+                                            (re/ncg "forwardSlash" (re/-lb #"<") (re/oom #"/"))
                                             (re/ncg "backSlash"    (re/oom #"\\")))
                                     ref/ows))
 
@@ -137,85 +126,7 @@
                                        (get m "with")      :with
                                        :else               nil)))))  ; Replace slashes with nothing (i.e. break expressions that contain these)
 
-(defn- strip-detritus
-  "Strips detritus from `coll`."
-  [coll]
-  (seq (filter #(if (string? %)
-                  (not (s/blank? %))
-                  (not (nil? %)))
-               (->> (-> coll
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Dual" ref/ows ref/nwa)) nil)
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb (re/opt-grp "Double") ref/ows "licensed" ref/ows "under" (re/opt-grp ref/ows "the") ref/nwa)) nil)
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Open" ref/ows "Source" ref/ows "Initiative" ref/nwa)) nil)
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Distributed" ref/ows "under" ref/ows (re/alt-grp "the" "an") ref/nwa)) nil))
-                    (lciu/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all Unicode word characters and trim the result
-                                     (when (>= (count s) 3)                        ; Then remove anything short
-                                       %)))))))
-
-;####TODO: THIS ISN'T WORKING!!!!
-(defn- sub-unidentifieds
-  "Replace any `String`s in `coll` with a fragment info map containing an
-  unidentified LicenseRef or AdditionRef."
-  [coll]
-  (let [placeholders              (lciu/map-str #(let [s (lciu/trim-non-word %)]
-                                                   (if (s/blank? s)
-                                                     (make-unidentified-fragment-info %)
-                                                     (make-unidentified-fragment-info s)))
-                                                coll)
-        unidentified-placeholder? (fn [x] (and (map? x) (= :unidentified (:fragment x))))]
-    (loop [[f s & r] placeholders
-           result    []]
-      (if-not f
-        result
-        (cond
-          ; Very first item in coll is unidentified, so convert it to a LicenseRef
-          (unidentified-placeholder? f)
-            (recur (concat [s] r)
-                   (conj result (assoc f :fragment (lcis/name->unidentified-license-ref (s/trim (last (:source f)))))))
-
-          ; Second item we're currently looking at is unidentified, so convert it based on the preceding item
-          (unidentified-placeholder? s)
-            (if (= f :with)
-              ; Convert to AdditionRef
-              (recur (concat [(assoc s :fragment (lcis/name->unidentified-addition-ref (s/trim (last (:source s)))))] r)
-                     (conj result :with))
-              ; Convert to LicenseRef
-              (recur (concat [(assoc s :fragment (lcis/name->unidentified-license-ref (s/trim (last (:source s)))))] r)
-                     (conj result
-                           (case f
-                             :or-with  :or
-                             :and-with :and
-                             f))))
-
-          ; Neither f nor s are unidentified, so pass through unchanged
-          :else
-            (recur (concat [s] r)
-                   (conj result f)))))))
-
-(defn- group-expressions
-  "Groups expressions in `coll` into sequences that can be turned into valid
-  SPDX expressions.
-
-  For example:
-  [{:fragment \"Apache-2.0\" ...}]                                                                   -> [[{:fragment \"Apache-2.0\" ...}]]
-  [{:fragment \"Apache-2.0\" ...} {:fragment \"MIT\"}]                                               -> [[{:fragment \"Apache-2.0\" ...}] [{:fragment \"MIT\" ...}]]
-  [{:fragment \"Apache-2.0\" ...} :or {:fragment \"MIT\" ...}]                                       -> [[\"Apache-2.0\" :or \"MIT\"]]
-  [{:fragment \"Apache-2.0\" ...} :and {:fragment \"MIT\" ...} {:fragment \"GPL-2.0-or-later\" ...}] -> [[{:fragment \"Apache-2.0\" ...} :and {:fragment \"MIT\" ...}] [{:fragment \"GPL-2.0-or-later\" ...}]]"
-  [coll]
-  (loop [result  [[]]
-         [f & r] coll]
-    (if-not f
-      ; Base case
-      result
-      ; Recursive case
-      (let [l (last result)]
-        (case [(map? (last l)) (map? f)]
-          [true  true]                (recur (conj result [f])                          r) ; map/map, so start a new nested sequence in result
-          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; map/keyword or keyword/map, so continue the current last collection in result
-;          [false false]  ; Not possible - we've already removed leading and consecutive keywords in fragments (in remove-invalid-operator-keywords)
-          )))))
-
-(defn- collapse-operators
+(defn- collapse-runs-of-operators
   "Collapses sequential runs of operator keywords in `coll`, to a single
   keyword; one of:
   * :and
@@ -255,36 +166,127 @@
                  %)
               (partition-by keyword? coll)))))
 
-(defn- finalise-operators
-  "Finalises operator keywords in `coll`, by replacing `AND` and `OR` with
-  `WITH` when they occur between a license or LicenseRef and an exception or an
-  AdditionRef."
+(defn- strip-detritus
+  "Strips detritus from `coll`."
   [coll]
-  (let [coll (collapse-operators coll)
-        f    (fn [idx elem]
-               (if (keyword? elem)
-                 (let [elem-before (nth coll (dec idx) nil)
-                       elem-after  (nth coll (inc idx) nil)]
-                   (case [(lcis/id-position (:fragment elem-before)) (lcis/id-position (:fragment elem-after))]
-                     [:license-position :exception-position] :with
-                     (case elem
-                       :with     :and
-                       :or-with  :or
-                       :and-with :and
-                       elem)))
-                 elem))]
-    (filter identity (map-indexed f coll))))
+  (seq (filter #(if (string? %)
+                  (not (s/blank? %))
+                  (not (nil? %)))
+               (->> (-> coll
+                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Dual" ref/ows ref/nwa)) nil)
+                        (faux/replace-in-strings (re/inline (re/join ref/nwb (re/opt-grp "Double") ref/ows "licensed" ref/ows "under" (re/opt-grp ref/ows "the") ref/nwa)) nil)
+                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Open" ref/ows "Source" ref/ows "Initiative" ref/nwa)) nil)
+                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Distributed" ref/ows "under" ref/ows (re/alt-grp "the" "an") ref/nwa)) nil))
+                    (lciu/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all Unicode word characters and trim the result
+                                     (when (>= (count s) 3)                        ; Then remove anything short
+                                       %)))))))
 
+(defn- sub-unidentified-placeholders
+  "Replace any non-blank `String`s in `coll` with an unidentified placeholder (a
+  Map).  Blank `String`s are filtered out."
+  [coll]
+  (filter identity
+          (lciu/map-str #(let [s (s/trim %)]
+                           (when-not (s/blank? s)
+                             {:unidentified (s/trim s)}))
+                        coll)))
+
+(defn- unidentified-placeholder?
+  "Is `x` an unidentified placeholder?"
+  [x]
+  (boolean (and (map? x) (:unidentified x))))
+
+(defn- unidentified-fragment-info
+  "Constructs a fragment info map for an unidentified ref and src."
+  [ref src]
+  (im/fragment-info ref
+                    src
+                    "Unidentified"))
+
+(defn- unidentified-placeholder->license-ref-fragment-info
+  "Turn `m`, an unidentified placeholder map, into a fragment info map
+  containing a LicenseRef."
+  [^java.util.Map m]
+  (let [s (:unidentified m)]
+    (unidentified-fragment-info (lcis/name->unidentified-license-ref s) s)))
+
+(defn- unidentified-placeholder->addition-ref-fragment-info
+  "Turn `m`, an unidentified placeholder map, into a fragment info map
+  containing an AdditionRef."
+  [^java.util.Map m]
+  (let [s (:unidentified m)]
+    (unidentified-fragment-info (lcis/name->unidentified-addition-ref s) s)))
+
+(defn- finalise-operators-and-unidentified-placeholders
+  "Finalises operator keywords in `coll` and unidentified placeholders, by:
+  * Replacing unidentified placeholders with a fragment info containing either
+    a LicenseRef or an AdditionRef
+  * Resolving `:or-with` and `:and-with` (to either `:or`, `:and` or `:with`)
+  * Replacing any operator that appears between a license/LicenseRef and an
+    exception/AdditionRef with `:with`"
+  [coll]
+  (letfn [(finaliser
+            [idx elem]
+            (if (keyword? elem)
+              ; It's an operator - finalise it based on what it's between
+              (let [elem-before (nth coll (dec idx) nil)
+                    elem-after  (nth coll (inc idx) nil)]
+                (case [(lcis/id-position (:fragment elem-before)) (lcis/id-position (:fragment elem-after))]
+                  [:license-position :exception-position] :with
+                  (case elem
+                    :with     (if (unidentified-placeholder? elem-after) :with :and)
+                    ; Assume :and or :or, even when elem-after is an unidentified placeholder
+                    :or-with  :or
+                    :and-with :and
+                    elem)))
+              (if (unidentified-placeholder? elem)
+                ; It's an unidentified placeholder - finalise it based on the prior operator (if any)
+                (case (nth coll (dec idx) nil)
+                  :with (unidentified-placeholder->addition-ref-fragment-info elem)
+                  (unidentified-placeholder->license-ref-fragment-info elem))
+                ; It's a fragment info - pass it through as-is
+                elem)))]
+    (filter identity (map-indexed finaliser coll))))
+
+(defn- group-expressions
+  "Groups expressions in `coll` into sequences that can be turned into valid
+  SPDX expressions.
+
+  For example:
+  [{:fragment \"Apache-2.0\" ...}]                                                                   -> [[{:fragment \"Apache-2.0\" ...}]]
+  [{:fragment \"Apache-2.0\" ...} {:fragment \"MIT\"}]                                               -> [[{:fragment \"Apache-2.0\" ...}] [{:fragment \"MIT\" ...}]]
+  [{:fragment \"Apache-2.0\" ...} :or {:fragment \"MIT\" ...}]                                       -> [[\"Apache-2.0\" :or \"MIT\"]]
+  [{:fragment \"Apache-2.0\" ...} :and {:fragment \"MIT\" ...} {:fragment \"GPL-2.0-or-later\" ...}] -> [[{:fragment \"Apache-2.0\" ...} :and {:fragment \"MIT\" ...}] [{:fragment \"GPL-2.0-or-later\" ...}]]"
+  [coll]
+  (loop [result  [[]]
+         [f & r] coll]
+    (if-not f
+      ; Base case
+      result
+      ; Recursive case
+      (let [l (last result)]
+        (case [(map? (last l)) (map? f)]
+          [true  true]                (recur (conj result [f])                          r) ; map/map, so start a new nested sequence in result
+          ([true false] [false true]) (recur (conj (vec (drop-last result)) (conj l f)) r) ; map/keyword or keyword/map, so continue the current last collection in result
+;          [false false]  ; Not possible - we've already removed leading and consecutive keywords
+          )))))
+
+;####TODO: THIS ISN'T WORKING!!!!!
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the `coll`ection containing
-  fragment info maps and operator keywords.  Returns an expressions map."
+  fragment info maps, unidentified placeholder maps, and operator keywords.
+  Returns an expressions map."
   [coll]
-  (when coll
+  (when (seq coll)
     ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
-    (when-not (every? lcis/unidentified? (map :fragment (filter map? coll)))
-      (if (and (= 1 (count coll)) (map? (first coll)))
-        {(:fragment (first coll)) coll}  ; Single id detected, so return it
-        (let [grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:fragment (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
+    (when-not (every? #(or (keyword? %) (lcis/unidentified? (:fragment %))) coll)
+;####TODO: REMOVE ONCE TESTED
+;      (if (and (= 1 (count coll)) (map? (first coll)))
+;        {(:fragment (first coll)) coll}  ; Single id detected, so return it
+        (let [grouped-expressions (group-expressions coll)
+;          grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:fragment (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
+;####TEST!!!!
+;_ (debug-print grouped-expressions "grouped-expressions")
               result              (into {}
                                         (map #(let [raw-expression (s/join " " (map (fn [elem]
                                                                                       (cond
@@ -303,62 +305,21 @@
                                                     eis            (filter map? %)]
                                                 [expression eis])
                                              grouped-expressions))]
-          result)))))
-
-;####TODO: CAN PROBABLY MOVE THIS INTO parse-name ONCE ITS WORKING!!!!
-(defn- parse-internal
-  "Parses the given license `n`ame, returning an expressions map or `nil` if no
-  expressions can be found."
-  [^String n ^Boolean attempt-download-and-match?]
-  (when-let [result (-> [n]
-                        ; Substitutions, with short circuiting of steps if we're done early
-                        ; The order of these steps is important
-                        (tu/until-> lcipu/done-parsing?
-                                    cursed/detect               ; This must go first
-                                    spdx-refs/detect
-                                    (uris/detect attempt-download-and-match?)
-                                    bsd/detect
-                                    cc/detect
-                                    wtf/detect
-                                    mx4j/detect
-                                    bouncy-castle/detect
-                                    jdom/detect
-                                    like-clojure/detect
-                                    public-domain/detect
-                                    proprietary-commercial/detect
-                                    listed-licenses/detect      ; This should go after most specific detections, since it's very broad (i.e. detects most of the license & exception lists)
-                                    gnu/detect                  ; Except this one, since it matches very liberally ("word salad" strategy)
-                                    spdx-special-forms/detect)  ; And this should go last, since it's somewhat non-specific (i.e. matching "NONE")
-                        ; At this point we've identified all of the licenses we possibly can
-;####TODO: REMOVE ONCE TESTED
-;                        deduplicate-identifiers
-                        detect-operators
-;####TEST!!!!
-;(print-fragments n)
-;####TEST!!!!
-;(debug-print "PRIOR TO STRIPPING DETRITUS")
-                        strip-detritus
-;(debug-print "AFTER STRIPPING DETRITUS")
-                        sub-unidentifieds    ;####TODO: THIS ISN'T WORKING!!!!!
-                        finalise-operators
-;####TEST!!!!
-;(debug-print "PRIOR TO REBUILD")
-                        ; Rebuild the final expression(s)
-                        rebuild-expressions)]
-    (im/prepend-source-to-fims-within-em n result)))
+          result))))
+;)
 
 (defn parse-name
   "Parses the given license `n`ame, returning an expressions map or `nil` when
   `n`ame is blank.
 
-  `attempt-download-and-match?` (default `false`) controls whether URIs are
-  downloaded and SPDX matching attempted on the content if they're not found in
-  the SPDX license list first"
-  ([^String n] (parse-name n false))
-  ([^String n ^Boolean attempt-download-and-match?]
+  `attempt-download-and-match?` controls whether URIs are downloaded and SPDX
+  matching attempted on the content (if the URI isn't found in the SPDX license
+  list or 'well known URI' list first, and only if the URI's hostname is in a
+  small set of allowed domains)."
+  [^CharSequence n ^Boolean attempt-download-and-match?]
   (when-not (s/blank? n)
     (let [n (s/trim n)]
-      ; 1. If it's an SPDX expression, return the canonicalised rendition of it - in the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should move into the parsing sequence in parse-internal
+      ; Alternative 1 - an SPDX expression.  In the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should move into the parsing sequence in parse-internal.
       (if-let [parse-tree (sexp/parse n)]
         (let [canonicalised-expression (sexp/unparse parse-tree)
               strategy                 (let [ids (sexp/extract-ids parse-tree)]
@@ -368,8 +329,39 @@
                                            "SPDX expression"))
               ei                       (im/fragment-info canonicalised-expression n strategy)]
           {canonicalised-expression (list ei)})
-        ; 2. Parse the name
-        (or (parse-internal n attempt-download-and-match?)
-            ; 3. Turn the entire name into a single unidentified LicenseRef
-            (let [unidentified-license-ref (lcis/name->unidentified-license-ref n)]
-              {unidentified-license-ref (list (make-unidentified-fragment-info n unidentified-license-ref))})))))))
+
+        (or ; Alternative 2 - attempt to parse the name
+            (some-> [n]
+                    ; License detection within n, with short circuiting of steps if we're done early
+                    (tu/until-> lcipu/done-parsing?
+                                ; Special cased license detectors
+                                cursed/detect
+                                spdx-refs/detect
+                                (uris/detect attempt-download-and-match?)
+                                bsd/detect
+                                cc/detect
+                                wtf/detect
+                                mx4j/detect
+                                bouncy-castle/detect
+                                jdom/detect
+                                like-clojure/detect
+                                public-domain/detect
+                                proprietary-commercial/detect
+                                ; Detector for the bulk of the SPDX license list (in most cases this detector does most of the work)
+                                listed-licenses/detect
+                                ; Overly broad / general license detectors
+                                gnu/detect                  ; Matches very liberally (uses a "word salad" strategy), so needs to go last
+                                spdx-special-forms/detect)  ; Very non-specific (e.g. matches "NONE"), so needs to go last
+                    ; SPDX expression construction
+                    detect-operators
+                    collapse-runs-of-operators
+                    strip-detritus
+                    sub-unidentified-placeholders
+                    finalise-operators-and-unidentified-placeholders
+                    ; Rebuild the final expression(s)
+                    rebuild-expressions
+                    (->> (im/prepend-source-to-fims-within-em n)))
+
+            ; Alternative 3. Turn the entire name into a single unidentified LicenseRef, and construct an expressions map with it
+            (let [fim (unidentified-fragment-info (lcis/name->unidentified-license-ref n) n)]
+              {(:fragment fim) (list fim)}))))))
