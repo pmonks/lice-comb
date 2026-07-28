@@ -249,8 +249,8 @@
     (filter identity (map-indexed finaliser coll))))
 
 (defn- group-expressions
-  "Groups expressions in `coll` into sequences that can be turned into valid
-  SPDX expressions.
+  "Groups expressions in `coll` into sequences that can each be turned into
+  a valid SPDX expression.
 
   For example:
   [{:fragment \"Apache-2.0\" ...}]                                                                   -> [[{:fragment \"Apache-2.0\" ...}]]
@@ -271,7 +271,6 @@
 ;          [false false]  ; Not possible - we've already removed leading and consecutive keywords
           )))))
 
-;####TODO: THIS ISN'T WORKING!!!!!
 (defn- rebuild-expressions
   "Rebuilds one or more SPDX expressions from the `coll`ection containing
   fragment info maps, unidentified placeholder maps, and operator keywords.
@@ -280,33 +279,26 @@
   (when (seq coll)
     ; If all we have are unidentifieds, return nil so that the caller can turn the entire string into a single unidentified
     (when-not (every? #(or (keyword? %) (lcis/unidentified? (:fragment %))) coll)
-;####TODO: REMOVE ONCE TESTED
-;      (if (and (= 1 (count coll)) (map? (first coll)))
-;        {(:fragment (first coll)) coll}  ; Single id detected, so return it
-        (let [grouped-expressions (group-expressions coll)
-;          grouped-expressions (filter #(or (> (count %) 1) (not (lcis/unidentified? (:fragment (first %))))) (group-expressions coll))  ; Remove solitary LicenseRefs
-;####TEST!!!!
-;_ (debug-print grouped-expressions "grouped-expressions")
-              result              (into {}
-                                        (map #(let [raw-expression (s/join " " (map (fn [elem]
-                                                                                      (cond
-                                                                                        (keyword? elem)
-                                                                                          (s/upper-case (name elem))
+      (let [grouped-expressions (group-expressions coll)
+            result              (into {}
+                                      (map #(let [raw-expression (s/join " " (map (fn [elem]
+                                                                                    (cond
+                                                                                      (keyword? elem)
+                                                                                        (s/upper-case (name elem))
 
-                                                                                        (map? elem)
-                                                                                          (:fragment elem)
+                                                                                      (map? elem)
+                                                                                        (:fragment elem)
 
-                                                                                        :else
-                                                                                         (throw (ex-info "Unexpected element in collection" {:collection coll}))))
-                                                                                    %))
-                                                    expression     (if-let [exp (sexp/canonicalise raw-expression)]
-                                                                     exp
-                                                                     (throw (ex-info (str "Invalid SPDX expression constructed: " raw-expression) {})))
-                                                    eis            (filter map? %)]
-                                                [expression eis])
-                                             grouped-expressions))]
-          result))))
-;)
+                                                                                      :else
+                                                                                       (throw (ex-info "Internal logic error: unexpected element in parse tree" {:parse-tree coll}))))
+                                                                                  %))
+                                                  expression     (if-let [exp (sexp/canonicalise raw-expression)]
+                                                                   exp
+                                                                   (throw (ex-info (str "Internal logic error: Invalid SPDX expression constructed: " raw-expression) {:raw-expression raw-expression :parse-tree coll})))
+                                                  eis            (filter map? %)]
+                                              [expression eis])
+                                           grouped-expressions))]
+        result))))
 
 (defn parse-name
   "Parses the given license `n`ame, returning an expressions map or `nil` when
