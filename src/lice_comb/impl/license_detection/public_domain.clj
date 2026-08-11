@@ -29,9 +29,11 @@
              (re/-la ref/bounded-ows (re/opt-grp #"per" ref/bounded-ows) re-cc0)  ; Or unbounded look ahead groups
              ref/nwa)))
 
+(def strategy "Public domain regex")
+
 (defn detect
-  "Detects any proprietary/commercial identifiers found inside the `String`s in
-  `coll` and replaces them with a fragment info map in that location. Returns
-  other elements unchanged."
+  "Detects any public domain identifiers found inside the `String`s in `coll`
+  and replaces them with a fragment info map in that location. Returns other
+  elements unchanged."
   [coll]
-  (faux/parse coll re-public-domain (partial mp/match->fragment-info (spdx/public-domain) "Public domain regex")))
+  (faux/parse coll re-public-domain (partial mp/match->fragment-info (spdx/public-domain) strategy)))

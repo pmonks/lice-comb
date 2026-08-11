@@ -103,7 +103,7 @@
   "Possible prefixes for BSD licenses"
   []
   (re/alt-grp
-    (re/ncg "beforeHP"        (re/alt "HP" (re/join "Hewlett" ref/mws "Packard")))
+    (re/ncg "beforeHP"        ref/hewlett-packard)
     (re/ncg "beforeLBNL"      (re/alt "LBNL" (re/join "Lawrence" ref/mws "Berkeley" ref/mws "National" ref/mws "Labs")))
     (re/ncg "beforeSystemics" "Systemics" (re/opt-ncg "beforeW3works" ref/mws "W3Works"))
     (re/ncg "beforeAMPAS"     ampas)
@@ -122,7 +122,7 @@
     (re/ncg "attribution"          (re/opt-grp ref/withs ref/mws) "attribution")
     (re/ncg "clear"                "Clear")
     (re/ncg "flex"                 "Flex")
-    (re/ncg "HP"                   (re/alt "HP" (re/join "Hewlett" ref/mws "Packard")))
+    (re/ncg "HP"                   ref/hewlett-packard)
     (re/ncg "LBNL"                 (re/alt "LBNL" (re/join "Lawrence" ref/mws "Berkeley" ref/mws "National" ref/mws "Labs")))
     (re/ncg "modification"         "Modification")
     (re/ncg "noMilitary"           "No" ref/mws "Military")
@@ -172,18 +172,19 @@
                  "\n\n#### Matching word ####\n"
                  "BSD"
                  "\n\n#### Trailing clauses ####\n"
-                 (re/zom-grp ref/ows (re/alt "style" "like"))
-                 (re/zom-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" before the after clause count
+                 (re/opt-grp ref/ows (re/alt "style" "like"))
+                 (re/opt-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" before the after clause count
                  (re/opt-grp ref/mws (bsd-any-clause "after"))
-                 (re/opt-grp ref/ows "BSD")  ; Accept BSD a second time (e.g. as in "3-clause BSD licence (Revised BSD licence)")
+;####TODO: REMOVE ONCE TESTED
+                 (re/opt-grp ref/ows "BSD" ref/ows #"\d+" ref/ows)  ; Accept BSD a second time (e.g. as in "3-clause BSD licence (Revised BSD licence)")
                  "\n\n#### Suffix ####\n"
                  (re/opt-grp ref/mws (suffix-clauses))
                  "\n\n#### Random dingleberries ####\n"
-                 (re/zom-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" after the after clause count
+                 (re/opt-grp ref/mws (re/alt-grp "variant" (re/join (re/opt-grp ref/public ref/mws) ref/license)))  ; Accept the words "variant" or "license" after the after clause count
 ;####TODO: REIMPLEMENT THIS IN TERMS OF THE NEW NAMESPACES - MAY NOT BE NEEDED?
 ;                 (re/opt-grp ref/ows (lcir/re-version))
                  "\n\n#### Coda ####\n"
-                 ref/ows
+;                 (re/opt-grp ref/ows #"BSD" ref/ows #"\d+" ref/ows)
                  ref/nwa))
 
 

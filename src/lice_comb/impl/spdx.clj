@@ -16,19 +16,19 @@
             [spdx.identifiers     :as si]
             [spdx.licenses        :as sl]
             [spdx.exceptions      :as se]
-            [spdx.expressions     :as sexp]
+            [spdx.expressions     :as sx]
             [lice-comb.impl.utils :as u]))
 
 ; The subset of SPDX identifiers that we use, as an unordered set
 (def license-ids-d   (delay (some->> (sl/ids)
-                                     (filter #(not (s/ends-with? % "+")))                                         ; Remove deprecated "xGPL-y.z+" identifiers
-                                     (filter #(not (re-matches #"\AGPL-\d\.0-with-[\p{Alpha}]+-exception\z" %)))  ; Remove deprecated "GPL-x.0-with-xxx-exception" identifiers
+                                     (filter #(not (s/ends-with? % "+")))                                                 ; Remove deprecated "xGPL-y.z+" identifiers
+                                     (filter #(not (re-matches #"\A[AL]?GPL-\d+\.\d+-with-[\p{Alpha}]+-exception\z" %)))  ; Remove deprecated "xGPL-x.y-with-xxx-exception" identifiers
                                      seq
                                      set)))
 (def exception-ids-d (delay (set (se/ids))))
 (def ids-d           (delay (set (concat @license-ids-d @exception-ids-d))))
 
-;####TODO: IS THIS BETTER IN clj-spdx?
+;####TODO: IS THIS BETTER IN clj-spdx (spdx.expressions ns)?
 (defn id-position
   "Returns the 'position' (expressed as `:license-position` or
   `:exception-position`) of `id` (a license, LicenseRef, exception, AdditionRef,
@@ -45,7 +45,7 @@
   ref, or a special form)."
   [^CharSequence spdx-expression-fragment]
   (when-not (s/blank? spdx-expression-fragment)
-    (if-let [canonical-expression (sexp/canonicalise spdx-expression-fragment)]  ; First, attempt expression canonicalisation (which handles more cases than identifer canonicalisation)
+    (if-let [canonical-expression (sx/canonicalise spdx-expression-fragment)]  ; First, attempt expression canonicalisation (which handles more cases than identifer canonicalisation)
       canonical-expression
       (si/canonicalise spdx-expression-fragment))))                              ; But if that doesn't work, fall back on identifier canonicalisation
 
@@ -258,7 +258,7 @@
         se-init (e/future* (se/init!))]
     @sl-init
     @se-init)
-  (sexp/init!)
+  (sx/init!)
 
   ; Serially initialise this namespace's dependent state - they're all pretty fast (< 1s)
   @license-ids-d

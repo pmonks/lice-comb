@@ -21,14 +21,15 @@
 
 ; MX4J license is Apache 1.1 - see https://wiki.spdx.org/view/Legal_Team/License_List/Licenses_Under_Consideration#Processed_License_Requests
 
-(def ^:private re-mx4j
+; Only public for ease of testing
+(def re-mx4j
   (re/fgrp "i"
            ref/nwb
            (re/opt-grp "The" ref/ows)
            "MX4J"
            (re/opt-grp ref/mws ref/public)
            (re/opt-grp ref/mws ref/license)
-           (re/opt-grp (verexp/expression-regex ["1.0"]))
+           (re/opt-grp ref/ows (verexp/expression-regex ["1.0"]))
            ref/nwa))
 
 (defn detect

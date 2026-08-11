@@ -17,7 +17,7 @@
             [clojure.java.io                                         :as io]
             [thread-until.core                                       :as tu]
             [spdx.identifiers                                        :as si]
-            [spdx.expressions                                        :as sexp]
+            [spdx.expressions                                        :as sx]
             [wreck.api                                               :as re]
             [lice-comb.impl.spdx                                     :as spdx]
             [lice-comb.impl.utils                                    :as u]
@@ -25,7 +25,6 @@
             [lice-comb.impl.parsing.faux-parse                       :as faux]
             [lice-comb.impl.parsing.info-maps                        :as info]
             [lice-comb.impl.parsing.correction                       :as correct]
-;            [lice-comb.impl.parsing.utils                            :as pu]
             [lice-comb.impl.regexes.fragments                        :as ref]
             [lice-comb.impl.license-detection.listed-licenses        :as listed-licenses]
             [lice-comb.impl.license-detection.spdx-matching          :as spdx-matching]
@@ -250,6 +249,24 @@
                 elem)))]
     (filter identity (map-indexed finaliser coll))))
 
+(defn- collapse-lice-comb-licenserefs
+  "Collapses redundant sequences of lice-comb specific LicenseRefs.  Returns a
+  sequence of fragment infos (which may be identical to the input)."
+  [coll n]
+  (if (and (> (count coll) 1)
+           (every? #(and (map? %) (spdx/lice-comb-license-ref? (:fragment %))) coll))
+    (cond
+      (some #(spdx/proprietary-commercial? (:fragment %)) coll)
+        [(info/fragment-info (spdx/proprietary-commercial) n proprietary-commercial/strategy)]
+
+      (some #(spdx/public-domain? (:fragment %)) coll)
+        [(info/fragment-info (spdx/public-domain) n public-domain/strategy)]
+
+      :else
+        [(unidentified-fragment-info (spdx/name->unidentified-license-ref n) n)])
+
+    coll))
+
 (defn- group-expressions
   "Groups expressions in `coll` into sequences that can each be turned into
   a valid SPDX expression.
@@ -294,7 +311,7 @@
                                                                                       :else
                                                                                        (throw (ex-info "Internal logic error: unexpected element in parse tree" {:parse-tree coll}))))
                                                                                   %))
-                                                  expression     (if-let [exp (sexp/canonicalise raw-expression)]
+                                                  expression     (if-let [exp (sx/canonicalise raw-expression)]
                                                                    exp
                                                                    (throw (ex-info (str "Internal logic error: Invalid SPDX expression constructed: " raw-expression) {:raw-expression raw-expression :parse-tree coll})))
                                                   eis            (filter map? %)]
@@ -319,9 +336,9 @@
   (when-not (s/blank? n)
     (let [n (s/trim n)]
       ; Alternative 1 - an SPDX expression.  In the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should move into the parsing sequence in parse-internal.
-      (if-let [parse-tree (sexp/parse n)]
-        (let [canonicalised-expression (sexp/unparse parse-tree)
-              strategy                 (let [ids (sexp/extract-ids parse-tree)]
+      (if-let [parse-tree (sx/parse n)]
+        (let [canonicalised-expression (sx/unparse parse-tree)
+              strategy                 (let [ids (sx/extract-ids parse-tree)]
                                          (if (and (= 1 (count ids))
                                                   (= :license-id (si/id-type (first ids))))
                                            "SPDX identifier"
@@ -357,10 +374,11 @@
                     strip-detritus
                     sub-unidentified-placeholders
                     finalise-operators-and-unidentified-placeholders
+                    (collapse-lice-comb-licenserefs n)
                     ; Rebuild the final expression(s)
                     rebuild-expressions
                     (->> (info/prepend-source-to-fims-within-em n)))
 
-            ; Alternative 3. Turn the entire name into a single unidentified LicenseRef, and construct an expressions map with it
+            ; Alternative 3. Turn the entire name into a single unidentified LicenseRef, and construct a fragment info map with it
             (let [fim (unidentified-fragment-info (spdx/name->unidentified-license-ref n) n)]
               {(:fragment fim) (list fim)}))))))

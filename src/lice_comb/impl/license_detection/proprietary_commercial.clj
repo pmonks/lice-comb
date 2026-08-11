@@ -30,9 +30,11 @@
            (re/opt-grp ref/mws ref/license)
            ref/nwa))
 
+(def strategy "Proprietary/commercial regex")
+
 (defn detect
   "Detects any proprietary/commercial values found inside the `String`s in
   `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-proprietary-commercial (partial mp/match->fragment-info (spdx/proprietary-commercial) "Proprietary/commercial regex")))
+  (faux/parse coll re-proprietary-commercial (partial mp/match->fragment-info (spdx/proprietary-commercial) strategy)))

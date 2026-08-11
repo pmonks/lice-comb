@@ -16,6 +16,7 @@
   (:require [clojure.string                            :as s]
             [clojure.math.combinatorics                :as combo]
             [wreck.api                                 :as re]
+            [rencg.api                                 :as ncg]
             [spdx.identifiers                          :as si]
             [lice-comb.impl.version-series             :as verser]
             [lice-comb.impl.regexes.version-expression :as verexp]
@@ -35,7 +36,7 @@
 
 (defn- common-replacements
   "Performs replacements common to both identifiers and names, in `s` (a
-  `String), returning a sequence."
+  `String`), returning a sequence."
   [^String s ^String ncg-prefix versions]
   (when-not (s/blank? s)
     (let [re-vers  (re/opt-grp ref/ows (re/opt-grp ref/single-qots) (verexp/expression-regex ncg-prefix versions))
@@ -43,7 +44,9 @@
           template (if (re-find re-placeholder-ver s)
                      (u/replacing-split s re-placeholder-ver re-vers)
                      [s re-vers])]  ; Always add a version matching component on the end, to handle cases where the version doesn't appear in the name (e.g. Adobe-2006, Arphic-1999)
-      (faux/parse (concat [(re/opt-grp #"The" ref/mws)] template)
+      (faux/parse (concat [(re/opt-grp #"The" ref/mws)]
+                          template
+                          [(re/opt-grp ref/mws ref/public) (re/opt-grp ref/mws ref/license) (re/opt-grp ref/mws ref/date)])
                   ; only or or-later suffix
                   re-placeholder-oool                   re-oool
                   ; Name alternatives
@@ -75,59 +78,7 @@
                   ; Numbers that aren't part of a version
                   (re/inline (re/ncg "number" #"\d+"))  (fn [m] (let [number (get m "number")] (re/join #"0*" number)))))))
 
-;####TODO: REMOVE ONCE TESTED!!!!
-;  (when (seq template)
-;    (let [template-without-placeholders (if (seq versions)
-;                                          (let [re-vers (re/opt-grp ref/ows (verexp/expression-regex ncg-prefix versions))
-;                                                re-oool (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing)))]
-;                                            (->> template)
-;                                                 (u/mapcat-str #(if (re-find re-placeholder-ver %)
-;                                                                     (u/replacing-split % re-placeholder-ver re-vers)
-;                                                                     [% re-vers]))
-;                                                 (u/mapcat-str #(if (re-find re-placeholder-oool %)
-;                                                                     (u/replacing-split % re-placeholder-oool re-oool)
-;                                                                     [% re-oool])))
-;                                          template)]
-
-;####TODO: REMOVE ONCE TESTED!!!!
-;                                          (faux/parse template
-;                                                      re-placeholder-ver   (re/opt-grp ref/ows (verexp/expression-regex ncg-prefix versions))
-;                                                      re-placeholder-oool  (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing))))
-;                                          template)]
-
-;####TODO: REMOVE ONCE TESTED!!!!
-;      (faux/parse template-without-placeholders
-;                  ; Name alternatives
-;                  #"(?i:(?<!\w)Apache(?!\w))"           (re/inline (re/alt-grp (re/join "Apache" (re/opt-grp ref/mws (re/alt-grp "Software" "SW"))) "ASL"))
-;                  #"(?i:(?<!\w)Beerware(?!\w))"         (re/inline (re/join "Beer" ref/ows "ware"))
-;                  ; MIT/X11/ISC overlaps
-;                  #"(?i:(?<!\w)MIT(?!\w))"              (re/inline (let [x11-or-isc (re/alt-grp "X11" "ISC")
-;                                                                         separator  (re/n2m 1 4 ref/ws+slashes)]
-;                                                                     (re/join (re/-lb x11-or-isc separator)
-;                                                                              "MIT"
-;                                                                              (re/-la separator x11-or-isc))))
-;                  #"(?i:(?<!\w)X11(?!\w))"              (re/inline (let [mit       "MIT"
-;                                                                         separator (re/n2m 1 4 ref/ws+slashes)]
-;                                                                     (re/join (re/opt-grp mit separator)
-;                                                                              "X11"
-;                                                                              (re/opt-grp separator mit))))
-;                  #"(?i:(?<!\w)ISC(?!\w))"              (re/inline (let [mit       "MIT"
-;                                                                         separator (re/n2m 1 4 ref/ws+slashes)]
-;                                                                     (re/join (re/opt-grp mit separator)
-;                                                                              "ISC"
-;                                                                              (re/opt-grp separator mit))))
-;                  ; zlib/libpng overlaps
-;                  #"(?i:(?<!\w)(?<!zlib/)libpng(?!\w))" (re/inline (let [zlib      "zlib"
-;                                                                         separator (re/n2m 1 4 ref/ws+slashes)]
-;                                                                     (re/join (re/-lb zlib separator)
-;                                                                              "libpng"
-;                                                                              (re/-la separator zlib))))
-;                  ; Numbers that aren't part of a version
-;                  (re/inline (re/ncg "number" #"\d+"))  (fn [m] (let [number (get m "number")] (re/join #"0*" number)))))))
-
-;####TODO: MAKE PRIVATE ONCE TESTED!!!!
-(defn id->regex
-;(defn- id->regex
+(defn- id->regex
   "Returns a regex suitable for matching variations on `id` (a
   `String`), optionally within `version-series`.
 
@@ -140,8 +91,6 @@
   (some-> (common-replacements id ncg-prefix-id (:versions version-series))
           (faux/parse ; Special cases for SGI-B without the -B
                       #"(?i:(?<!\w)SGI-B(?!\w))" (re/inline (re/join "SGI" (re/opt-grp ref/mws "B"))))
-          ; Remove empty strings
-          (->> (filter #(or (not (string? %)) (not (s/blank? %)))))  ;####TODO: Is s/blank? the right predicate here, or should it be (not= "" %) ??
           ; Replace whitespace
           (faux/replace-in-strings #"[\s\-]+" ref/mws)
           ; Cleanup, escape remaining fragments, then combine into a single regex
@@ -149,9 +98,7 @@
                (apply re/join))))
 
 
-;####TODO: MAKE PRIVATE ONCE TESTED!!!!
-(defn name->regex
-;(defn- name->regex
+(defn- name->regex
   [version-series name]
 ;####TODO: FIX THESE REGEXES TO USE FRAGMENTS FROM ref NS
   (some-> (common-replacements name ncg-prefix-name (:versions version-series))
@@ -161,20 +108,11 @@
 ;                      #"(?i)\(for libpng 0\.5 through 1\.6\.35\)"                                 #"\(?for[\s\-–—]+libpng[\s\-–—]+0+\.0*5[\s\-–—]+through[\s\-–—]+0*1\.0*6\.0*35\)?"
 ;                      #"(?i)\(or possibly 2\.0A and 2\.0B\)"                                      #"\(?or[\s\-–—]+possibly[\s\-–—]+0*2\.0+A[\s\-–—]+(?:and|&)[\s\-–—]+0*2\.0+B\)?"
 ;                      #"(?i)TORQUE v2\.5\+"                                                       #"TORQUE[\s\-–—]+v0*2\.0*5\+"
-                      ; Special cases for certain licenses
-;                      #"(?i)(?<!\w)Apache(?!\w)"                                                  #"(?:Apache(?:[\s\-–—]*Software)?|ASL)"
-;                      #"(?i)(?<!\w)Beerware(?!\w)"                                                #"Beer[\s\-–—]*Ware"
-;                      #"(?i)(?<!\w)No Derivatives(?!\w)"                                          #"No[\s\-–—]*Deriv(?:s|atives)?"
-;                      #"(?i)(?<!\w)Share Alike(?!\w)"                                             #"Share[\s\-–—]*Alike"
-;                      #"(?i)(?<!\w)MIT(?!\w)"                                                     #"(?<!(?:X11|ISC)[\\/\-\s]{1,4})MIT(?![\\/\-\s]{1,4}(?:X11|ISC))"
-;                      #"(?i)(?<!\w)X11(?!\w)"                                                     #"(?:MIT[\\/\-\s]{1,4})?X11(?:[\\/\-\s]{1,4}MIT)?"
-;                      #"(?i)(?<!\w)ISC(?!\w)"                                                     #"(?:MIT[\\/\-\s]{1,4})?ISC(?:[\\/\-\s]{1,4}MIT)?"
-;                      #"(?i)(?<!\w)zlib(/libpng)?(?!\w)"                                          #"(?:libpng[\\/\-\s]{1,4})?zlib([\\/\-\s]{1,4}libpng)?"
-;                      #"(?i)(?<!\w)(?<!zlib/)libpng(?!\w)"                                        #"(?<!zlib[\\/\-\s]{1,4})libpng(?![\\/\-\s]{1,4}zlib)"
-                      #"(?<!\w)(?i:Hewlett[\s\-]+Packard)(?!\w)"                                  (re/inline (re/alt-grp (re/join "Hewlett" ref/mws "Packard") "HP"))
-                      #"(?<!\w)(?i:Microsoft)(?!\w)"                                              (re/inline (re/alt-grp "Microsoft" "MS"))
-                      #"(?<!\w)(?i:End[\s\-]user licen[cs]e agreement|EULA)(?!\w)"                (re/inline (re/alt-grp (re/join "End" ref/mws "User" ref/mws ref/license ref/mws "Agreement") "EULA"))
-                      #"(?<!\w)(?i:Plexus\s+Classworlds\s+Licen[cs]e)(?!\w)"                      #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))"
+                      ; Special cases for certain phrases in licenses
+                      #"(?<!\w)(?i:Hewlett[\s\-]+Packard)(?!\w)"                                  ref/hewlett-packard
+                      #"(?<!\w)(?i:Microsoft)(?!\w)"                                              ref/microsoft
+                      #"(?<!\w)(?i:End[\s\-]user[\s\-]licen[cs]e[\s\-]agreement|EULA)(?!\w)"      (re/inline (re/alt-grp (re/join "End" ref/mws "User" ref/mws ref/license ref/mws "Agreement") "EULA"))
+;                      #"(?<!\w)(?i:Plexus\s+Classworlds\s+Licen[cs]e)(?!\w)"                      #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))"
                       #"\A(?i:Open\s+Software\s+Licen[cs]e)(?!\w)"                                (re/inline (re/join #"Open" ref/mws ref/software ref/mws ref/license))  ; OSL-x.y
                       #"\A(?i:Open\s+Public\s+Licen[cs]e)(?!\w)"                                  (re/inline (re/join #"Open" ref/mws ref/public ref/mws ref/license))  ; OPL-x.y
                       #"(?<!\w)Unlicense(?!\w)"                                                   (re/inline (re/join #"Un" ref/ows ref/license #"d?"))
@@ -283,14 +221,32 @@
   [_]
   nil)
 
-(defn regexes-for-id
-  "Convenience function for testing the regexes for a specific SPDX identifier or
-  version series id.  This is not used by lice-comb anywhere."
+(defn regexes-for-id-or-version-series
+  "Convenience function that returns the regexes for a specific SPDX identifier
+  or version series id.  This function is not used by lice-comb anywhere and is
+  solely intended for human use at a REPL - the implementation is inefficient."
   [id-or-version-series-id]
   (if-let [vs (get (:version-series (verser/version-series)) id-or-version-series-id)]
     (regexes vs)
     (regexes id-or-version-series-id)))
 
+(defn re-matches-for-id-or-version-series
+  "Convenience function that attempts to re-match the regexes for a specific
+  SPDX identifier or version series id against `s` (a `String`).  This function
+  is not used by lice-comb anywhere and is solely intended for human use at a
+  REPL - the implementation is inefficient."
+  [id-or-version-series-id ^CharSequence s]
+  (let [res (sort-by #(* -1 (count (str %))) (mapcat vals (regexes-for-id-or-version-series id-or-version-series-id)))]
+    (some #(ncg/re-matches % s) res)))
+
+(defn re-find-for-id-or-version-series
+  "Convenience function that attempts to re-find the regexes for a specific SPDX
+  identifier or version series id against `s` (a `String`).  This function is
+  not used by lice-comb anywhere and is solely intended for human use at a
+  REPL - the implementation is inefficient."
+  [id-or-version-series-id ^CharSequence s]
+  (let [res (sort-by #(* -1 (count (str %))) (mapcat vals (regexes-for-id-or-version-series id-or-version-series-id)))]
+    (some #(ncg/re-find % s) res)))
 
 ;; Functions for processing matches from a regex produced by [[regexes]].
 ;; Note: rencg must have been used to produce the match.

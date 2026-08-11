@@ -85,10 +85,10 @@
 (def public          #"pub?lic")       ; Note: the optional missing `b` is a known misspelling in a POM license name: https://repo.clojars.org/org/immutant/immutant-common/1.1.4/immutant-common-1.1.4.pom (there are others too)
 (def proprietary     #"propriet[aoe]ry")
 (def general         #"genere?al")     ; Note: "genereal" is a known misspelling in a POM license name: https://repo.clojars.org/clj-file-zip/clj-file-zip/0.1.0/clj-file-zip-0.1.0.pom
-(def software        (re/alt-grp #"Software" #"SW"))
+(def software        (re/alt-grp #"Software" #"S/?W"))
 (def version-label   (re/join "v" (re/opt-grp "er" (re/opt-grp "sion" (re/opt "s")))))
 
-; Country variants
+; Country variations
 
 (def au (re/alt-grp "Australia" "AU"))
 (def at (re/alt-grp "Austria" "AT"))
@@ -98,3 +98,8 @@
 (def jp (re/alt-grp "Japan" "JP"))
 (def nl (re/alt-grp "Netherlands" "NL"))
 (def us (re/alt-grp (re/join "United" mws "States" (re/opt-grp (re/opt-grp mws "of") mws "America")) #"USA?"))
+
+; Company name variations
+
+(def microsoft       (re/alt-grp "Microsoft" "MS"))
+(def hewlett-packard (re/alt-grp (re/join "Hewlett" ows "Packard") "HP"))
