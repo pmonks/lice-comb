@@ -20,16 +20,17 @@
             [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
-(def ^:private re-proprietary-commercial
-  (re/fgrp "i"
-           ref/nwb
-           (re/alt-grp (re/join ref/proprietary (re/opt-grp (re/oom ref/ws+hyphens+slashes) "Commercial"))
-                       "Commercial"
-                       (re/join (re/opt-grp "Copyright" ref/mws (re/n2m 0 20 ".")) "All" ref/mws "Rights" ref/mws "Reserved")
-                       "Private")
-           (re/opt-grp ref/mws ref/license)
-           ref/nwa))
+; Public for ease of testing
+(def re (re/fgrp "i"
+                 ref/nwb
+                 (re/alt-grp (re/join ref/proprietary (re/opt-grp (re/oom ref/ws+hyphens+slashes) "Commercial"))
+                             "Commercial"
+                             (re/join (re/opt-grp "Copyright" ref/mws (re/n2m 0 20 ".")) "All" ref/mws "Rights" ref/mws "Reserved")
+                             "Private")
+                 (re/opt-grp ref/mws ref/license)
+                 ref/nwa))
 
+; Note: public because it's used by lice-comb.impl.parsing.parser when collapsing runs of unidentified LicenseRefs
 (def strategy "Proprietary/commercial regex")
 
 (defn detect
@@ -37,4 +38,4 @@
   `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-proprietary-commercial (partial mp/match->fragment-info (spdx/proprietary-commercial) strategy)))
+  (faux/parse coll re (partial mp/match->fragment-info (spdx/proprietary-commercial) strategy)))

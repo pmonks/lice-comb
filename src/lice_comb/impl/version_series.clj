@@ -53,6 +53,7 @@
       ; Special cases - licenses
       (= id "W3C")                                                         "W3C"       ; Id doesn't include a version, even though its name does!
       (= id "Libpng")                                                      "libpng"    ; Id doesn't include a version and has different case to other members of the version series
+      (= id "SAX-PD")                                                      "SAX-PD"    ; Id and name don't include a version, but it's a v1.0
       (s/starts-with? id "AGPL-1.0")                                       "Affero"    ; Unrelated to AGPL-3.0 (despite having the same ID pattern)
       (s/starts-with? id "BSD-")                                           nil         ; e.g. to properly handle BSD-3-Clause-No-Nuclear-License-2014 (2014 is detected as a version number)
       (s/starts-with? id "LZMA-SDK-")                                      "LZMA-SDK"  ; Has multiple versions in one of the ids
@@ -136,6 +137,7 @@
   (case series-id
     "W3C"    "W3C"
     "libpng" "Libpng"
+    "SAX-PD" "SAX-PD"
     (let [[default or-later?] (defaults series-id)]
       (spdx/canonicalise-spdx-expression-fragment (str (default series-ids) (when or-later? "+"))))))
 

@@ -46,35 +46,36 @@
                      [s re-vers])]  ; Always add a version matching component on the end, to handle cases where the version doesn't appear in the name (e.g. Adobe-2006, Arphic-1999)
       (faux/parse (concat [(re/opt-grp #"The" ref/mws)]
                           template
-                          [(re/opt-grp ref/mws ref/public) (re/opt-grp ref/mws ref/license) (re/opt-grp ref/mws ref/date)])
+                          [(re/opt-grp ref/mws ref/public) (re/opt-grp ref/mws ref/license) (re/opt-grp ref/mws ref/date)])   ;####TODO: CHECK THAT THIS IS GENERALLY APPROPRIATE
                   ; only or or-later suffix
                   re-placeholder-oool                   re-oool
                   ; Name alternatives
-                  #"(?i:(?<!\w)Apache(?!\w))"           (re/inline (re/alt-grp (re/join "Apache" (re/opt-grp ref/mws (re/alt-grp "Software" "SW"))) "ASL"))
-                  #"(?i:(?<!\w)Beerware(?!\w))"         (re/inline (re/join "Beer" ref/ows "ware"))
-                  #"(?i:(?<!\w)Classpath\s+exception(?!\w))" (re/inline (re/join (re/opt-grp "GNU" ref/ows) (re/alt-grp "CPE" (re/join "Classpath" ref/ows "exception"))))
+                  #"(?<!\w)(?i:Apache)(?!\w)"           (re/inline (re/alt-grp (re/join "Apache" (re/opt-grp ref/mws (re/alt-grp "Software" "SW"))) "ASL"))
+                  #"(?<!\w)(?i:Beerware)(?!\w)"         (re/inline (re/join "Beer" ref/ows "ware"))
+                  #"(?<!\w)(?i:Classpath\s+exception)(?!\w)" (re/inline (re/join (re/opt-grp "GNU" ref/ows) (re/alt-grp (re/join "Classpath" ref/ows "exception") "CPE")))
                   ; MIT/X11/ISC overlaps
-                  #"(?i:(?<!\w)MIT(?!\w))"              (re/inline (let [x11-or-isc (re/alt-grp "X11" "ISC")
+                  #"(?<!\w)(?i:MIT)(?!\w)"              (re/inline (let [x11-or-isc (re/alt-grp "X11" "ISC")
                                                                          separator  (re/n2m 1 4 ref/ws+slashes)]
                                                                      (re/join (re/-lb x11-or-isc separator)
                                                                               "MIT"
                                                                               (re/-la separator x11-or-isc))))
-                  #"(?i:(?<!\w)X11(?!\w))"              (re/inline (let [mit       "MIT"
+                  #"(?<!\w)(?i:X11)(?!\w)"              (re/inline (let [mit       "MIT"
                                                                          separator (re/n2m 1 4 ref/ws+slashes)]
                                                                      (re/join (re/opt-grp mit separator)
                                                                               "X11"
                                                                               (re/opt-grp separator mit))))
-                  #"(?i:(?<!\w)ISC(?!\w))"              (re/inline (let [mit       "MIT"
+                  #"(?<!\w)(?i:ISC)(?!\w)"              (re/inline (let [mit       "MIT"
                                                                          separator (re/n2m 1 4 ref/ws+slashes)]
                                                                      (re/join (re/opt-grp mit separator)
                                                                               "ISC"
                                                                               (re/opt-grp separator mit))))
                   ; zlib/libpng overlaps
-                  #"(?i:(?<!\w)(?<!zlib/)libpng(?!\w))" (re/inline (let [zlib      "zlib"
+                  #"(?<!\w)(?i:(?<!zlib/)libpng)(?!\w)" (re/inline (let [zlib      "zlib"
                                                                          separator (re/n2m 1 4 ref/ws+slashes)]
                                                                      (re/join (re/-lb zlib separator)
                                                                               "libpng"
                                                                               (re/-la separator zlib))))
+                  #"(?<!\w)(?i:zlib(?:/libpng)?)(?!\w)" (re/inline (re/join "zlib" (re/opt-grp ref/ows #"/?" ref/ows "libpng")))
                   ; Numbers that aren't part of a version
                   (re/inline (re/ncg "number" #"\d+"))  (fn [m] (let [number (get m "number")] (re/join #"0*" number)))))))
 
@@ -100,76 +101,64 @@
 
 (defn- name->regex
   [version-series name]
-;####TODO: FIX THESE REGEXES TO USE FRAGMENTS FROM ref NS
   (some-> (common-replacements name ncg-prefix-name (:versions version-series))
-          (faux/parse ; Special case for some double and/or weird version components
-;                      #"(?i)\(versions 9\.11 to 9\.20\)"                                          #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*11(?:[\s\-–—]+to)?[\s\-–—]+0*9\.0*20\)?"
-;                      #"(?i)\(versions 9\.22 and beyond\)"                                        #"\(?(?:(?:v|ver|versions?)[\s\-–—]*)?0*9\.0*22[\s\-–—]*(\+|(?:and|&)[\s\-–—]*beyond)\)?"
-;                      #"(?i)\(for libpng 0\.5 through 1\.6\.35\)"                                 #"\(?for[\s\-–—]+libpng[\s\-–—]+0+\.0*5[\s\-–—]+through[\s\-–—]+0*1\.0*6\.0*35\)?"
-;                      #"(?i)\(or possibly 2\.0A and 2\.0B\)"                                      #"\(?or[\s\-–—]+possibly[\s\-–—]+0*2\.0+A[\s\-–—]+(?:and|&)[\s\-–—]+0*2\.0+B\)?"
-;                      #"(?i)TORQUE v2\.5\+"                                                       #"TORQUE[\s\-–—]+v0*2\.0*5\+"
-                      ; Special cases for certain phrases in licenses
-                      #"(?<!\w)(?i:Hewlett[\s\-]+Packard)(?!\w)"                                  ref/hewlett-packard
-                      #"(?<!\w)(?i:Microsoft)(?!\w)"                                              ref/microsoft
+          (faux/parse ; Special cases for certain phrases in licenses
                       #"(?<!\w)(?i:End[\s\-]user[\s\-]licen[cs]e[\s\-]agreement|EULA)(?!\w)"      (re/inline (re/alt-grp (re/join "End" ref/mws "User" ref/mws ref/license ref/mws "Agreement") "EULA"))
+;####TODO
 ;                      #"(?<!\w)(?i:Plexus\s+Classworlds\s+Licen[cs]e)(?!\w)"                      #"(?:Plexus(?:[\s\-–—]+Classworlds)?(?:[\s\-–—]+Licen[cs]e)?|Similar[\s\-–—]+to[\s\-–—]+Apache(?:[\s\-–—]+Licen[cs]e)(?:[\s\-–—]+but)?[\s\-–—]+with(?:[\s\-–—]+the)?[\s\-–—]+acknowledge?ment(?:[\s\-–—]+clause)?[\s\-–—]+(?:removed|deleted))"
                       #"\A(?i:Open\s+Software\s+Licen[cs]e)(?!\w)"                                (re/inline (re/join #"Open" ref/mws ref/software ref/mws ref/license))  ; OSL-x.y
                       #"\A(?i:Open\s+Public\s+Licen[cs]e)(?!\w)"                                  (re/inline (re/join #"Open" ref/mws ref/public ref/mws ref/license))  ; OPL-x.y
-                      #"(?<!\w)Unlicense(?!\w)"                                                   (re/inline (re/join #"Un" ref/ows ref/license #"d?"))
-                      #"(?<!\w)Business\s+Source\s+Licen[cs]e(?!\w)"                              (re/inline (re/join (re/-lb "Hyperfiddle" ref/bounded-mws) "Business" ref/mws "Source" ref/mws ref/license))
-;                      #"(?i)(?<!\w)(?<!Microsoft[\s\-–—]+)Reciprocal\s+Public\s+Licen[cs]e(?!\w)" #"(?<!Microsoft[\s\-–—]+)Reciprocal(?:[\s\-–—]+Pub?lic)?[\s\-–—]+Licen[cs]e"
-                      ; Optional words - we replace them twice to ensure the resulting regex consumes leading whitespace in locations other than the start of input
+                      #"(?<!\w)(?i:Unlicense)(?!\w)"                                              (re/inline (re/join #"Un" ref/ows ref/license #"d?"))
+                      #"(?<!\w)(?i:Business\s+Source\s+Licen[cs]e)(?!\w)"                         (re/inline (re/join (re/-lb "Hyperfiddle" ref/bounded-mws) "Business" ref/mws "Source" ref/mws ref/license))
 
-;####TODO: UPDATE THIS TO FEWER REGEXES THAT HANDLE ALL VARIANTS OF "Licen[cs]e|Lizenz" PREFIXED WITH "Open|Open Source|Public|Software"
-; BUT WATCH OUT FOR THE "Open Software License" (OSL-x.y) VERSION SERIES!!!!
-; ALSO USE ref/license, ref/public, ref/ackonwledgement, ETC.
+                      ; Words that are handled elsewhere
+                      #"\A(?i:the\s+)"                                                            ""  ; A leading, optional "the" is always added to every regex, in common-replacements
 
-                      #"(?i)\s+licen[cs]e[\s\-]agreement(?!\w)"                                   #"(?:[\s\-–—]+Licen?[cs]e)?(?:[\s\-–—]+agreement)?"
-                      #"(?i)\s+licen[cs]e(?!\w)"                                                  #"(?:[\s\-–—]+Licen?[cs]e)?"  ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
-                      #"(?i)licen[cs]e(?!\w)"                                                     #"(?:Licen?[cs]e)?"
-                      #"(?i)\s+Lizenz(?!\w)"                                                      #"(?:[\s\-–—]+Lizenz)?"
-                      #"(?i)Lizenz(?!\w)"                                                         #"(?:Lizenz)?"
-                      #"(?i)\s+free(?!\w)"                                                        #"(?:[\s\-–—]+free)?"
-                      #"(?i)free(?!\w)"                                                           #"(?:free)?"
-                      #"(?i)\s+public(?!\w)"                                                      #"(?:[\s\-–—]+Pub?lic)?"  ; Note: the optional missing `b` is a known misspelling in a POM license name: e.g. https://repo.clojars.org/org/immutant/immutant-common/1.1.4/immutant-common-1.1.4.pom (there are others too)
-                      #"(?i)public(?!\w)"                                                         #"(?:Pub?lic)?"
-                      #"(?i)\s+software(?!\w)"                                                    #"(?:[\s\-–—]+Software)?"
-                      #"(?i)software(?!\w)"                                                       #"(?:Software)?"
-                      #"(?i)\s+hardware(?!\w)"                                                    #"(?:[\s\-–—]+Hardware)?"
-                      #"(?i)hardware(?!\w)"                                                       #"(?:Hardware)?"
-                      #"(?i)\s+generic(?!\w)"                                                     #"(?:[\s\-–—]+Generic)?"
-                      #"(?i)generic(?!\w)"                                                        #"(?:Generic)?"
-                      #"(?i)\s+international(?!\w)"                                               #"(?:[\s\-–—]+International)?"
-                      #"(?i)international(?!\w)"                                                  #"(?:International)?"
-                      ; Alternative spellings
-                      #"(?i)\s+Australia(?!\w)"                                                   #"[\s\-–—]+(?:Australia|AU)"
-                      #"(?i)\s+Austria(?!\w)"                                                     #"[\s\-–—]+(?:Austria|AT)"
-                      #"(?i)\s+England and Wales(?!\w)"                                           #"[\s\-–—]+(?:England[\s\-–—]*(?:and|&)[\s\-–—]*Wales|GB|UK)"
-                      #"(?i)\s+France(?!\w)"                                                      #"[\s\-–—]+(?:France|FR)"
-                      #"(?i)\s+(Germany|Deutsche)(?!\w)"                                          #"[\s\-–—]+(?:Germany?|DE|Deutsche)"
-                      #"(?i)\s+Japan(?!\w)"                                                       #"[\s\-–—]+(?:Japan|JP)"
-                      #"(?i)\s+Netherlands(?!\w)"                                                 #"[\s\-–—]+(?:Netherlands|NL)"
-                      #"(?i)(?<!\w)(United Kingdom|UK)(?!\w)"                                     #"(?:United[\s\-–—]+Kingdom|GB|UK)"
-                      #"(?i)\s+(USA?|United States)(?!\w)"                                        #"[\s\-–—]+(?:United[\s\-–—]+States(?:[\s\-–—]+of[\s\-–—]+America)?|USA?)"
-                      #"(?i)(?<!\w)(European Union|EU)(?!\w)"                                     #"(?:European[\s\-–—]+Union|EU)"
-                      #"(?i)\s+University of California(?!\w)"                                    #"[\s\-–—]+(?:University[\s\-–—]+of[\s\-–—]+(?:California|CA)|UC|Cal)"
-                      #"(?i)(?<!\w)acknowledge?ments?(?!\w)"                                      #"Acknowledge?ments?"
-                      #"(?i)(?<!\w)merchant[ai]bility(?!\w)"                                      #"Merchant[ai]bility"
-                      #"(?i)(?<!\w)non-?commercial(?!\w)"                                         #"Non[-–—]?commercial"  ; Note: hyphen, en-dash, em-dash
-                      ; Common conjunctions etc.
-                      #"(?<!\w)(?i:open\s+source)(?!\w)"                                          #"(?:Open[\s\-–—]+Source|FOSS|OSS)"
-                      #"(?i)(?<!\w)the\s+"                                                        #"(?:The[\s\-–—]+)?"
-                      #"(?i)(?<!\w)w/"                                                            #"(?:w/|with[\s\-–—]+)"
-                      #"(?i)(?<!\w)(and|&)(?!\w)"                                                 #"(?:and|&)"
-                      ; Character equivalents
-                      #"(?iu:é)"                                            #"(?:é|é|e)"  ; As of License List v3.26.0 'é' is the only accented character present, and it can represented 2 ways in Unicode, one of which cannot be used in a regex character class as it's made up of multiple codepoints
-                      #"\""                                                 (re/inline (re/opt ref/qots))
-                      #"\s*/\s*"                                            (re/inline (re/join ref/ows ref/hyphens+slashes ref/ows))
+                      ; Optional words
+                      #"(?<!\w)(?i:licen[cs]e[\s\-]agreement)(?!\w)"                              (re/inline (re/opt-grp ref/license ref/mws "agreement"))
+;####TEST!!!!
+;                      #"(?<!\w)(?i:licen[cs]e)(?!\w)"                                             ref/license
+                      #"(?<!\w)(?i:(?:(?:software|public)\s+)*licen[cs]e)(?!\w)"                  (re/inline (re/opt-grp (re/zom-grp ref/ows (re/alt-grp "style" ref/public ref/software) ref/ows) ref/license))
+                      #"(?<!\w)(?i:Lizenz)(?!\w)"                                                 (re/inline (re/opt (re/alt-grp ref/license "Lizenz")))
+                      #"(?<!\w)(?i:public)(?!\w)"                                                 (re/inline (re/opt-grp ref/public))
+                      #"(?<!\w)(?i:software)(?!\w)"                                               (re/inline (re/opt-grp ref/software))
+                      #"(?<!\w)(?i:hardware)(?!\w)"                                               (re/inline (re/opt-grp ref/hardware))
+                      #"(?<!\w)(?i:free)(?!\w)"                                                   (re/inline (re/opt-grp "Free"))
+                      #"(?<!\w)(?i:generic)(?!\w)"                                                (re/inline (re/opt-grp "Generic"))
+                      #"(?<!\w)(?i:international)(?!\w)"                                          (re/inline (re/opt-grp "International"))
 
-                      ;####TODO: REPLACE THESE WITH CONSTANTS FROM ref
-                      #"[\s\-–]+"                                           ref/mws
-                      #"[\(\[\{«‹]+"                                        #"[\(\[\{«‹]*"      ; Make parens optional
-                      #"[\)\]\}»›]+"                                        #"[\)\]\}»›]*")
+                      ; Alternative spellings - organisations
+                      #"(?<!\w)(?i:Hewlett[\s\-]+Packard)(?!\w)"                                  ref/hewlett-packard
+                      #"(?<!\w)(?i:Microsoft)(?!\w)"                                              ref/microsoft
+                      #"(?<!\w)(?i:University of California)(?!\w)"                               ref/uc
+                      #"(?<!\w)(?i:Sun)(?!\w)"                                                    ref/sun-oracle
+
+                      ; Alternative spellings - countries
+                      #"(?<!\w)(?i:Australia)(?!\w)"                                              ref/au
+                      #"(?<!\w)(?i:Austria)(?!\w)"                                                ref/at
+                      #"(?<!\w)(?i:England (?:and|&) Wales|England|United Kingdom|UK)(?!\w)"      ref/gb
+                      #"(?<!\w)(?i:France)(?!\w)"                                                 ref/fr
+                      #"(?<!\w)(?i:Germany|Deutsche)(?!\w)"                                       ref/de
+                      #"(?<!\w)(?i:Japan)(?!\w)"                                                  ref/jp
+                      #"(?<!\w)(?i:Netherlands)(?!\w)"                                            ref/nl
+                      #"(?<!\w)(?i:United States|USA?)(?!\w)"                                     ref/us
+                      #"(?<!\w)(?i:European Union|EU)(?!\w)"                                      ref/eu
+
+                      ; Alternative spellings & misspellings
+                      #"(?<!\w)(?i:acknowledge?ments?)(?!\w)"                                     ref/acknowledgement
+                      #"(?<!\w)(?i:merchant[ai]bility)(?!\w)"                                     ref/merchantability
+                      #"(?<!\w)(?i:non-?commercial)(?!\w)"                                        (re/inline (re/join "non" ref/ows "commercial"))
+                      #"(?<!\w)(?i:open\s+source(?:\s+software)?)(?!\w)"                          ref/open-source
+
+                      ; Equivalents
+                      #"(?<!\w)(?i:and|&)(?!\w)"                                                  ref/ands
+                      #"(?<!\w)(?:w/)"                                                            ref/withs
+                      #"(?iu:é)"                                                                  #"(?:é|é|e)"  ; As of License List v3.28.0 'é' is the only accented character present, and it can represented 2 ways in Unicode, one of which cannot be used in a regex character class as it's made up of multiple codepoints
+                      #"[\"']"                                                                    (re/inline (re/opt ref/qots))
+                      #"[/\\]"                                                                    (re/inline (re/opt ref/hyphens+slashes))
+                      ref/mopen-parens                                                            ref/oopen-parens
+                      ref/mclose-parens                                                           ref/oclose-parens
+                      #"[\s\-–]+"                                                                 ref/ows)
         ; Cleanup, escape, and concat into a single pattern
           (->> (u/mapcat-str #(vector (re/esc %)))
                (apply re/join))))
@@ -188,7 +177,10 @@
   have entries in the result."
   ([ids names] (regexes-impl ids names nil))
   ([ids names version-series]
-   (let [id-regexes   (seq (map (partial id->regex   version-series) ids))
+   ;####TODO: REVISIT THIS POTENTIAL OPTIMISATION, BUT FILTER THE IDS NOT THE NAMES (SINCE THE NAME REGEXES ARE MORE GENERAL)
+   ; Any names that are identical to an id, after "license" or "public" is removed, are removed
+   (let [;distinct-names (seq (filter identity (map #(when-not (some #{(-> % (s/replace (re/inline (re/fgrp "i" ref/license)) "") (s/replace (re/inline (re/fgrp "i" ref/public)) ""))} ids) %) names)))
+         id-regexes   (seq (map (partial id->regex   version-series) ids))
          name-regexes (seq (map (partial name->regex version-series) names))
          combinations (combo/cartesian-product id-regexes name-regexes)]
      (map (fn [[id-regex name-regex]]

@@ -105,21 +105,22 @@
 ; Map of confidence explanations to their associated confidence scores
 (def ^:private confidence-explanation->confidence {
   ; General confidence explanations
-  :missing-version                :low     ; Version is completely missing
-  :invalid-version                :low     ; Version is invalid (e.g. "Apache 2.1")
-  :version-near-match             :medium  ; Version is a near match (e.g. "Apache 2", "Apache 2.0.0")
-  :inconsistent-versions          :medium  ; Multiple valid versions found, but they don't match (e.g. "Apache License 1.1 (Apache-2.0)")
+  :missing-version                              :low     ; Version is completely missing
+  :invalid-version                              :low     ; Version is invalid (e.g. "Apache 2.1")
+  :version-near-match                           :medium  ; Version is a near match (e.g. "Apache 2", "Apache 2.0.0")
+  :inconsistent-versions                        :medium  ; Multiple valid versions found, but they don't match (e.g. "Apache License 1.1 (Apache-2.0)")
   ; BSD-specific confidence explanations
-  :missing-bsd-clause-count       :low     ; BSD clause count is missing (e.g. "BSD")
-  :invalid-bsd-clause-count       :low     ; BSD clause count is invalid (e.g. "BSD 99 Clause")
-  :inconsistent-bsd-clause-counts :low     ; BSD clause counts are inconsistent (e.g. "2 Clause BSD 4 Clause")
-  :invalid-bsd-combination        :low     ; Invalid combination of BSD clause counts and suffixes (e.g. "BSD 2 Clause No Nuclear License")
+  :missing-bsd-clause-count                     :low     ; BSD clause count is missing (e.g. "BSD")
+  :invalid-bsd-clause-count                     :low     ; BSD clause count is invalid (e.g. "BSD 99 Clause")
+  :inconsistent-bsd-clause-counts               :low     ; BSD clause counts are inconsistent (e.g. "2 Clause BSD 4 Clause")
+  :invalid-bsd-clause-count-variant-combination :low     ; Invalid combination of BSD clause counts and variant (e.g. "BSD 2 Clause No Nuclear License")
+  :multiple-bsd-variants                        :low     ; More than one BSD variant provided (e.g. "BSD 3 Clause HP UC")
   ; CC-BY-specific confidence explanations
-  :invalid-cc-suffix              :low     ; Invalid combination of CC version and suffix (e.g. "CC BY 4.0 Australia")
+  :invalid-cc-suffix                            :low     ; Invalid combination of CC version and suffix (e.g. "CC BY 4.0 Australia")
   ; GNU-specific confidence explanations
-  :missing-version-range          :medium  ; GNU family version range is missing (e.g. "GPL 2.0" - missing "-only" or "-or-later")
+  :missing-version-range                        :medium  ; GNU family version range is missing (e.g. "GPL 2.0" - missing "-only" or "-or-later")
   ; URI-specific confidence explanations
-  :download-skipped               :low     ; URI is in the allow list, but downloading was skipped
+  :download-skipped                             :low     ; URI is in the allow list, but downloading was skipped
 })
 
 (def ^:private strategies->match-type

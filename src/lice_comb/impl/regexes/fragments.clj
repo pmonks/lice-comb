@@ -31,7 +31,7 @@
 ; limitations in the JVM's regex engine).
 
 (def ^:private raw-hyphens #"\p{Pd}")
-(def raw-ws      (re/join #"\p{IsWhitespace}" raw-hyphens (re/esc "_,.()")))  ; Character classes etc. that we consider to be whitespace
+(def raw-ws                (re/join #"\p{IsWhitespace}" raw-hyphens (re/esc "_,.()")))  ; Character classes etc. that we consider to be whitespace
 (def ^:private raw-slashes (re-pattern (re/esc "\\/")))
 (def ^:private raw-quotes  (re/join (re/esc "\"'`") #"\p{Pi}\p{Pf}"))  ; Note: " ' ` not considered initial (\p{Pi}) or final (\p{Pf}) punctuation in Unicode
 
@@ -51,6 +51,13 @@
 (def mqots              (re/oom qots))
 (def single-qots        (re/chcl (re/esc "'`‛’‘‚❜❛＇")))  ; Note: these are all different Unicode characters, despite appearances
 
+(def open-paren         (re/chcl #"\p{Ps}"))
+(def oopen-parens       (re/zom open-paren))
+(def mopen-parens       (re/oom open-paren))
+(def close-paren        (re/chcl #"\p{Pe}"))
+(def oclose-parens      (re/zom close-paren))
+(def mclose-parens      (re/oom close-paren))
+
 (def ws+hyphens         (re/chcl raw-ws raw-hyphens))
 (def ws+slashes         (re/chcl raw-ws raw-slashes))
 (def hyphens+slashes    (re/chcl raw-hyphens raw-slashes))
@@ -61,10 +68,10 @@
 (def nwb (re/-lb #"\w"))
 (def nwa (re/-la #"\w"))
 
-; Dates (note: approximate - will match some invalid dates such as "99nd May 2025")
+; Dates (note: approximate - will match some invalid dates such as "39nd May 2025")
 
 (def date (re/grp ; Day (optional)
-                  (re/opt-grp #"\d\d?" ows #"(?:st|nd|rd|th)?" mws)
+                  (re/opt-grp #"[0123]?\d" ows #"(?:st|nd|rd|th)?" mws)
                   ; Textual month (mandatory)
                   (re/alt-grp #"Jan(?:uary)?" #"Feb(?:ruary)?" #"Mar(?:ch)?" #"Apr(?:il)?" #"May" #"June?" #"July?" #"Aug(?:ust)?" #"Sep(?:t(?:ember)?)?" #"Oct(?:ober)?" #"Nov(?:ember)?" #"Dec(?:ember)?")
                   mws
@@ -76,16 +83,19 @@
 (def decimal (re/join #"\d+" (re/opt-grp #"\.\d+")))
 (def semver  (re/join #"\d+" (re/zom-grp #"\.\d+")))
 
-; Common word variations
+; Common word variations / misspellings
 
 (def ands            (re/alt-grp "and" "&"))
 (def withs           (re/alt-grp "with" "w/"))
 (def acknowledgement #"acknowledge?ment")
-(def license         #"licen?[cs]e")   ; Note: the optional missing `n` is a known misspelling in a POM license name: https://repo.clojars.org/net/unit8/excelebration/excelebration/0.2.0/excelebration-0.2.0.pom
-(def public          #"pub?lic")       ; Note: the optional missing `b` is a known misspelling in a POM license name: https://repo.clojars.org/org/immutant/immutant-common/1.1.4/immutant-common-1.1.4.pom (there are others too)
+(def merchantability #"Merchant[ai]bility")
+(def license         #"lices?n?[cs]{0,2}e?s?")
+(def public          #"pub?lic")          ; Note: the optional missing `b` is a known misspelling in a POM license name: https://repo.clojars.org/org/immutant/immutant-common/1.1.4/immutant-common-1.1.4.pom (there are others too)
+(def open-source     (re/alt-grp (re/join "Open" ows "Source" (re/opt-grp ows "Software")) "FOSS" "OSS"))
 (def proprietary     #"propriet[aoe]ry")
 (def general         #"genere?al")     ; Note: "genereal" is a known misspelling in a POM license name: https://repo.clojars.org/clj-file-zip/clj-file-zip/0.1.0/clj-file-zip-0.1.0.pom
-(def software        (re/alt-grp #"Software" #"S/?W"))
+(def software        (re/alt-grp #"Soft?ware" #"S/?W"))
+(def hardware        (re/alt-grp #"Hardware" #"H/?W"))
 (def version-label   (re/join "v" (re/opt-grp "er" (re/opt-grp "sion" (re/opt "s")))))
 
 ; Country variations
@@ -98,8 +108,13 @@
 (def jp (re/alt-grp "Japan" "JP"))
 (def nl (re/alt-grp "Netherlands" "NL"))
 (def us (re/alt-grp (re/join "United" mws "States" (re/opt-grp (re/opt-grp mws "of") mws "America")) #"USA?"))
+(def eu (re/alt-grp (re/join "European" mws "Union") "EU"))
 
-; Company name variations
+; Organisation name variations
 
 (def microsoft       (re/alt-grp "Microsoft" "MS"))
 (def hewlett-packard (re/alt-grp (re/join "Hewlett" ows "Packard") "HP"))
+(def sun-oracle      (re/alt-grp (re/join "Sun" (re/opt-grp mws "Microsystems" (re/opt-grp mws #"Inc\.?"))) (re/join "Oracle" (re/opt-grp mws #"Corp(?:oration)?"))))
+(def uc              (re/alt-grp (re/join "University" mws "of" mws "California") "UC"))
+(def osi             (re/alt-grp (re/join "Open" ows "Source" mws "Initiative") "OSI"))
+

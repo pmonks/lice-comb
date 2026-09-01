@@ -21,20 +21,19 @@
 
 ; MX4J license is Apache 1.1 - see https://wiki.spdx.org/view/Legal_Team/License_List/Licenses_Under_Consideration#Processed_License_Requests
 
-; Only public for ease of testing
-(def re-mx4j
-  (re/fgrp "i"
-           ref/nwb
-           (re/opt-grp "The" ref/ows)
-           "MX4J"
-           (re/opt-grp ref/mws ref/public)
-           (re/opt-grp ref/mws ref/license)
-           (re/opt-grp ref/ows (verexp/expression-regex ["1.0"]))
-           ref/nwa))
+; Public for ease of testing
+(def re (re/fgrp "i"
+                 ref/nwb
+                 (re/opt-grp "The" ref/ows)
+                 "MX4J"
+                 (re/opt-grp ref/mws ref/public)
+                 (re/opt-grp ref/mws ref/license)
+                 (re/opt-grp ref/ows (verexp/expression-regex ["1.0"]))
+                 ref/nwa))
 
 (defn detect
   "Detects any MX4J identifiers found inside the `String`s in `coll` and
   replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
-  (faux/parse coll re-mx4j (partial mp/match->fragment-info "Apache-1.1" "MX4J regex")))
+  (faux/parse coll re (partial mp/match->fragment-info "Apache-1.1" "MX4J regex")))

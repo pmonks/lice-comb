@@ -20,24 +20,25 @@
 
 (def ids-d (delay ["WTFPL"]))
 
-(def re-wtf (re/fgrp "i"
-              (re/alt-grp
-                (re/join (re/opt-grp ref/ows "WTFPL" ref/ows)
-                         (re/opt-grp "The" ref/mws)
-                         "Do" ref/mws
-                         (re/alt-grp "WTF" (re/join "What" ref/mws "The" ref/mws #"[f*][us*][c*][k*]")) ref/mws   ; Note: don't need to escape * inside character classes
-                         (re/alt-grp "You" "U") ref/mws
-                         "Want" ref/mws
-                         (re/opt (re/alt-grp "To" "2")))
-                "WTFPL")
-              (re/opt-grp ref/mws ref/public)
-              (re/opt-grp ref/mws ref/license)
-              (re/opt-grp ref/ows ref/version-label ref/ows #"[\d\.]+")   ; We don't care about capturing any version numbers included in a WTFPL value, as it has no versions
-              #"(?!\w)"))
+; Public for ease of testing
+(def re (re/fgrp "i"
+                 (re/alt-grp
+                   (re/join (re/opt-grp ref/ows "WTFPL" ref/ows)
+                            (re/opt-grp "The" ref/mws)
+                            "Do" ref/mws
+                            (re/alt-grp "WTF" (re/join "What" ref/mws "The" ref/mws #"[f*][us*][c*][k*]")) ref/mws   ; Note: don't need to escape * inside character classes
+                            (re/alt-grp "You" "U") ref/mws
+                            "Want" ref/mws
+                            (re/opt (re/alt-grp "To" "2")))
+                   "WTFPL")
+                 (re/opt-grp ref/mws ref/public)
+                 (re/opt-grp ref/mws ref/license)
+                 (re/opt-grp ref/ows ref/version-label ref/ows #"[\d\.]+")   ; We don't care about capturing any version numbers included in a WTFPL value, as it has no versions
+                 ref/nwa))
 
 (defn detect
   "Detects any WTFPL identifiers found inside the `String`s in `coll` and
   replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
-  (faux/parse coll re-wtf (partial mp/match->fragment-info "WTFPL" "WTFPL regex")))
+  (faux/parse coll re (partial mp/match->fragment-info "WTFPL" "WTFPL regex")))

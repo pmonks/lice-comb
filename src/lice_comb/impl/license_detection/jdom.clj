@@ -20,25 +20,25 @@
 
 ; JDOM License is Plexus - see https://lists.spdx.org/g/Spdx-legal/topic/22080544#msg997
 
-(def ^:private re-jdom
-  (re/fgrp "i"
-           ref/nwb
-           "Similar" ref/mws
-           "to" ref/mws
-           (re/opt-grp "the" ref/mws)
-           "Apache" ref/mws
-           (re/opt-grp ref/license ref/mws)
-           (re/opt-grp "but" ref/mws)
-           ref/withs ref/mws
-           (re/opt-grp "the" ref/mws)
-           ref/acknowledgement ref/mws
-           "clause" ref/mws
-           "removed"
-           ref/nwa))
+; Public for ease of testing
+(def re (re/fgrp "i"
+                 ref/nwb
+                 "Similar" ref/mws
+                 "to" ref/mws
+                 (re/opt-grp "the" ref/mws)
+                 "Apache" ref/mws
+                 (re/opt-grp ref/license ref/mws)
+                 (re/opt-grp "but" ref/mws)
+                 ref/withs ref/mws
+                 (re/opt-grp "the" ref/mws)
+                 ref/acknowledgement ref/mws
+                 "clause" ref/mws
+                 "removed"
+                 ref/nwa))
 
 (defn detect
   "Detects any JDOM license declarations found inside the `String`s in `coll`
   and replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
-  (faux/parse coll re-jdom (partial mp/match->fragment-info "Plexus" "JDOM regex")))
+  (faux/parse coll re (partial mp/match->fragment-info "Plexus" "JDOM regex")))

@@ -20,17 +20,17 @@
 
 ; Bouncy Castle License is MIT - see https://github.com/spdx/license-list-XML/issues/910
 
-(def ^:private re-bouncy-castle
-  (re/fgrp "i"
-           ref/nwb
-           (re/opt-grp "The" ref/ows)
-           "Bouncy" ref/ows "Castle"
-           (re/opt-grp ref/mws ref/license)
-           ref/nwa))
+; Public for ease of testing
+(def re (re/fgrp "i"
+                 ref/nwb
+                 (re/opt-grp "The" ref/ows)
+                 "Bouncy" ref/ows "Castle"
+                 (re/opt-grp ref/mws ref/license)
+                 ref/nwa))
 
 (defn detect
   "Detects any Bouncy Castle license declarations found inside the `String`s in
   `coll` and replaces them with a fragment info map in that location. Returns
   other elements unchanged."
   [coll]
-  (faux/parse coll re-bouncy-castle (partial mp/match->fragment-info "MIT" "Bouncy Castle regex")))
+  (faux/parse coll re (partial mp/match->fragment-info "MIT" "Bouncy Castle regex")))

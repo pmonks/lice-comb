@@ -109,10 +109,10 @@
 
 (deftest irregular-and-mixed-tests
   (testing "Version series with irregular ids haven't changed as new SPDX license lists are released"
-    (is (= #{"libpng" "W3C" "LZMA-SDK"}
+    (is (= #{"libpng" "W3C" "LZMA-SDK" "SAX-PD"}
         (set (keys (irregular-ids))))))
   (testing "Version series with irregular names haven't changed as new SPDX license lists are released"
-    (is (= #{"CC-BY-NC-ND" "CC-BY-SA" "libpng" "CC-BY-NC" "W3C" "CC-BY-ND" "LZMA-SDK" "CC-BY-NC-SA" "CC-BY" "LGPL" "OLDAP"}
+    (is (= #{"CC-BY-NC-ND" "CC-BY-SA" "libpng" "CC-BY-NC" "W3C" "CC-BY-ND" "LZMA-SDK" "CC-BY-NC-SA" "CC-BY" "LGPL" "OLDAP" "SAX-PD"}
            (set (keys (irregular-names))))))
   (testing "Version series with mixed identifier types haven't changed as new SPDX license lists are released"
     (is (= #{"SHL"} (set (keys (mixed-type-version-series)))))))

@@ -54,7 +54,7 @@
 (def ^:private re-agpl-words-before (re/grp (apply re/alt (concat gnu-words [(re/join #"\(?AGPL" ref/ows #"\)?") "Affero"]))))
 (def ^:private re-agpl-words-after  (re/grp (apply re/alt (concat gnu-words [(re/join #"\(?AGPL" gnu-version-esque-class #"\)?") "Affero"]))))  ; Only include version variants *after* the actual version
 
-; Only public for ease of testing
+; Public for ease of testing
 (def re-agpl (re/fgrp "ix"
                       ref/nwb
                       "\n\n#### Leading word salad ####\n"
@@ -77,7 +77,7 @@
 (def ^:private re-lgpl-words-before  (re/grp (apply re/alt (concat gnu-words [(re/join #"\(?LGPL" ref/ows #"\)?") re-lesser-or-library]))))
 (def ^:private re-lgpl-words-after   (re/grp (apply re/alt (concat gnu-words [(re/join #"\(?LGPL" gnu-version-esque-class #"\)?") re-lesser-or-library]))))  ; Only include version variants *after* the actual version
 
-; Only public for ease of testing
+; Public for ease of testing
 (def re-lgpl (re/fgrp "ix"
                       ref/nwb
                       "\n\n#### Leading word salad ####\n"
@@ -102,7 +102,7 @@
 (def ^:private re-gpl-words-before (re/grp (apply re/alt (concat gnu-words [(re/join #"\(?GPL" ref/ows #"\)?")]))))
 (def ^:private re-gpl-words-after  (re/grp (apply re/alt (concat gnu-words [(re/join #"\(?GPL" gnu-version-esque-class)]))))  ; Only include version variants *after* the actual version
 
-; Only public for ease of testing
+; Public for ease of testing
 (def re-gpl (re/fgrp "ix"
                      ref/nwb
                      "\n\n#### Leading word salad ####\n"

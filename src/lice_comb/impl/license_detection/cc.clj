@@ -70,7 +70,7 @@
         (re/ncg "netherlands"       ref/nl)
         (re/ncg "usa"               ref/us)))))
 
-; Only public for ease of testing
+; Public for ease of testing
 (def re (re/fgrp "ix"
                  ref/nwb
                  (re/opt-grp "The" ref/mws)

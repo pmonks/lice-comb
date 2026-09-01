@@ -23,7 +23,6 @@
   [strategy m]
   (mp/match->fragment-info (:match m) strategy m))
 
-
 (defn detect
   "Detects any SPDX license or addition refs found in the `String`s in
   `coll` with a fragment info map. Returns other elements unchanged."

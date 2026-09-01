@@ -19,7 +19,8 @@
             [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
-(def ^:private re-public-domain
+; Public for ease of testing
+(def re
   (let [re-cc0 (re/alt-grp (re/join #"Creative" ref/ows #"Commons") (re/join "CC" (re/n2m 0 4 ref/ws+hyphens+slashes) (re/n2m 0 4 "0")))]  ; Make sure this regex _doesn't_ match if preceeded or followed by "CC0"
     (re/fgrp "i"
              ref/nwb
@@ -29,6 +30,7 @@
              (re/-la ref/bounded-ows (re/opt-grp #"per" ref/bounded-ows) re-cc0)  ; Or unbounded look ahead groups
              ref/nwa)))
 
+; Note: public because it's used by lice-comb.impl.parsing.parser when collapsing runs of unidentified LicenseRefs
 (def strategy "Public domain regex")
 
 (defn detect
@@ -36,4 +38,4 @@
   and replaces them with a fragment info map in that location. Returns other
   elements unchanged."
   [coll]
-  (faux/parse coll re-public-domain (partial mp/match->fragment-info (spdx/public-domain) strategy)))
+  (faux/parse coll re (partial mp/match->fragment-info (spdx/public-domain) strategy)))

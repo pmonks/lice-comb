@@ -91,7 +91,7 @@
     to ensure that the fragment is wrapped in additional fragments to do that,
     if needed (e.g. whitespace)."
   ([version-numbers] (expression-regex nil version-numbers))
-  ([ ^String ncg-prefix version-numbers]
+  ([^String ncg-prefix version-numbers]
    (when (seq version-numbers)
      (let [version-number-regex (re/ncg (when-not (nil? ncg-prefix) (str ncg-prefix ncg-version-number)) (ver/range-regex version-numbers))
            suffix-regex         (suffix-regex ncg-prefix)]

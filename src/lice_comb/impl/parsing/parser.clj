@@ -32,6 +32,7 @@
             [lice-comb.impl.license-detection.spdx-special-forms     :as spdx-special-forms]
             [lice-comb.impl.license-detection.uris                   :as uris]
             [lice-comb.impl.license-detection.bsd                    :as bsd]
+            [lice-comb.impl.license-detection.freebsd-netbsd         :as freebsd-netbsd]
             [lice-comb.impl.license-detection.cc                     :as cc]
             [lice-comb.impl.license-detection.gnu                    :as gnu]
             [lice-comb.impl.license-detection.wtf                    :as wtf]
@@ -167,20 +168,34 @@
                  %)
               (partition-by keyword? coll)))))
 
+(defn- detect-copyright-notices
+  "Detects copyright notices in coll and replaces them with an unidentified
+  placeholder."
+  [coll]
+  (map #(if (and (string? %)
+                 (re-find (re/inline (re/fgrp "i" (re/alt "copyright" #"\(c\)" "©️" "©"))) %))
+          {:copyright-notice (s/trim %)}
+          %)
+       coll))
+
 (defn- strip-detritus
   "Strips detritus from `coll`."
   [coll]
   (seq (filter #(if (string? %)
                   (not (s/blank? %))
                   (not (nil? %)))
-               (->> (-> coll
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Dual" ref/ows ref/nwa)) nil)
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb (re/opt-grp "Double") ref/ows "licensed" ref/ows "under" (re/opt-grp ref/ows "the") ref/nwa)) nil)
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Open" ref/ows "Source" ref/ows "Initiative" ref/nwa)) nil)
-                        (faux/replace-in-strings (re/inline (re/join ref/nwb "Distributed" ref/ows "under" ref/ows (re/alt-grp "the" "an") ref/nwa)) nil))
-                    (u/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all Unicode word characters and trim the result
-                                 (when (>= (count s) 3)                         ; Then remove anything short
-                                   %)))))))
+               (->> (faux/parse coll
+                                (re/inline (re/fgrp "i" ref/ows (re/opt-grp "also" ref/ows) "included" ref/ows "in" ref/ows "the" ref/ows "jar" ref/ows "file" ref/ows ref/nwa)) nil
+                                (re/inline (re/fgrp "i" ref/ows (re/opt-grp "Double") ref/ows "licensed" ref/ows "under" (re/opt-grp ref/ows "the") ref/ows ref/nwa))            nil
+                                (re/inline (re/fgrp "i" ref/ows "Distributed" ref/ows "under" (re/opt-grp ref/ows (re/alt-grp "the" "an")) ref/ows ref/nwa))                     nil
+                                (re/inline (re/fgrp "i" ref/ows "see" ref/mws ref/license (re/opt-grp ref/mws "for" ref/mws "details") ref/ows ref/nwa))                         nil
+                                (re/inline (re/fgrp "i" ref/ows ref/osi ref/ows ref/nwa))                                                                                        nil
+                                (re/inline (re/fgrp "i" ref/ows (re/alt-grp "style" "like") ref/mws ref/license ref/ows ref/nwa))                                                nil
+                                (re/inline (re/fgrp "i" ref/ows "current" ref/ows ref/nwa))                                                                                      nil
+                                (re/inline (re/fgrp "i" ref/ows "Dual" ref/ows ref/nwa))                                                                                         nil)
+                    (u/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all non-word-characters (Unicode) and trim the result
+                                  (when (>= (count s) 3)                        ; Then remove anything short
+                                    %)))))))
 
 (defn- sub-unidentified-placeholders
   "Replace any non-blank `String`s in `coll` with an unidentified placeholder (a
@@ -196,6 +211,11 @@
   "Is `x` an unidentified placeholder?"
   [x]
   (boolean (and (map? x) (:unidentified x))))
+
+(defn- copyright-placeholder?
+  "Is `x` a copyright placeholder?"
+  [x]
+  (boolean (and (map? x) (:copyright-notice x))))
 
 (defn- unidentified-fragment-info
   "Constructs a fragment info map for an unidentified ref and src."
@@ -218,8 +238,9 @@
   (let [s (:unidentified m)]
     (unidentified-fragment-info (spdx/name->unidentified-addition-ref s) s)))
 
-(defn- finalise-operators-and-unidentified-placeholders
-  "Finalises operator keywords in `coll` and unidentified placeholders, by:
+(defn- finalise-operators-and-placeholders
+  "Finalises operator keywords in `coll` and placeholders, by:
+  * Removing copyright placeholders
   * Replacing unidentified placeholders with a fragment info containing either
     a LicenseRef or an AdditionRef
   * Resolving `:or-with` and `:and-with` (to either `:or`, `:and` or `:with`)
@@ -240,13 +261,18 @@
                     :or-with  :or
                     :and-with :and
                     elem)))
-              (if (unidentified-placeholder? elem)
-                ; It's an unidentified placeholder - finalise it based on the prior operator (if any)
-                (case (nth coll (dec idx) nil)
-                  :with (unidentified-placeholder->addition-ref-fragment-info elem)
-                  (unidentified-placeholder->license-ref-fragment-info elem))
+              (cond
+                ; Copyright placeholder - remove.  Perhaps in future we'd use these for something...
+                (copyright-placeholder? elem) nil
+
+                ; Unidentified placeholder - finalise it based on the prior operator (if any)
+                (unidentified-placeholder? elem)
+                  (case (nth coll (dec idx) nil)
+                    :with (unidentified-placeholder->addition-ref-fragment-info elem)
+                    (unidentified-placeholder->license-ref-fragment-info elem))
+
                 ; It's a fragment info - pass it through as-is
-                elem)))]
+                :else elem)))]
     (filter identity (map-indexed finaliser coll))))
 
 (defn- collapse-lice-comb-licenserefs
@@ -332,53 +358,59 @@
   matching attempted on the content (if the URI isn't found in the SPDX license
   list or 'well known URI' list first, and only if the URI's hostname is in a
   small set of allowed domains)."
-  [^CharSequence n ^Boolean attempt-download-and-match?]
-  (when-not (s/blank? n)
-    (let [n (s/trim n)]
-      ; Alternative 1 - an SPDX expression.  In the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should move into the parsing sequence in parse-internal.
-      (if-let [parse-tree (sx/parse n)]
-        (let [canonicalised-expression (sx/unparse parse-tree)
-              strategy                 (let [ids (sx/extract-ids parse-tree)]
-                                         (if (and (= 1 (count ids))
-                                                  (= :license-id (si/id-type (first ids))))
-                                           "SPDX identifier"
-                                           "SPDX expression"))
-              ei                       (info/fragment-info canonicalised-expression n strategy)]
-          {canonicalised-expression (list ei)})
+  ([^CharSequence n] (parse-name n false))
+  ([^CharSequence n ^Boolean attempt-download-and-match?]
+   (when-not (s/blank? n)
+     (let [n (s/trim n)]
+       ; Alternative 1 - an SPDX expression.  In the unlikely event https://github.com/pmonks/clj-spdx/issues/66 is addressed this should move into the parsing sequence in parse-internal.
+       (if-let [parse-tree (sx/parse n)]
+         (let [canonicalised-expression (sx/unparse parse-tree)
+               strategy                 (let [ids (sx/extract-ids parse-tree)]
+                                          (if (and (= 1 (count ids))
+                                                   (= :license-id (si/id-type (first ids))))
+                                            "SPDX identifier"
+                                            "SPDX expression"))
+               ei                       (info/fragment-info canonicalised-expression n strategy)]
+           {canonicalised-expression (list ei)})
 
-        (or ; Alternative 2 - attempt to parse the name
-            (some-> [n]
-                    ; License detection within n, with short circuiting of steps if we're done early
-                    (tu/until-> done-parsing?
-                                ; Special cased license detectors
-                                cursed/detect
-                                spdx-refs/detect
-                                (uris/detect attempt-download-and-match?)
-                                bsd/detect
-                                cc/detect
-                                wtf/detect
-                                mx4j/detect
-                                bouncy-castle/detect
-                                jdom/detect
-                                like-clojure/detect
-                                public-domain/detect
-                                proprietary-commercial/detect
-                                ; Detector for the bulk of the SPDX license list (in most cases this detector does most of the work)
-                                listed-licenses/detect
-                                ; Overly broad / general license detectors
-                                gnu/detect                  ; Matches very liberally (uses a "word salad" strategy), so needs to go last
-                                spdx-special-forms/detect)  ; Very non-specific (e.g. matches "NONE"), so needs to go last
-                    ; SPDX expression construction
-                    detect-operators
-                    collapse-runs-of-operators
-                    strip-detritus
-                    sub-unidentified-placeholders
-                    finalise-operators-and-unidentified-placeholders
-                    (collapse-lice-comb-licenserefs n)
-                    ; Rebuild the final expression(s)
-                    rebuild-expressions
-                    (->> (info/prepend-source-to-fims-within-em n)))
+         (or ; Alternative 2 - attempt to parse the name
+             (some-> [n]
+                     ; License detection within n, with short circuiting of steps if we're done early
+                     (tu/until-> done-parsing?
+                                 ; Special cased license detectors
+                                 cursed/detect
+                                 spdx-refs/detect
+                                 (uris/detect attempt-download-and-match?)
+                                 wtf/detect
+                                 mx4j/detect
+                                 bouncy-castle/detect
+                                 jdom/detect
+                                 like-clojure/detect
+                                 proprietary-commercial/detect
+                                 freebsd-netbsd/detect
+                                 bsd/detect                  ; Only matches "claused" BSD licenses (0BSD, and BSD-#-Clause) - others are matched by listed-licenses
+                                 cc/detect                   ; Must come after BSD, due to use of the (naked) word "attribution"
+                                 ; Detector for the bulk of the SPDX license list (in most cases this detector does most of the work)
+                                 listed-licenses/detect
+                                 ; Overlaps with some listed licenses (e.g. NCBI-PD, NIST-PD-*, NTIA-PD, PDDL-1.0, SAX-PD-*, )
+                                 public-domain/detect
+                                 ; Overly broad / general license detectors
+                                 gnu/detect                  ; Matches very liberally (uses a "word salad" strategy), so needs to go last
+                                 spdx-special-forms/detect)  ; Very non-specific (e.g. matches "NONE"), so needs to go last
+                     ; SPDX expression construction
+                     detect-operators
+                     collapse-runs-of-operators
+                     detect-copyright-notices
+;####TEST!!!!!
+;(debug-print "Before stripping detritus")
+                     strip-detritus
+                     sub-unidentified-placeholders
+                     finalise-operators-and-placeholders
+                     (collapse-lice-comb-licenserefs n)
+                     ; Rebuild the final expression(s)
+                     rebuild-expressions
+                     (->> (info/prepend-source-to-fims-within-em n)))
 
-            ; Alternative 3. Turn the entire name into a single unidentified LicenseRef, and construct a fragment info map with it
-            (let [fim (unidentified-fragment-info (spdx/name->unidentified-license-ref n) n)]
-              {(:fragment fim) (list fim)}))))))
+             ; Alternative 3. Turn the entire name into a single unidentified LicenseRef, and construct a fragment info map with it
+             (let [fim (unidentified-fragment-info (spdx/name->unidentified-license-ref n) n)]
+               {(:fragment fim) (list fim)})))))))
