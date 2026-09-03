@@ -38,6 +38,7 @@
             [lice-comb.impl.license-detection.wtf                    :as wtf]
             [lice-comb.impl.license-detection.cursed                 :as cursed]
             [lice-comb.impl.license-detection.mx4j                   :as mx4j]
+            [lice-comb.impl.license-detection.expat                  :as expat]
             [lice-comb.impl.license-detection.bouncy-castle          :as bouncy-castle]
             [lice-comb.impl.license-detection.jdom                   :as jdom]
             [lice-comb.impl.license-detection.like-clojure           :as like-clojure]
@@ -192,7 +193,8 @@
                                 (re/inline (re/fgrp "i" ref/ows ref/osi ref/ows ref/nwa))                                                                                        nil
                                 (re/inline (re/fgrp "i" ref/ows (re/alt-grp "style" "like") ref/mws ref/license ref/ows ref/nwa))                                                nil
                                 (re/inline (re/fgrp "i" ref/ows "current" ref/ows ref/nwa))                                                                                      nil
-                                (re/inline (re/fgrp "i" ref/ows "Dual" ref/ows ref/nwa))                                                                                         nil)
+                                (re/inline (re/fgrp "i" ref/ows "Dual" ref/ows ref/nwa))                                                                                         nil
+                                (re/inline (re/fgrp "i" ref/ows "Some" ref/ows ref/nwa))                                                                                         nil)
                     (u/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all non-word-characters (Unicode) and trim the result
                                   (when (>= (count s) 3)                        ; Then remove anything short
                                     %)))))))
@@ -383,6 +385,7 @@
                                  (uris/detect attempt-download-and-match?)
                                  wtf/detect
                                  mx4j/detect
+                                 expat/detect
                                  bouncy-castle/detect
                                  jdom/detect
                                  like-clojure/detect
