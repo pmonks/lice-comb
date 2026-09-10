@@ -134,6 +134,11 @@
       (when (re-matches #"-?\d+" s)
         (java.lang.Long/parseLong s)))))  ; We use interop instead of clojure.core/parse-long for backwards compatibility with older Clojure versions
 
+(defn sint
+  "`nil` safe version of `clojure.core/int`"
+  [x]
+  (when x (int x)))
+
 (defn nset
   "`nil` preserving version of `clojure.core/set`"
   [coll]

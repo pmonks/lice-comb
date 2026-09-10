@@ -62,7 +62,7 @@
 
 (defn- build-regex-fn-pairs-for-ids
   "Builds a sequence of regex/fn pairs for every id in `ids`, in such an order
-  that maximises the chances of correct matches."  ; ####TODO: OR SORT THE REGEXES, AFTER THEY'VE BEEN GENERATED?  THIS WILL "MIX UP" REGEXES FOR THE SAME ID HOWEVER - POSSIBLY A PROBLEM?
+  that maximises the chances of correct matches."
   [ids]
   (let [;####TODO: NEED TO SPLIT IDS INTO DEPRECATED AND NON-DEPRECATED, THEN SORT!!!!
         {raw-version-series :version-series
@@ -70,7 +70,7 @@
         version-series (vals raw-version-series)
         all-items      (concat unversioned-ids version-series)
         re-fn-pairs    (mapcat build-regex-fn-pairs all-items)]
-    (reverse (sort-by #(count (re/str' (first %))) re-fn-pairs))))  ; Sort from longest regex to shortest
+    (sort-by #(* -1 (count (re/str' (first %)))) re-fn-pairs)))  ; Sort from longest regex to shortest
 
 ; Pairs of regex/fn based on listed SPDX license and exception names and ids
 (def ^:private pairs-d (delay (build-regex-fn-pairs-for-ids @ids-d)))

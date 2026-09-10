@@ -91,13 +91,12 @@
   [version-series id]
   (some-> (common-replacements id ncg-prefix-id (:versions version-series))
           (faux/parse ; Special cases for SGI-B without the -B
-                      #"(?i:(?<!\w)SGI-B(?!\w))" (re/inline (re/join "SGI" (re/opt-grp ref/mws "B"))))
-          ; Replace whitespace
-          (faux/replace-in-strings #"[\s\-]+" ref/mws)
-          ; Cleanup, escape remaining fragments, then combine into a single regex
-          (->> (u/mapcat-str #(vector (re/esc %)))
+                      #"(?i:(?<!\w)SGI-B(?!\w))" (re/inline (re/join "SGI" (re/opt-grp ref/mws "B")))
+                      ; Replace whitespace
+                      #"[\s\-]+"                 ref/ows)
+          ; Escape remaining fragments, then combine into a single regex
+          (->> (u/map-str re/esc)
                (apply re/join))))
-
 
 (defn- name->regex
   [version-series name]
@@ -110,14 +109,13 @@
                       #"\A(?i:Open\s+Public\s+Licen[cs]e)(?!\w)"                                  (re/inline (re/join #"Open" ref/mws ref/public ref/mws ref/license))  ; OPL-x.y
                       #"(?<!\w)(?i:Unlicense)(?!\w)"                                              (re/inline (re/join #"Un" ref/ows ref/license #"d?"))
                       #"(?<!\w)(?i:Business\s+Source\s+Licen[cs]e)(?!\w)"                         (re/inline (re/join (re/-lb "Hyperfiddle" ref/bounded-mws) "Business" ref/mws "Source" ref/mws ref/license))
+                      #"(?<!\w)(?i:Software\s+Notice\s+and\s+(?:Document\s+)?Licen[cs]e)(?!\w)"   (re/inline (re/opt-grp (re/zom-grp ref/ows (re/alt-grp ref/software "notice" ref/ands "document" "style" ref/public ref/software) ref/ows) ref/license))  ; To handle non-standard variations of W3C names, such as "W3C Software License"
 
                       ; Words that are handled elsewhere
                       #"\A(?i:the\s+)"                                                            ""  ; A leading, optional "the" is always added to every regex, in common-replacements
 
                       ; Optional words
                       #"(?<!\w)(?i:licen[cs]e[\s\-]agreement)(?!\w)"                              (re/inline (re/opt-grp ref/license ref/mws "agreement"))
-;####TEST!!!!
-;                      #"(?<!\w)(?i:licen[cs]e)(?!\w)"                                             ref/license
                       #"(?<!\w)(?i:(?:(?:software|public)\s+)*licen[cs]e)(?!\w)"                  (re/inline (re/opt-grp (re/zom-grp ref/ows (re/alt-grp "style" ref/public ref/software) ref/ows) ref/license))
                       #"(?<!\w)(?i:Lizenz)(?!\w)"                                                 (re/inline (re/opt (re/alt-grp ref/license "Lizenz")))
                       #"(?<!\w)(?i:public)(?!\w)"                                                 (re/inline (re/opt-grp ref/public))
@@ -159,8 +157,8 @@
                       ref/mopen-parens                                                            ref/oopen-parens
                       ref/mclose-parens                                                           ref/oclose-parens
                       #"[\s\-–]+"                                                                 ref/ows)
-        ; Cleanup, escape, and concat into a single pattern
-          (->> (u/mapcat-str #(vector (re/esc %)))
+          ; Escape remaining fragments, then combine into a single regex
+          (->> (u/map-str re/esc)
                (apply re/join))))
 
 (defn- regexes-impl
@@ -213,32 +211,6 @@
   [_]
   nil)
 
-(defn regexes-for-id-or-version-series
-  "Convenience function that returns the regexes for a specific SPDX identifier
-  or version series id.  This function is not used by lice-comb anywhere and is
-  solely intended for human use at a REPL - the implementation is inefficient."
-  [id-or-version-series-id]
-  (if-let [vs (get (:version-series (verser/version-series)) id-or-version-series-id)]
-    (regexes vs)
-    (regexes id-or-version-series-id)))
-
-(defn re-matches-for-id-or-version-series
-  "Convenience function that attempts to re-match the regexes for a specific
-  SPDX identifier or version series id against `s` (a `String`).  This function
-  is not used by lice-comb anywhere and is solely intended for human use at a
-  REPL - the implementation is inefficient."
-  [id-or-version-series-id ^CharSequence s]
-  (let [res (sort-by #(* -1 (count (str %))) (mapcat vals (regexes-for-id-or-version-series id-or-version-series-id)))]
-    (some #(ncg/re-matches % s) res)))
-
-(defn re-find-for-id-or-version-series
-  "Convenience function that attempts to re-find the regexes for a specific SPDX
-  identifier or version series id against `s` (a `String`).  This function is
-  not used by lice-comb anywhere and is solely intended for human use at a
-  REPL - the implementation is inefficient."
-  [id-or-version-series-id ^CharSequence s]
-  (let [res (sort-by #(* -1 (count (str %))) (mapcat vals (regexes-for-id-or-version-series id-or-version-series-id)))]
-    (some #(ncg/re-find % s) res)))
 
 ;; Functions for processing matches from a regex produced by [[regexes]].
 ;; Note: rencg must have been used to produce the match.
@@ -269,3 +241,34 @@
   [m]
   (or (boolean (get-from-match verexp/ncg-only m))
       (boolean (get-from-match (str ncg-suffix-trailing verexp/ncg-only) m))))  ;####TODO: DOUBLE CHECK THAT THE NCG IS CONSTRUCTED CORRECTLY - good test case is GFDL/invariants
+
+
+;; Convenience functions
+
+(defn regexes-for-id-or-version-series
+  "Convenience function that returns the regexes for a specific SPDX identifier
+  or version series id.  This function is not used by lice-comb anywhere and is
+  solely intended for human use at a REPL - the implementation is inefficient."
+  [id-or-version-series-id]
+  (if-let [vs (get (:version-series (verser/version-series)) id-or-version-series-id)]
+    (regexes vs)
+    (regexes id-or-version-series-id)))
+
+(defn re-matches-for-id-or-version-series
+  "Convenience function that attempts to re-match the regexes for a specific
+  SPDX identifier or version series id against `s` (a `String`).  This function
+  is not used by lice-comb anywhere and is solely intended for human use at a
+  REPL - the implementation is inefficient."
+  [id-or-version-series-id ^CharSequence s]
+  (let [res (sort-by #(* -1 (count (str %))) (mapcat vals (regexes-for-id-or-version-series id-or-version-series-id)))]
+    (some #(ncg/re-matches % s) res)))
+
+(defn re-find-for-id-or-version-series
+  "Convenience function that attempts to re-find the regexes for a specific SPDX
+  identifier or version series id against `s` (a `String`).  This function is
+  not used by lice-comb anywhere and is solely intended for human use at a
+  REPL - the implementation is inefficient."
+  [id-or-version-series-id ^CharSequence s]
+  (let [res (sort-by #(* -1 (count (str %))) (mapcat vals (regexes-for-id-or-version-series id-or-version-series-id)))]
+    (some #(ncg/re-find % s) res)))
+

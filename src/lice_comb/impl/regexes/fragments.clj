@@ -60,6 +60,7 @@
 
 (def ws+hyphens         (re/chcl raw-ws raw-hyphens))
 (def ws+slashes         (re/chcl raw-ws raw-slashes))
+(def ws+qots            (re/chcl raw-ws raw-quotes))
 (def hyphens+slashes    (re/chcl raw-hyphens raw-slashes))
 (def ws+hyphens+slashes (re/chcl raw-ws raw-hyphens raw-slashes))
 

@@ -22,8 +22,6 @@
             [lice-comb.impl.parsing.faux-parse                 :as faux]
             [lice-comb.impl.license-detection.match-processing :as mp]))
 
-;(def ids-d (delay (concat ["0BSD" "AMPAS" "FreeBSD-DOC"] (filter #(s/starts-with? % "BSD-") @spdx/license-ids-d))))
-
 ; Note: this namespace only handles the various "claused" BSD licenses - things like FreeBSD are handled generically (by lice-comb.impl.license-detection.listed-licenses)
 (def ids-d (delay (concat ["0BSD"] (filter (partial re-matches #"BSD-\d-Clause(?:-.*)?") @spdx/license-ids-d))))
 
@@ -31,6 +29,8 @@
 ;;
 ;; BSD REGEX CONSTRUCTION
 ;;
+
+(def ^:private ows+qots (re/zom ref/ws+qots))
 
 ;####TODO: PARSE THESE STRUCTURES OUT OF @ids-d?
 (def ^:private bsd-clauses {
@@ -47,8 +47,8 @@
   "Patent"                  ["Patent"                                                                                                                    2]
   "pkgconf-disclaimer"      [(re/join "pcgconf" ref/ows "disclaimer")                                                                                    2]
   "Views"                   ["Views"                                                                                                                     2]
-  "FreeBSD"                 ["FreeBSD"                                                                                                                   2]  ; Deprecated
-  "NetBSD"                  ["NetBSD"                                                                                                                    2]  ; Deprecated
+  "FreeBSD"                 ["FreeBSD"                                                                                                                   2]  ; Deprecated, handled by clj-spdx canonicalisation
+  "NetBSD"                  ["NetBSD"                                                                                                                    2]  ; Deprecated, handled by clj-spdx canonicalisation
   "acpica"                  ["acpica"                                                                                                                    3]
   "Attribution"             ["Attribution"                                                                                                               3]
   "Clear"                   ["Clear"                                                                                                                     3]
@@ -67,14 +67,13 @@
   "Shortened"               ["Shortened"                                                                                                                 4]
   "UC"                      [ref/uc                                                                                                                      4]})
 
-;####TODO: THIS IS THORNY
-;(def ^:private inner-bsd-words #{"or" })
-(def ^:private bsd-words #{"BSD" "public" ref/license "style" "c(?:lause)?" "type"})
+(def ^:private bsd-words ["BSD" "public" ref/license "style" #"c(?:lause)?" "type"])
 
 (defn- ncg-for-clause
   [ncg-prefix [ncg-name synonyms]]
-  (re/ncg (str ncg-prefix ncg-name)
-          (apply re/alt (sort-by #(* -1 (count (re/str' %))) synonyms))))
+  (let [clause-alt (apply re/alt (sort-by #(* -1 (count (re/str' %))) synonyms))]
+    (re/join (re/ncg (str ncg-prefix ncg-name) clause-alt)
+             (re/zom-grp ows+qots (re/alt-grp "or" "/" #"\\") ows+qots (re/grp clause-alt)))))
 
 (defn- ncg-for-variant
   [ncg-prefix [ncg-name [re]]]
@@ -96,15 +95,15 @@
                  ref/nwb
                  (re/opt-grp "The" ref/mws)
                  "\n\n#### Before word salad ####\n"
-                 (re/zom-grp (word-salad "before") ref/ows)
+                 (re/zom-grp ows+qots (word-salad "before") ows+qots)
                  "\n\n#### Matching word ####\n"
                  "BSD"
                  "\n\n#### After word salad ####\n"
                  ref/ows
-                 (re/zom-grp (word-salad "after") ref/ows)
+                 (re/zom-grp ows+qots (word-salad "after") ows+qots)
                  ;####TODO: VERSION SHOULD GO IN THE WORD SALAD
                  "\n\n#### Version ####\n"
-                 (re/opt-grp ref/ows (verexp/expression-regex ["1.0" "2.0" "3.0" "4.0"]))  ; e.g. for https://repo.clojars.org/org/clojars/ndepalma/jme-game-engine/3.0/jme-game-engine-3.0.pom
+                 (re/opt-grp ref/ows (verexp/expression-regex "bsd" ["1.0" "2.0" "3.0" "4.0"]))  ; e.g. for https://repo.clojars.org/org/clojars/ndepalma/jme-game-engine/3.0/jme-game-engine-3.0.pom
                  "\n\n#### Coda ####\n"
                  ref/nwa))
 
@@ -116,7 +115,7 @@
 (defn- ncg-from-match
   "Retrieves all values of the given `ncg-name` from match `m`."
   [ncg-name m]
-  (seq (distinct (map s/trim (filter identity [(get m (str "before" ncg-name)) (get m (str "after" ncg-name))])))))
+  (seq (distinct (map s/trim (filter some? [(get m (str "before" ncg-name)) (get m (str "after" ncg-name))])))))
 
 (defn- ncg-in-match?
   "Is the given (partial) `ncg-name` in match `m`?  Checks both 'before' and
@@ -127,50 +126,65 @@
       (get m (str "before" ncg-name))
       (get m (str "after"  ncg-name)))))
 
+(def ^:private sort-seq (comp seq sort distinct (partial filter some?)))
+
 (defn- determine-clause-counts
-  "Returns a sequence of the clause count(s) found in match `m`, as integers.
-  Note that they are NOT validated."
+  "Returns a thruple containing:
+
+  1. valid clauses detected in match `m`
+  2. other clauses detected in match `m`
+  3. a version number found in match `m`
+
+  Any or all of these values may be `nil`."
   [m]
-  (if-let [clauses (seq
-                     (distinct
-                       (filter identity (concat [(when (ncg-in-match? "ZeroClause"  m) 0)
-                                                 (when (ncg-in-match? "OneClause"   m) 1)
-                                                 (when (ncg-in-match? "TwoClause"   m) 2)
-                                                 (when (ncg-in-match? "ThreeClause" m) 3)
-                                                 (when (ncg-in-match? "FourClause"  m) 4)]
-                                                (map u/parse-lng (ncg-from-match "OtherClause" m))))))]
-    ; We found clause(s), so return them in sorted order
-    (sort clauses)
-    ; We didn't find clause(s), so check for a version number
-    (when-let [version (get m "VersionNumber")]
-      [(int (u/parse-dbl version))])))  ; version might be something like 3.0, so parse it as a double but then drop the fractional part
+  (let [clauses        (sort-seq [(when (ncg-in-match? "ZeroClause"  m) 0)
+                                  (when (ncg-in-match? "OneClause"   m) 1)
+                                  (when (ncg-in-match? "TwoClause"   m) 2)
+                                  (when (ncg-in-match? "ThreeClause" m) 3)
+                                  (when (ncg-in-match? "FourClause"  m) 4)])
+        other-clauses  (sort-seq (map u/parse-lng (ncg-from-match "OtherClause" m)))
+        version-number (u/sint (u/parse-dbl (get m "bsdVersionNumber")))]
+    [clauses other-clauses version-number]))
 
 (defn- bsd-match->fragment-info
   "Turns a match by the BSD regex into a fragment info map."
   [m]
-  (let [clause-counts           (determine-clause-counts m)
-        variants                (seq (distinct (filter identity (map #(when (ncg-in-match? (s/replace % "-" "") m) %) (keys bsd-variants)))))
-        implied-clause-counts   (seq (distinct (filter identity (map #(second (get bsd-variants %)) variants))))
-        valid-clause-counts     (seq (filter #(<= % 4) clause-counts))
-        ;####TODO: This seems like a shit way to turn confidence-explanations into a set that doesn't contain nil - see if there's a better way
-        confidence-explanations (some->> [(when (empty? clause-counts)                                 :missing-bsd-clause-count)
-                                          (when (> (count clause-counts) 2)                            :inconsistent-bsd-clause-counts)
-                                          (when (some #(> % 4) clause-counts)                          :invalid-bsd-clause-count)
-                                          (when (> (count variants) 1)                                 :multiple-bsd-variants)
-                                          (when (and (not (empty? implied-clause-counts))
-                                                     (not= implied-clause-counts valid-clause-counts)) :invalid-bsd-clause-count-variant-combination)]
-                                         (filter identity)
-                                         seq
-                                         set)
-        final-clause-count      (case [(empty? clause-counts) (empty? implied-clause-counts)]
-                                  [true  true]  4
-                                  [true  false] (first implied-clause-counts)
-                                  [false true]  (first clause-counts)
-                                  [false false] (first implied-clause-counts))
+  (let [[clauses
+         other-clauses
+         version-number]        (determine-clause-counts m)
+        all-clauses             (sort-seq (concat clauses other-clauses [version-number]))
+        variants                (sort-seq (map #(when (ncg-in-match? (s/replace % "-" "") m) %) (keys bsd-variants)))
+        implied-clause-counts   (sort-seq (map #(second (get bsd-variants %)) variants))
+        implied-clause-count    (second (get bsd-variants (first variants)))
         final-variant           (when-not (empty? variants)
                                   (let [variant (first variants)]
                                     (when (not= variant "Aduna")
                                       variant)))
+        clause-count            (cond
+                                  clauses                          (first clauses)
+                                  (and (not (nil? version-number))
+                                       (<= 1 version-number 4))    version-number)
+        final-clause-count      (cond
+                                  implied-clause-counts (first implied-clause-counts)  ; Favour implied clause count from variant over the actual clause count, if they're inconsistent
+                                  clause-count          clause-count
+                                  :else                 4)
+        ;####TODO: This seems like a shit way to turn confidence-explanations into a set that doesn't contain nil - see if there's a better way
+        confidence-explanations (some->> [(when (and (nil? clauses)
+                                                     (nil? other-clauses)
+                                                     (nil? version-number))                          :missing-bsd-clause-count)
+                                          (when other-clauses                                        :invalid-bsd-clause-count)
+                                          (when (> (count all-clauses) 1)                            :inconsistent-bsd-clause-counts)
+                                          (when (> (count variants) 1)                               :multiple-bsd-variants)
+                                          (when (and (some? version-number)
+                                                     (not= final-clause-count version-number))       (if (<= 1 version-number 4)
+                                                                                                       :inconsistent-bsd-clause-counts
+                                                                                                       :invalid-bsd-clause-count))
+                                          (when (and (some? final-variant)
+                                                     (some? clause-count)
+                                                     (not= final-clause-count implied-clause-count)) :invalid-bsd-clause-count-variant-combination)]
+                                         (filter some?)
+                                         seq
+                                         set)
         id                      (if (zero? final-clause-count)
                                   "0BSD"
                                   (str "BSD-" final-clause-count "-Clause" (when final-variant (str "-" final-variant))))]

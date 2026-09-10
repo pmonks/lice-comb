@@ -23,11 +23,13 @@
 ; Public for ease of testing
 (def re (re/fgrp "i"
                  ref/nwb
+                 (re/opt-grp "Other" ref/mws)
                  (re/alt-grp (re/join ref/proprietary (re/opt-grp (re/oom ref/ws+hyphens+slashes) "Commercial"))
                              "Commercial"
                              (re/join (re/opt-grp "Copyright" ref/mws (re/n2m 0 20 ".")) "All" ref/mws "Rights" ref/mws "Reserved")
                              "Private")
                  (re/opt-grp ref/mws ref/license)
+                 (re/opt-grp ref/mws "available" ref/ows)
                  ref/nwa))
 
 ; Note: public because it's used by lice-comb.impl.parsing.parser when collapsing runs of unidentified LicenseRefs
