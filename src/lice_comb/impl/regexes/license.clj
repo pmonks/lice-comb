@@ -39,7 +39,9 @@
   `String`), returning a sequence."
   [^String s ^String ncg-prefix versions]
   (when-not (s/blank? s)
-    (let [re-vers  (re/opt-grp ref/ows (re/opt-grp ref/single-qots) (verexp/expression-regex ncg-prefix versions))
+;####TODO: REMOVE ONCE TESTED!!!!
+;    (let [re-vers  (re/opt-grp ref/ows (re/opt-grp ref/single-qots) (verexp/expression-regex ncg-prefix versions))
+    (let [re-vers  (re/zom-grp ref/ows (re/opt-grp ref/single-qots) (verexp/expression-regex ncg-prefix versions))  ; We use zom here, due to names such as "Apache Licence 2.0 Version 2.0"
           re-oool  (re/opt-grp ref/ows (verexp/suffix-regex (str ncg-prefix ncg-suffix-trailing)))
           template (if (re-find re-placeholder-ver s)
                      (u/replacing-split s re-placeholder-ver re-vers)

@@ -186,15 +186,17 @@
                   (not (s/blank? %))
                   (not (nil? %)))
                (->> (faux/parse coll
-                                (re/inline (re/fgrp "i" ref/ows (re/opt-grp "also" ref/ows) "included" ref/ows "in" ref/ows "the" ref/ows "jar" ref/ows "file" ref/ows ref/nwa)) nil
-                                (re/inline (re/fgrp "i" ref/ows (re/opt-grp "Double") ref/ows "licensed" ref/ows "under" (re/opt-grp ref/ows "the") ref/ows ref/nwa))            nil
-                                (re/inline (re/fgrp "i" ref/ows "Distributed" ref/ows "under" (re/opt-grp ref/ows (re/alt-grp "the" "an")) ref/ows ref/nwa))                     nil
-                                (re/inline (re/fgrp "i" ref/ows "see" ref/mws ref/license (re/opt-grp ref/mws "for" ref/mws "details") ref/ows ref/nwa))                         nil
-                                (re/inline (re/fgrp "i" ref/ows ref/osi ref/ows ref/nwa))                                                                                        nil
-                                (re/inline (re/fgrp "i" ref/ows (re/alt-grp "style" "like") ref/mws ref/license ref/ows ref/nwa))                                                nil
-                                (re/inline (re/fgrp "i" ref/ows "current" ref/ows ref/nwa))                                                                                      nil
-                                (re/inline (re/fgrp "i" ref/ows "Dual" ref/ows ref/nwa))                                                                                         nil
-                                (re/inline (re/fgrp "i" ref/ows "Some" ref/ows ref/nwa))                                                                                         nil)
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows (re/opt-grp "also" ref/ows) "included" ref/ows "in" ref/ows "the" ref/ows "jar" ref/ows "file" ref/ows ref/nwa)) nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows (re/opt-grp "Double") ref/ows "licensed" ref/ows "under" (re/opt-grp ref/ows "the") ref/ows ref/nwa))            nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows "Distributed" ref/ows "under" (re/opt-grp ref/ows (re/alt-grp "the" "an")) ref/ows ref/nwa))                     nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows "see" ref/mws ref/license (re/opt-grp ref/mws "for" ref/mws "details") ref/ows ref/nwa))                         nil
+;####TODO: REMOVE ONCE TESTED
+;                                (re/inline (re/fgrp "i" ref/nwb ref/ows ref/version-label ref/ows #"\d+" (re/zom-grp #"\.\d+") ref/ows ref/nwa))                                         nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows ref/osi ref/ows ref/nwa))                                                                                        nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows (re/alt-grp "style" "like") ref/mws ref/license ref/ows ref/nwa))                                                nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows "current" ref/ows ref/nwa))                                                                                      nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows "Dual" ref/ows ref/nwa))                                                                                         nil
+                                (re/inline (re/fgrp "i" ref/nwb ref/ows "Some" ref/ows ref/nwa))                                                                                         nil)
                     (u/map-str #(let [s (s/trim (s/replace % #"(?U:\W+)" ""))]  ; Strip all non-word-characters (Unicode) and trim the result
                                   (when (>= (count s) 3)                        ; Then remove anything short
                                     %)))))))

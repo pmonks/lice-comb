@@ -20,7 +20,7 @@
   without notice."
   (:require [wreck.api                             :as re]
             [lice-comb.impl.regexes.fragments      :as ref]
-            [lice-comb.impl.regexes.version-number :as ver]))
+            [lice-comb.impl.regexes.version-number :as vernum]))
 
 (def ncg-version-number "VersionNumber")
 (def ncg-or-later       "OrLater")
@@ -93,7 +93,7 @@
   ([version-numbers] (expression-regex nil version-numbers))
   ([^String ncg-prefix version-numbers]
    (when (seq version-numbers)
-     (let [version-number-regex (re/ncg (when-not (nil? ncg-prefix) (str ncg-prefix ncg-version-number)) (ver/range-regex version-numbers))
+     (let [version-number-regex (re/ncg (when-not (nil? ncg-prefix) (str ncg-prefix ncg-version-number)) (vernum/range-regex version-numbers))
            suffix-regex         (suffix-regex ncg-prefix)]
        (re/fgrp "i" (re/opt-grp ref/version-label ref/ows)
                     version-number-regex
