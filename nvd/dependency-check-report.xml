@@ -4,16 +4,16 @@
         <engineVersion>12.2.0</engineVersion>
         <dataSource>
             <name>NVD API Last Checked</name>
-            <timestamp>2026-10-20T11:43:17Z</timestamp>
+            <timestamp>2026-10-27T10:47:35Z</timestamp>
         </dataSource>
         <dataSource>
             <name>NVD API Last Modified</name>
-            <timestamp>2026-10-20T11:17:35Z</timestamp>
+            <timestamp>2026-10-27T10:16:56Z</timestamp>
         </dataSource>
     </scanInfo>
     <projectInfo>
         <name>com.github.pmonks/lice-comb 2.0.348-SNAPSHOT</name>
-        <reportDate>2026-10-20T11:43:27.465734143Z</reportDate>
+        <reportDate>2026-10-27T10:47:45.873142716Z</reportDate>
         <credits>This product uses the NVD API but is not endorsed or certified by the NVD. This report contains data retrieved from the National Vulnerability Database: https://nvd.nist.gov, Github Advisory Database (via NPM Audit API): https://github.com/advisories/, and the RetireJS community.</credits>
     </projectInfo>
     <dependencies>
